@@ -17,6 +17,7 @@ from conftest import (
     flat_callback_data,
     make_result,
 )
+from aiogram.exceptions import TelegramBadRequest
 from grokbot.application.events import ItemResult
 from grokbot.domain.generation import GenerationResult, MediaType
 from grokbot.telegram import sender as sender_mod
@@ -297,6 +298,64 @@ async def test_video_no_url_reports_on_status(gateway, downloader, refs_repo):
     assert gateway.calls_by_method("send_video") == []
     edits = gateway.calls_by_method("edit_message_text")
     assert edits[-1]["text"].startswith("Error: el modelo no devolvió URL de video")
+
+
+class _RejectingVideoGateway(FakeTelegramGateway):
+    """Gateway cuyo ``send_video`` es rechazado por la Bot API.
+
+    Reproduce el error que el ``AiogramGateway`` real relanza en ``send_video``
+    (O2 arch): el sender debe degradar a texto con la URL + warning, nunca
+    crashar ni filtrar el video.
+    """
+
+    async def send_video(
+        self, chat_id, video, *, filename="generated.mp4", caption=None,
+        parse_mode="HTML", reply_markup=None, reply_to_message_id=None,
+    ):
+        raise TelegramBadRequest(method="sendVideo", message="video file is too big")
+
+
+@pytest.mark.asyncio
+async def test_video_remote_send_rejected_falls_back_text(refs_repo):
+    """O2: la API rechaza el ``send_video`` → fallback de texto user-safe."""
+    gateway = _RejectingVideoGateway()
+    downloader = FakeMediaDownloader(payload=b"v" * 100)
+    ui = ChatUI(gateway, CHAT_ID)
+    sender = _make_sender(gateway, downloader, refs_repo)
+    item = _item(
+        media_type=MediaType.VIDEO,
+        remote_url=XAI_URL,
+        meta={"urls": [XAI_URL], "download_allowlist": "xai"},
+    )
+    status = await ui.send_text("Generando video...")
+    sent = await sender.send_video(ui, item, "Prompt", status_id=status.message_id)
+    assert sent is None
+    assert gateway.calls_by_method("send_video") == [], "el envío fue rechazado"
+    edits = gateway.calls_by_method("edit_message_text")
+    text = edits[-1]["text"]
+    assert "No se pudo enviar el video por Telegram." in text
+    assert "Descárgalo aquí:" in text
+    assert XAI_URL in text  # URL en el fallback de descarga explícito
+    assert SENSITIVE_DOWNLOAD_WARNING in text
+    assert edits[-1]["reply_markup"] is None
+
+
+@pytest.mark.asyncio
+async def test_video_remote_send_rejected_no_status_sends_text(refs_repo):
+    """O2: sin status_id el fallback de ``send_video`` rechazado es un mensaje."""
+    gateway = _RejectingVideoGateway()
+    downloader = FakeMediaDownloader(payload=b"v" * 100)
+    ui = ChatUI(gateway, CHAT_ID)
+    sender = _make_sender(gateway, downloader, refs_repo)
+    item = _item(
+        media_type=MediaType.VIDEO,
+        remote_url=XAI_URL,
+        meta={"urls": [XAI_URL]},
+    )
+    sent = await sender.send_video(ui, item, "Prompt", status_id=None)
+    assert sent is None
+    texts = [c["text"] for c in gateway.calls_by_method("send_message")]
+    assert texts[-1].startswith("No se pudo enviar el video por Telegram.")
 
 
 # --------------------------------------------------------------------------- #

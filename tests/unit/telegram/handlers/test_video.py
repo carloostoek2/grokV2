@@ -24,6 +24,7 @@ from conftest import (
     text_message,
 )
 from grokbot.providers.base import ProviderError
+from grokbot.telegram.handlers._common import SOURCE_MEDIA_UNAVAILABLE_MSG
 
 _UID = USER_ID
 _CHAT = CHAT_ID
@@ -67,6 +68,21 @@ async def test_video_photo_caption_i2v():
     texts = _send_texts(deps)
     assert any(t.startswith("Animando imagen con <b>grok-imagine-video</b>") for t in texts)
     assert deps.gateway.calls_by_method("send_video")
+
+
+async def test_video_photo_caption_source_fetch_failure_degrades():
+    """M2: foto+caption i2v con file_id expirado → degrada user-safe, sin video."""
+    deps = make_deps()
+    deps.update_config.set_model(_UID, "grok_video")
+    deps = await _msg(
+        deps,
+        make_photo_message(caption="haz que el agua caiga", file_id="EXPIRED:src_video"),
+    )
+    texts = _send_texts(deps)
+    assert SOURCE_MEDIA_UNAVAILABLE_MSG in texts
+    assert "EXPIRED" not in texts[-1], "no filtra el file_id al usuario"
+    assert deps.gateway.calls_by_method("send_video") == []
+    assert deps.job_manager.active_jobs(_UID) == (), "el flujo i2v no abre job"
 
 
 async def test_video_itemfailed_terminal_false_finalizes():

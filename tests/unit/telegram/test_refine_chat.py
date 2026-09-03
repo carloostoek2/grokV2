@@ -348,3 +348,79 @@ async def test_refine_error_restores_base_and_status(tmp_path, gateway, refs_rep
         if c["message_id"] == photos[0]["sent"].message_id
     ]
     assert flat_callback_data(regen_markup[-1]["reply_markup"]) == ["regen"]
+
+
+# --------------------------------------------------------------------------- #
+# álbum: no / timeout → confirm editado a "Imagen final.", base final
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("choice", ["no", "timeout"])
+@pytest.mark.asyncio
+async def test_album_no_or_timeout_finalizes_base(tmp_path, gateway, refs_repo, choice):
+    downloader = object()
+    sender = ResultSender(gateway=gateway, downloader=downloader, refs=refs_repo)  # type: ignore[arg-type]
+    provider = _provider(tmp_path)
+    timeout = 0.01 if choice == "timeout" else 10.0
+    refine_uc = ResolveRefineUseCase(provider=provider, timeout=timeout)
+    token = refine_uc.register(user_id=USER_ID, job_id=None)
+    item = _item(tmp_path, n=2)  # álbum base
+    ui = ChatUI(gateway, CHAT_ID)
+
+    if choice == "no":
+        _schedule_decision(refine_uc, token, "no")
+    decision = await run_refine_flow(
+        ui, item=item, sender=sender, refine_uc=refine_uc,
+        prefix="Multi-pose ×2", status_id=None, delete_status=False,
+        user_id=USER_ID, token=token,
+    )
+
+    assert decision == (RefineDecision.no if choice == "no" else RefineDecision.timeout)
+    groups = gateway.calls_by_method("send_media_group")
+    assert len(groups) == 1  # solo base; sin álbum refinado
+    confirms = [
+        c for c in gateway.calls_by_method("send_message")
+        if c["text"] == "¿Refinar las imágenes generadas?"
+    ]
+    assert len(confirms) == 1
+    confirm_id = confirms[0]["sent"].message_id
+    edits = [
+        c for c in gateway.calls_by_method("edit_message_text")
+        if c["message_id"] == confirm_id
+    ]
+    assert edits and edits[-1]["text"] == "Imagen final."
+    assert provider.refine_calls == []
+
+
+# --------------------------------------------------------------------------- #
+# álbum: cancelled → confirm borrado, base queda, sin refinada
+# --------------------------------------------------------------------------- #
+@pytest.mark.asyncio
+async def test_album_cancelled_keeps_base_without_refined(tmp_path, gateway, refs_repo):
+    downloader = object()
+    sender = ResultSender(gateway=gateway, downloader=downloader, refs=refs_repo)  # type: ignore[arg-type]
+    provider = _provider(tmp_path)
+    refine_uc = ResolveRefineUseCase(provider=provider, timeout=10.0)
+    job_id = "job-album-cancel"
+    token = refine_uc.register(user_id=USER_ID, job_id=job_id)
+    item = _item(tmp_path, n=2)
+    ui = ChatUI(gateway, CHAT_ID)
+
+    _schedule_cancel(refine_uc, job_id)
+    decision = await run_refine_flow(
+        ui, item=item, sender=sender, refine_uc=refine_uc,
+        prefix="Multi-pose ×2", status_id=None, delete_status=False,
+        user_id=USER_ID, token=token, job_id=job_id,
+    )
+
+    assert decision == RefineDecision.cancelled
+    groups = gateway.calls_by_method("send_media_group")
+    assert len(groups) == 1  # base queda; sin refinada
+    confirms = [
+        c for c in gateway.calls_by_method("send_message")
+        if c["text"] == "¿Refinar las imágenes generadas?"
+    ]
+    assert len(confirms) == 1
+    confirm_id = confirms[0]["sent"].message_id
+    assert confirm_id in [
+        c["message_id"] for c in gateway.calls_by_method("delete_message")
+    ], "el confirm de álbum cancelado se borra"
+    assert provider.refine_calls == []
