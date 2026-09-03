@@ -12,6 +12,7 @@ from grokbot.domain.generation import (
     GenerationRequest,
     MediaType,
 )
+from grokbot.providers.base import ProviderInputError, ProviderUnavailableError
 from grokbot.providers.replicate_provider import ReplicateProvider
 
 API_TOKEN = "r8-token-secret"
@@ -109,3 +110,33 @@ async def test_multi_url_output_normalization():
     result = await prov.generate(_req("grok"))
     assert result.remote_url == "https://a.io/1.png"
     assert result.meta["urls"] == ["https://a.io/1.png", "https://a.io/2.png"]
+
+
+class _FailingClient:
+    """Fake replicate client whose ``run`` always raises the configured error."""
+
+    def __init__(self, exc):
+        self._exc = exc
+
+    def run(self, model_id, input=None, **kwargs):
+        raise self._exc
+
+
+@pytest.mark.asyncio
+async def test_sdk_exception_maps_to_unavailable():
+    prov = ReplicateProvider(API_TOKEN, client=_FailingClient(RuntimeError("boom")))
+    with pytest.raises(ProviderUnavailableError):
+        await prov.generate(_req("grok"))
+
+
+@pytest.mark.asyncio
+async def test_provider_error_passthrough_not_wrapped():
+    # A typed ProviderError raised by the SDK/client must propagate untouched
+    # (the retryability decision belongs to the caller, R8), not be wrapped as
+    # a transient ProviderUnavailableError.
+    prov = ReplicateProvider(
+        API_TOKEN,
+        client=_FailingClient(ProviderInputError("bad payload", user_message="bad")),
+    )
+    with pytest.raises(ProviderInputError):
+        await prov.generate(_req("grok"))

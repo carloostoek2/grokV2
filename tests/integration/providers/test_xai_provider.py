@@ -302,3 +302,42 @@ async def test_video_timeout_raises_timeout_error(monkeypatch):
         m.post(f"{XAI_BASE}/videos/generations", status=200, payload={"request_id": "vid-t"})
         with pytest.raises(ProviderTimeoutError):
             await prov.generate(req)
+
+
+@pytest.mark.asyncio
+async def test_video_poll_transient_500_recovers(monkeypatch):
+    """A transient 5xx on the poll is retried (backoff) and the poll succeeds."""
+    monkeypatch.setattr(xai_mod.asyncio, "sleep", _no_sleep)
+    prov = XaiProvider(API_KEY)
+    req = await _video_request()
+    poll_url = f"{XAI_BASE}/videos/vid-retry"
+    with aioresponses() as m:
+        m.post(
+            f"{XAI_BASE}/videos/generations",
+            status=200,
+            payload={"request_id": "vid-retry"},
+        )
+        m.get(poll_url, status=500, body=b"boom")
+        m.get(
+            poll_url,
+            status=200,
+            payload={
+                "status": "done",
+                "video": {"url": "https://x.ai/retry.mp4", "respect_moderation": True},
+            },
+        )
+        result = await prov.generate(req)
+
+    assert result.remote_url == "https://x.ai/retry.mp4"
+    assert result.meta["urls"] == ["https://x.ai/retry.mp4"]
+
+
+@pytest.mark.asyncio
+async def test_video_create_without_request_id_raises_generation_error(monkeypatch):
+    monkeypatch.setattr(xai_mod.asyncio, "sleep", _no_sleep)
+    prov = XaiProvider(API_KEY)
+    req = await _video_request()
+    with aioresponses() as m:
+        m.post(f"{XAI_BASE}/videos/generations", status=202, payload={})
+        with pytest.raises(ProviderGenerationError):
+            await prov.generate(req)

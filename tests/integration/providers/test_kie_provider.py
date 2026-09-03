@@ -22,6 +22,7 @@ from grokbot.domain.generation import (
 from grokbot.providers.base import (
     ProviderInputError,
     ProviderNotConfiguredError,
+    ProviderRateLimitError,
     ProviderUnavailableError,
 )
 from grokbot.providers.kie_provider import KieProvider
@@ -313,6 +314,36 @@ def test_create_task_http_500_raises_unavailable():
             body=b"boom",
         )
         with pytest.raises(ProviderUnavailableError):
+            asyncio.run(prov.generate(_req()))
+
+
+def test_create_task_business_code_400_raises_input_error():
+    """M3: a terminal 4xx *business* code (HTTP 200 body) is not retryable."""
+    import asyncio
+
+    prov = KieProvider(API_KEY)
+    with aioresponses() as m:
+        m.post(
+            f"{KIE_BASE}/api/v1/jobs/createTask",
+            status=200,
+            payload={"code": 400, "data": {}},
+        )
+        with pytest.raises(ProviderInputError):
+            asyncio.run(prov.generate(_req()))
+
+
+def test_create_task_business_code_429_raises_rate_limit():
+    """M3: a 429 *business* code stays transient (retryable)."""
+    import asyncio
+
+    prov = KieProvider(API_KEY)
+    with aioresponses() as m:
+        m.post(
+            f"{KIE_BASE}/api/v1/jobs/createTask",
+            status=200,
+            payload={"code": 429, "data": {}},
+        )
+        with pytest.raises(ProviderRateLimitError):
             asyncio.run(prov.generate(_req()))
 
 
