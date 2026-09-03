@@ -46,6 +46,8 @@ CHAT_ID = 111111111
 
 from datetime import datetime, timezone  # noqa: E402
 
+from aiogram import Bot, Dispatcher  # noqa: E402
+from aiogram.fsm.storage.memory import MemoryStorage  # noqa: E402
 from aiogram.types import (  # noqa: E402
     CallbackQuery,
     Chat,
@@ -56,6 +58,15 @@ from aiogram.types import (  # noqa: E402
     User,
 )
 
+from grokbot.application.generate_image import GenerateImageUseCase  # noqa: E402
+from grokbot.application.generate_video import GenerateVideoUseCase  # noqa: E402
+from grokbot.application.job_manager import JobManager  # noqa: E402
+from grokbot.application.manage_config import UpdateUserConfigUseCase  # noqa: E402
+from grokbot.application.manage_lists import ManageListsUseCase  # noqa: E402
+from grokbot.application.refine_flow import ResolveRefineUseCase  # noqa: E402
+from grokbot.application.run_variable_batch import RunVariableBatchUseCase  # noqa: E402
+from grokbot.domain.variables import DEFAULT_TEMPLATE  # noqa: E402
+from grokbot.telegram.deps import BotDeps  # noqa: E402
 from grokbot.telegram.ports import SentMessage  # noqa: E402
 
 
@@ -75,6 +86,7 @@ def text_message(
     chat_id: int = CHAT_ID,
     chat_type: str = "private",
     message_id: int = 1,
+    reply_to_message: Message | None = None,
 ) -> Message:
     return Message(
         message_id=message_id,
@@ -82,10 +94,11 @@ def text_message(
         chat=make_chat(chat_id, type=chat_type),
         from_user=make_user(user_id),
         text=text,
+        reply_to_message=reply_to_message,
     )
 
 
-def photo_message(
+def make_photo_message(
     *,
     caption: str | None = None,
     user_id: int = USER_ID,
@@ -94,6 +107,7 @@ def photo_message(
     message_id: int = 1,
     file_id: str = "FAKE:photo1",
     media_group_id: str | None = None,
+    reply_to_message: Message | None = None,
 ) -> Message:
     photo = PhotoSize(
         file_id=file_id,
@@ -110,7 +124,12 @@ def photo_message(
         photo=[photo],
         caption=caption,
         media_group_id=media_group_id,
+        reply_to_message=reply_to_message,
     )
+
+
+# Alias histórico (foto con caption).
+photo_message = make_photo_message
 
 
 def callback_query(
@@ -121,10 +140,12 @@ def callback_query(
     chat_type: str = "private",
     message_id: int = 1,
     callback_id: str = "cb-1",
+    message: Message | None = None,
 ) -> CallbackQuery:
-    message = text_message(
-        "base", user_id=user_id, chat_id=chat_id, chat_type=chat_type, message_id=message_id
-    )
+    if message is None:
+        message = text_message(
+            "base", user_id=user_id, chat_id=chat_id, chat_type=chat_type, message_id=message_id
+        )
     return CallbackQuery(
         id=callback_id,
         from_user=make_user(user_id),
@@ -374,3 +395,89 @@ def flat_callback_data(markup: InlineKeyboardMarkup | None) -> list[str]:
             if btn.callback_data is not None:
                 out.append(btn.callback_data)
     return out
+
+
+# --- Composición de deps y dispatcher (Task 3) ---------------------------------
+_DEFAULT_LISTS = {
+    "poses": ["de pie", "sentada"],
+    "angles": ["frontal", "perfil"],
+    "actions": ["mirando a cámara", "sonriendo"],
+}
+
+
+def make_deps(
+    *,
+    gateway: FakeTelegramGateway | None = None,
+    downloader: FakeMediaDownloader | None = None,
+    refs: FakeRefsRepo | None = None,
+    sessions: FakeSessionRepo | None = None,
+    variables: FakeVariablesRepo | None = None,
+    registry=None,
+    job_manager: JobManager | None = None,
+    refine_uc: ResolveRefineUseCase | None = None,
+    pending: PendingPrompts | None = None,
+    allowed_telegram_ids: set[int] | None = None,
+    variables_admin_ids: set[int] | None = None,
+    **overrides,
+) -> BotDeps:
+    """Armar un :class:`BotDeps` con fakes (0 red / 0 unittest.mock).
+
+    Los use cases se construyen con fakes compartidos; el ``refine_hook`` del
+    ``JobManager`` queda cableado a ``refine_uc.cancel_for_job`` para que el
+    cancel de un job resuelva las confirmaciones de refine pendientes (R7).
+    """
+    gateway = gateway or FakeTelegramGateway()
+    downloader = downloader or FakeMediaDownloader()
+    sessions = sessions or FakeSessionRepo()
+    variables = variables or FakeVariablesRepo(lists=dict(_DEFAULT_LISTS))
+    refs = refs or FakeRefsRepo()
+    registry = registry if registry is not None else make_registry()
+    refine_uc = refine_uc or ResolveRefineUseCase(provider=registry.provider("comfyui"))
+    job_manager = job_manager or JobManager(refine_hook=refine_uc.cancel_for_job)
+    generate_image = GenerateImageUseCase(sessions=sessions, registry=registry)
+    generate_video = GenerateVideoUseCase(sessions=sessions, registry=registry)
+    run_batch = RunVariableBatchUseCase(
+        sessions=sessions,
+        registry=registry,
+        variables=variables,
+        job_manager=job_manager,
+        generate_image=generate_image,
+    )
+    update_config = UpdateUserConfigUseCase(sessions=sessions)
+    manage_lists = ManageListsUseCase(variables=variables)
+    return BotDeps(
+        gateway=gateway,
+        downloader=downloader,
+        refs=refs,
+        sessions=sessions,
+        variables=variables,
+        job_manager=job_manager,
+        refine_uc=refine_uc,
+        generate_image=generate_image,
+        generate_video=generate_video,
+        run_batch=run_batch,
+        update_config=update_config,
+        manage_lists=manage_lists,
+        pending=pending or PendingPrompts(),
+        allowed_telegram_ids=allowed_telegram_ids,
+        variables_admin_ids=variables_admin_ids,
+    )
+
+
+def make_dispatcher(deps: BotDeps | None = None, *, register: bool = True):
+    """Dispatcher offline con ``MemoryStorage`` y ``Bot("42:TEST")``.
+
+    Si ``register=True`` (default) aplica ``register_all(dp, deps)`` con el deps
+    dado o uno por defecto (fakes).
+    """
+    from aiogram import Dispatcher
+    from aiogram.fsm.storage.memory import MemoryStorage
+
+    if deps is None:
+        deps = make_deps()
+    dp = Dispatcher(storage=MemoryStorage())
+    if register:
+        from grokbot.telegram.handlers import register_all
+
+        register_all(dp, deps)
+    return dp, deps
