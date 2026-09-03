@@ -1,0 +1,56 @@
+# gsd-executor log — Item 3: Repositories (grokv2-rearch)
+
+Pool: grokv2-rearch · Ítem: item3-repositories · Agente: gsd-executor
+Fecha: 2026-09-03
+
+## Baseline (pre-edit)
+- grokV2 git repo OK. Último commit: 4a6a8e6 (docs(pool): item2 test-guardian reporte + log).
+- grok read-only baseline esperado y confirmado:
+  M sources/6181290784.jpg ; ?? variables_packages/hot.json ; ?? variables_packages/sexy.json
+- Python 3.14.x; venv .venv OK (pydantic/pytest/asyncio/aiohttp/replicate instalados).
+- No existen src/grokbot/{application,repositories,telegram,main.py,shared} (se crea repositories/ en este ítem).
+- git status grokV2: solo untracked de planeación (impact-analyzer memory + item3 PLAN dir) — no-code.
+
+## Task 1 — D1 Settings data_dir + paths derivados (work unit 1)
+- settings.py: + from pathlib import Path; + from pydantic import Field; + data_dir: Path = Field(default=Path("data"), alias="GROK_DATA_DIR"); + 4 props sessions_file/variables_file/generation_refs_file/packages_dir.
+- tests/conftest.py: SETTINGS_ENV_VARS += "GROK_DATA_DIR".
+- .env.example: bloque GROK_DATA_DIR.
+- tests/unit/test_settings.py: + test_data_dir_default_and_derived_paths + test_data_dir_env_override (import Path).
+- Verificación: pytest tests/unit -q → 84 passed. pytest tests/unit/test_settings.py -q → 11 passed.
+- grok intacto en gate (baseline solo). pydantic alias GROK_DATA_DIR verificado en runtime.
+
+## Task 2 — repositories/base.py + __init__.py (work unit 2)
+- base.py: 3 Protocols @runtime_checkable (SessionRepository/VariablesRepository/GenerationRefsRepository) + write_json_atomic (parent mkdir + mkstemp mismo dir + os.replace; ensure_ascii=True default, indent=2, sin sort_keys). Imports stdlib + UserConfig únicamente.
+- __init__.py: re-export Protocols + write_json_atomic (concretos se agregan en Tasks 3-5).
+- Verificación: .venv/bin/python -c "import grokbot.repositories; print(...)" ok.
+- grok intacto.
+
+## Task 3 — json_session_repo.py + tests (work unit 3)
+- json_session_repo.py: JsonSessionRepository con VIDEO_HOURLY_WINDOW_SEC=3600; _default_record desde UserConfig.defaults().to_record()+video_hourly_timestamps; _load (missing->{}, non-dict top->ValueError, malformado propaga JSONDecodeError); _save atomic ensure_ascii default True; _ensure_full hardened A4 (legacy primero, canonical gana si ambos); get_config (persiste default si nuevo, guard non-dict ValueError); save_config merge no destructivo + pop grok_provider; record/count/count_global quota con prune ventana 3600; persistencia solo si cambió.
+- __init__.py: + JsonSessionRepository export.
+- tests/integration/repositories/test_json_session_repo.py: 12 casos (fixtures anonimizados 111111111; canonical/legacy/coexistence; round-trip paridad; corrupto; dump-flags ensure_ascii True).
+- Verificación: pytest tests/integration/repositories/test_json_session_repo.py tests/unit -q → 96 passed.
+- grok intacto.
+
+## Task 4 — json_variables_repo.py + tests (work unit 4)
+- json_variables_repo.py: JsonVariablesRepository (path, packages_dir default sibling variables_packages); DEFAULT_LISTS transcrito verbatim de grok variables_store.py:38-70 (poses 10/actions 5/angles 10); threading.Lock; _load tolerante (corrupto/missing/no-dict->{}); _save + _save_package atomic ensure_ascii=False; _ensure_full seed SOLO si lists ausente/vacío (no contamina paquete); CRUD+template+blacklist con semántica grok; packages D3/D7: list_packages()->list[str] sorted, save (normaliza lists/fields), load/package_exists/active_package_name/activate (blacklist [] + _package)/delete (activo->False). _slugify/_normalize_package_payload mirror.
+- __init__.py: + JsonVariablesRepository + DEFAULT_LISTS exports.
+- tests/integration/repositories/test_json_variables_repo.py: 12 casos (seed new/empty/corrupt; paquete-activo no contamina y preserva _package/_extra_top; CRUD; blacklist; is_valid_list_name D8; packages D3; activate missing; dump-flags ensure_ascii=False).
+- Verificación: pytest tests/unit tests/integration/repositories -q → 108 passed.
+- grok intacto.
+
+## Task 5 — generation_refs_repo.py + tests + suite completa (work unit 5)
+- generation_refs_repo.py: JsonGenerationRefsRepository con GENERATION_REF_TTL_SEC=14d; save guard (not kie_task_id and not regen -> no-op); record provider/kind/prompt truncado 500/created_at now inyectable; kie_task_id+clamp kie_index 0..5; regen opaco; _load (missing->{}, top no-dict->{}, malformado propaga JSONDecodeError); _save atomic ensure_ascii True; _prune TTL en save y get; get persiste prune solo si el key pedido existe.
+- __init__.py: + JsonGenerationRefsRepository export.
+- tests/integration/repositories/test_generation_refs_repo.py: 12 casos (shape, no-op, regen-only, truncado, clamp, get existente/missing, prune persist solo si key presente, get vencida sin escribir, extras preservadas, regen opaco, no-dict/corrupto, dump-flags ensure_ascii True). Ajuste A7: get usa time real -> guardar con now real en tests de get.
+- Verificación: suite ítem pytest tests/unit tests/integration/repositories -q → 120 passed. Suite completa pytest tests -q → 201 passed (baseline 163 + 38 nuevos). import grokbot.repositories ok. grok intacto (baseline solo). No dirs ítems 4-6 creados.
+
+## Self-Check: PASSED
+- [x] Todas las tareas completadas (1-5)
+- [x] Suite del PLAN corrida: .venv/bin/pytest tests/unit tests/integration/repositories -q → 120 passed
+- [x] 0 regresiones atribuibles: .venv/bin/pytest tests -q → 201 passed (baseline 163 + 38 nuevos)
+- [x] Convenciones del proyecto respetadas (sync, escritura atómica, dump-flags D9, fixtures anonimizados, sin print)
+- grok intacto: baseline solo (M sources/6181290784.jpg ; ?? variables_packages/hot.json sexy.json)
+- No existen src/grokbot/{application,telegram,main.py,shared}; providers/* y domain/* intactos
+- SUMMARY.md: Write denegado por harness → contenido completo en reporte final al orquestador (patrón fallback).
+- Commits del ítem: f3f5923 (settings D1) · ee2c4f3 (base) · 17eefbd (session repo) · abf35ca (variables repo) · 171aec5 (refs repo, amended) · + chore final log/planning/memory.
