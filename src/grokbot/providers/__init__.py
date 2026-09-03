@@ -27,7 +27,10 @@ from grokbot.providers.base import (
     detect_image_mime,
     validate_image_for_i2v,
 )
+from grokbot.providers.comfyui.provider import ComfyUIProvider
+from grokbot.providers.comfyui.ssh_client import SshClient
 from grokbot.providers.kie_provider import KieProvider
+from grokbot.providers.registry import ProviderRegistry, ProviderResolution
 from grokbot.providers.replicate_provider import ReplicateProvider
 from grokbot.providers.xai_provider import XaiProvider
 
@@ -56,4 +59,8 @@ __all__ = [
     "XaiProvider",
     "ReplicateProvider",
     "KieProvider",
+    "ComfyUIProvider",
+    "SshClient",
+    "ProviderRegistry",
+    "ProviderResolution",
 ]
