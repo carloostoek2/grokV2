@@ -143,6 +143,18 @@ class ResolveRefineUseCase:
         """Quitar un pending (limpieza; también tras resolver/timeout/cancel)."""
         self._pending.pop(token, None)
 
+    def owner_of(self, token: str) -> int | None:
+        """User id dueño de una confirmación AÚN no resuelta (parity 1281-1296).
+
+        Devuelve None cuando el token es desconocido O ya fue resuelto/borrado
+        (la UI distingue "La confirmación ya se procesó." de "No es tu
+        confirmación." consultando primero este método).
+        """
+        entry = self._pending.get(token)
+        if entry is None or entry.future.done():
+            return None
+        return entry.user_id
+
     def pending_count(self, user_id: int) -> int:
         return sum(1 for entry in self._pending.values() if entry.user_id == user_id)
 
