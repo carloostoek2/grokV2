@@ -24,6 +24,7 @@ from grokbot.application.events import (
     ItemResult,
     ItemStarted,
     JobsFull,
+    RetryScheduled,
 )
 from grokbot.application.generate_image import GenerateImageUseCase
 from grokbot.application.job_manager import JobManager
@@ -202,7 +203,7 @@ class RunVariableBatchUseCase:
         source_image: bytes | None = None,
         source_file_id: str | None = None,
         mode: str = "edit",
-    ) -> AsyncIterator[BatchStarted | ItemStarted | ItemResult | ItemFailed | BatchCancelled | BatchSummary | EmptyList | BatchRejected | JobsFull]:
+    ) -> AsyncIterator[BatchStarted | ItemStarted | RetryScheduled | ItemResult | ItemFailed | BatchCancelled | BatchSummary | EmptyList | BatchRejected | JobsFull]:
         cfg = self._sessions.get_config(user_id)
 
         # 1. Rechazo temprano de modelos que no generan imágenes.
@@ -277,13 +278,22 @@ class RunVariableBatchUseCase:
                     source_file_id=source_file_id,
                     allow_shuffle=(strategy.style == "variables"),
                 ):
-                    if isinstance(ev, ItemFailed) and ev.exhausted and strategy.style == "variables":
-                        self._variables.blacklist_add(draw.key)
-                        failed += 1
-                    elif isinstance(ev, ItemResult):
-                        completed += 1
-                    elif isinstance(ev, ItemFailed):
-                        failed += 1
+                    # Terminal del item en vuelo. Paridad grok 2387-2399 / 2736-2741:
+                    # si el usuario canceló mientras este item generaba (o durante el
+                    # shuffle-retry), se SUPRIME el terminal (no se envía media/error,
+                    # no se cuenta) y se emite BatchCancelled — incluso si es el último
+                    # item (nunca BatchSummary con un item en vuelo cancelado).
+                    if isinstance(ev, (ItemResult, ItemFailed)):
+                        if self._job_manager.is_cancelled(job):
+                            yield BatchCancelled(completed=completed, failed=failed, total=count)
+                            return
+                        if isinstance(ev, ItemFailed) and ev.exhausted and strategy.style == "variables":
+                            self._variables.blacklist_add(draw.key)
+                            failed += 1
+                        elif isinstance(ev, ItemResult):
+                            completed += 1
+                        elif isinstance(ev, ItemFailed):
+                            failed += 1
                     yield ev
             yield BatchSummary(completed=completed, failed=failed, total=count)
         finally:
@@ -301,13 +311,15 @@ class RunVariableBatchUseCase:
         source_image: bytes | None,
         source_file_id: str | None,
         allow_shuffle: bool,
-    ) -> AsyncIterator[ItemResult | ItemFailed]:
-        """Corre el inner GenerateImageUseCase y decide el shuffle-retry.
+    ) -> AsyncIterator[RetryScheduled | ItemResult | ItemFailed]:
+        """Corre el inner GenerateImageUseCase, relaya su progreso y decide el shuffle-retry.
 
         Paridad grok 2386-2411: en random, un ``ItemFailed(exhausted=True)`` de
         la primera corrida se SUPRIME y se reintenta con el prompt derangement;
         el terminal que se propaga es el de la segunda corrida. El caller hace
-        ``blacklist_add`` si esa segunda también agota.
+        ``blacklist_add`` si esa segunda también agota. La cancel se chequea en
+        el caller al recibir el terminal, y ACÁ antes del shuffle (grok 2389-2391:
+        un cancel tras el primer generate aborta el item sin reintentar).
         """
         shuffled = False
         async for ev in self._generate_image.run(
@@ -322,6 +334,12 @@ class RunVariableBatchUseCase:
                 yield ev
                 return
             if isinstance(ev, ItemFailed) and ev.exhausted and allow_shuffle and not shuffled:
+                # Cancel tras la primera corrida → se aborta el shuffle: se
+                # propaga el terminal exhausted para que el caller (que ve el
+                # cancel seteado) emita BatchCancelled sin blacklistear ni contar.
+                if self._job_manager.is_cancelled(job):
+                    yield ev
+                    return
                 shuffled = True
                 shuffled_prompt = build_shuffled_prompt(self._variables.get_template(), draw.values)
                 async for ev2 in self._generate_image.run(

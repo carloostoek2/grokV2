@@ -187,20 +187,29 @@ async def test_jobs_full_when_three_active(sessions, variables_repo, fast_sleep)
 
 
 class _GatedKieProvider(FakeImageProvider):
-    """Kie fake cuyo generate se bloquea hasta que el test lo libera."""
+    """Kie fake cuyo generate se bloquea hasta que el test lo libera.
 
-    def __init__(self, gate: asyncio.Event, entered: asyncio.Event, *, outcomes=None) -> None:
+    ``block_calls=None`` (default) bloquea TODAS las llamadas; con un set
+    (1-based) solo bloquea las llamadas indicadas y deja pasar las demás —
+    permite escenarios "ítem i completo, ítem i+1 en vuelo".
+    """
+
+    def __init__(self, gate, entered, *, outcomes=None, block_calls=None) -> None:
         super().__init__(name="kie", outcomes=outcomes)
         self._gate = gate
         self.entered = entered
+        self._calls = 0
+        self._block_calls = block_calls
 
     async def generate(self, request, *, source_image=None):
-        self.entered.set()
-        await self._gate.wait()
+        self._calls += 1
+        if self._block_calls is None or self._calls in self._block_calls:
+            self.entered.set()
+            await self._gate.wait()
         return await super().generate(request, source_image=source_image)
 
 
-async def test_cancel_between_items_yields_batch_cancelled(sessions, variables_repo, fast_sleep):
+async def test_cancel_during_generation_suppresses_inflight_item(sessions, variables_repo, fast_sleep):
     gate = asyncio.Event()
     entered = asyncio.Event()
     prov = _GatedKieProvider(gate, entered, outcomes=[_ok_result(1)])
@@ -215,16 +224,87 @@ async def test_cancel_between_items_yields_batch_cancelled(sessions, variables_r
             events.append(ev)
 
     task = asyncio.create_task(_consume())
-    await asyncio.wait_for(entered.wait(), timeout=2)
+    await asyncio.wait_for(entered.wait(), timeout=2)  # item 1 en vuelo (generando)
     job_id = jm.active_jobs(USER_ID)[0].job_id
     jm.cancel(USER_ID, job_id)
     gate.set()
     await asyncio.wait_for(task, timeout=2)
 
+    # El item en vuelo se SUPRIME: su ItemResult no se relayea ni se cuenta y el
+    # batch termina en BatchCancelled — paridad grok bot.py 2387-2399.
+    cancelled = [ev for ev in events if isinstance(ev, BatchCancelled)]
+    assert len(cancelled) == 1
+    assert (cancelled[0].completed, cancelled[0].failed, cancelled[0].total) == (0, 0, 3)
+    assert not any(isinstance(ev, (ItemResult, ItemFailed)) for ev in events)
+    assert not any(isinstance(ev, BatchSummary) for ev in events)
+    assert [type(ev).__name__ for ev in events] == ["BatchStarted", "ItemStarted", "BatchCancelled"]
+    assert prov.generate_count == 1  # la generación en vuelo corrió pero no se entregó
+    assert jm.active_count(USER_ID) == 0
+
+
+async def test_cancel_during_last_item_yields_batch_cancelled_not_summary(sessions, variables_repo, fast_sleep):
+    gate = asyncio.Event()
+    entered = asyncio.Event()
+    prov = _GatedKieProvider(gate, entered, outcomes=[_ok_result(1)])
+    reg = make_registry(kie=prov)
+    jm = JobManager()
+    uc, _ = _uc(sessions, reg, variables_repo, jm=jm)
+
+    events: list = []
+
+    async def _consume():
+        async for ev in uc.run(user_id=USER_ID, count=1, strategy=RandomComboStrategy(variables_repo)):
+            events.append(ev)
+
+    task = asyncio.create_task(_consume())
+    await asyncio.wait_for(entered.wait(), timeout=2)  # ÚLTIMO item en vuelo
+    job_id = jm.active_jobs(USER_ID)[0].job_id
+    jm.cancel(USER_ID, job_id)
+    gate.set()
+    await asyncio.wait_for(task, timeout=2)
+
+    # Cancel durante el último item: NUNCA BatchSummary con un item en vuelo.
+    cancelled = [ev for ev in events if isinstance(ev, BatchCancelled)]
+    assert len(cancelled) == 1
+    assert (cancelled[0].completed, cancelled[0].failed, cancelled[0].total) == (0, 0, 1)
+    assert not any(isinstance(ev, (ItemResult, ItemFailed)) for ev in events)
+    assert not any(isinstance(ev, BatchSummary) for ev in events)
+    assert [type(ev).__name__ for ev in events] == ["BatchStarted", "ItemStarted", "BatchCancelled"]
+    assert prov.generate_count == 1
+    assert jm.active_count(USER_ID) == 0
+
+
+async def test_cancel_between_items_counts_finished_suppresses_next(sessions, variables_repo, fast_sleep):
+    gate = asyncio.Event()
+    entered = asyncio.Event()
+    # Item 1 pasa libre; item 2 queda en vuelo (gate).
+    prov = _GatedKieProvider(gate, entered, outcomes=[_ok_result(1), _ok_result(2)], block_calls={2})
+    reg = make_registry(kie=prov)
+    jm = JobManager()
+    uc, _ = _uc(sessions, reg, variables_repo, jm=jm)
+
+    events: list = []
+
+    async def _consume():
+        async for ev in uc.run(user_id=USER_ID, count=3, strategy=RandomComboStrategy(variables_repo)):
+            events.append(ev)
+
+    task = asyncio.create_task(_consume())
+    await asyncio.wait_for(entered.wait(), timeout=2)  # item 1 completado, item 2 en vuelo
+    assert sum(1 for ev in events if isinstance(ev, ItemResult)) == 1
+    job_id = jm.active_jobs(USER_ID)[0].job_id
+    jm.cancel(USER_ID, job_id)
+    gate.set()
+    await asyncio.wait_for(task, timeout=2)
+
+    # Lo ya completado se cuenta (completed=1); el item en vuelo se suprime.
     cancelled = [ev for ev in events if isinstance(ev, BatchCancelled)]
     assert len(cancelled) == 1
     assert (cancelled[0].completed, cancelled[0].failed, cancelled[0].total) == (1, 0, 3)
+    assert sum(1 for ev in events if isinstance(ev, ItemResult)) == 1  # solo item 1
+    assert not any(isinstance(ev, ItemFailed) for ev in events)
     assert not any(isinstance(ev, BatchSummary) for ev in events)
+    assert prov.generate_count == 2
     assert jm.active_count(USER_ID) == 0
 
 
