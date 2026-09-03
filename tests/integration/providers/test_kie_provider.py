@@ -22,6 +22,7 @@ from grokbot.domain.generation import (
 from grokbot.providers.base import (
     ProviderInputError,
     ProviderNotConfiguredError,
+    ProviderUnavailableError,
 )
 from grokbot.providers.kie_provider import KieProvider
 
@@ -285,6 +286,34 @@ async def test_video_15_i2v_slug_no_mode(monkeypatch):
     assert inp["duration"] == 10
     assert inp["image_urls"] == ["https://tempfile.redpandaai.co/v.png"]
     assert "mode" not in inp  # 1.5 i2v omits mode entirely
+
+
+def test_create_task_http_400_raises_input_error_not_unavailable():
+    import asyncio
+
+    prov = KieProvider(API_KEY)
+    with aioresponses() as m:
+        m.post(
+            f"{KIE_BASE}/api/v1/jobs/createTask",
+            status=400,
+            body=b"bad payload",
+        )
+        with pytest.raises(ProviderInputError):
+            asyncio.run(prov.generate(_req()))
+
+
+def test_create_task_http_500_raises_unavailable():
+    import asyncio
+
+    prov = KieProvider(API_KEY)
+    with aioresponses() as m:
+        m.post(
+            f"{KIE_BASE}/api/v1/jobs/createTask",
+            status=500,
+            body=b"boom",
+        )
+        with pytest.raises(ProviderUnavailableError):
+            asyncio.run(prov.generate(_req()))
 
 
 @pytest.mark.asyncio

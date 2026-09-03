@@ -549,6 +549,12 @@ class KieProvider:
         return result_url, None
 
     def _raise_http_status(self, status: int, *, context: str) -> None:
+        """Map a non-ok HTTP status to a typed, user-safe ProviderError.
+
+        D3/M3: terminal 4xx (except 404/422 handled as transient inside the poll
+        loop) surface as :class:`ProviderInputError`; only 5xx map to
+        :class:`ProviderUnavailableError` (retryable).
+        """
         if status in (401, 403):
             raise ProviderAuthenticationError(
                 f"Kie authentication failed ({context}).",
@@ -559,13 +565,29 @@ class KieProvider:
                 f"Kie rate limit ({context}).",
                 user_message="Demasiadas solicitudes. Intenta de nuevo en unos segundos.",
             )
+        if 400 <= status < 500:
+            raise ProviderInputError(
+                f"Kie HTTP {status} ({context}).",
+                user_message=_USER_ERROR,
+            )
         raise ProviderUnavailableError(
             f"Kie HTTP {status} ({context}).",
             user_message=_USER_ERROR,
         )
 
     def _raise_api_code(self, api_code: int | None) -> None:
-        raise ProviderUnavailableError(
+        """Map a non-200 Kie business code to a terminal (non-retryable) error."""
+        if api_code == 429:
+            raise ProviderRateLimitError(
+                "Kie rate limit",
+                user_message="Demasiadas solicitudes. Intenta de nuevo en unos segundos.",
+            )
+        if isinstance(api_code, int) and 400 <= api_code < 500:
+            raise ProviderInputError(
+                f"Kie api code {api_code}",
+                user_message=_USER_ERROR,
+            )
+        raise ProviderGenerationError(
             f"Kie api code {api_code}",
             user_message=_USER_ERROR,
         )
