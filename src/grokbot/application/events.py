@@ -9,8 +9,12 @@ payloads pagos (R6/R8): el copy/format lo decide item 5.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from grokbot.domain.generation import GenerationResult
+
+if TYPE_CHECKING:
+    from grokbot.domain.generation import GenerationRequest
 
 
 @dataclass(frozen=True)
@@ -18,13 +22,16 @@ class BatchStarted:
     """Encabezado de un batch (item 5 muestra el header con botón cancelar).
 
     ``style`` es ``"variables"`` (random) | ``"var"`` (fijo) | ``"multipose"``.
-    Paridad: grok bot.py 2321-2324 (random), 2730-2733 (var), 2180-2184 (multipose).
+    ``job_id`` identifica el job activo del batch (item 5 lo usa para el teclado
+    Cancelar; aditivo D2 del item 5). Paridad: grok bot.py 2321-2324 (random),
+    2730-2733 (var), 2180-2184 (multipose).
     """
 
     style: str
     total: int
     provider: str | None = None
     model_id: str | None = None
+    job_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -61,7 +68,9 @@ class ItemResult:
     ``result`` viaja intacto (item 5 decide fan-out por ``meta["file_paths"]`` /
     ``meta["urls"]``, R10). ``combos`` se setea en multipose para el resumen de
     "poses usadas"; ``regen_context`` lo persiste item 5 (opaco, sin payloads).
-    Paridad: grok bot.py 2416-2423 / 2220-2226.
+    ``request`` es el :class:`GenerationRequest` efectivo del ítem (aditivo D2 del
+    item 5): refine_chat lo usa para el segundo stage sin re-resolver el provider
+    con la config actual. Paridad: grok bot.py 2416-2423 / 2220-2226.
     """
 
     result: GenerationResult
@@ -70,6 +79,7 @@ class ItemResult:
     total: int | None = None
     combos: tuple[str, ...] | None = None
     regen_context: dict | None = None
+    request: "GenerationRequest | None" = None
 
 
 @dataclass(frozen=True)

@@ -249,7 +249,7 @@ class RunVariableBatchUseCase:
         completed = 0
         failed = 0
         try:
-            yield BatchStarted(style=strategy.style, total=count)
+            yield BatchStarted(style=strategy.style, total=count, job_id=job.job_id)
             used: set[tuple[str, ...]] = set()
             for i in range(1, count + 1):
                 if self._job_manager.is_cancelled(job):
@@ -394,7 +394,7 @@ class RunVariableBatchUseCase:
             return
 
         try:
-            yield BatchStarted(style="multipose", total=MULTIPOSE_BATCH_SIZE)
+            yield BatchStarted(style="multipose", total=MULTIPOSE_BATCH_SIZE, job_id=job.job_id)
             strategy = RandomComboStrategy(self._variables)
             used: set[tuple[str, ...]] = set()
             combos: list[DrawnCombo] = []
@@ -437,6 +437,7 @@ class RunVariableBatchUseCase:
                     prompt=ok_result.prompt,
                     combos=labels,
                     regen_context=ok_result.regen_context,
+                    request=ok_result.request,
                 )
                 yield BatchSummary(completed=1, failed=0, total=1, combos=labels)
         finally:

@@ -115,8 +115,12 @@ class GenerateImageUseCase:
         prompts: list[str] | None = None,
         index: int | None = None,
         total: int | None = None,
+        cfg_override: UserConfig | None = None,
     ) -> AsyncIterator[ItemResult | ItemFailed | RetryScheduled]:
-        cfg = self._sessions.get_config(user_id)
+        # cfg_override (aditivo D2 del item 5): el caller (regen/edit) puede fijar
+        # la config efectiva del request sin re-leer sessions (el usuario pudo
+        # cambiar /config entre base y confirm; paridad grok ``_process_single_photo_edit``).
+        cfg = cfg_override if cfg_override is not None else self._sessions.get_config(user_id)
 
         # 1. Resolver el provider de imagen para la config.
         try:
@@ -212,5 +216,6 @@ class GenerateImageUseCase:
                 index=index,
                 total=total,
                 regen_context=ctx,
+                request=request,
             )
             return
