@@ -27,6 +27,7 @@ from grokbot.providers.base import (
     detect_image_mime,
     validate_image_for_i2v,
 )
+from grokbot.providers.replicate_provider import ReplicateProvider
 from grokbot.providers.xai_provider import XaiProvider
 
 __all__ = [
@@ -52,4 +53,5 @@ __all__ = [
     "detect_image_mime",
     "validate_image_for_i2v",
     "XaiProvider",
+    "ReplicateProvider",
 ]
