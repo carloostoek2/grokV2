@@ -40,3 +40,11 @@ python3 = 3.14.4, venv OK, red a PyPI = 200. grok venv tiene pydantic 2.13.4/pyt
 - 16:18: tests/unit/test_settings.py → 9 passed. Suite completa (smoke+settings) → 10 passed.
 - import grokbot.settings sin env → OK (no instancia Settings en import).
 - Commit: feat(settings)
+
+## Gate 4 — TASK 3a: domain/catalog + generation + job + __init__ + tests
+- 2026-09-03 16:19: commit settings 07f (ver git). Se crea paquete domain puro (stdlib).
+
+### TASK 3a resultado
+- 16:20: tests domain 3a (catalog+generation+job) → 16 passed. Suite completa → 26 passed.
+- Solo stdlib en domain/. grok sin cambios.
+- Commit: feat(domain): catalog + generation + job
