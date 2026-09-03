@@ -15,11 +15,13 @@ from __future__ import annotations
 
 import importlib
 import importlib.util
+import logging
 import pathlib
 
 import pydantic
 import pytest
 from aiogram import Bot
+from aiogram.filters import Command
 
 import grokbot.main as main
 from grokbot.settings import Settings, get_settings
@@ -80,6 +82,7 @@ def test_build_deps_wiring_real(tmp_path, monkeypatch):
     _set_base_env(monkeypatch, tmp_path)
     monkeypatch.setenv("ALLOWED_TELEGRAM_IDS", "111111111")
     monkeypatch.setenv("VARIABLES_ADMIN_IDS", "999")
+    monkeypatch.setenv("REFINE_CONFIRM_TIMEOUT", "123")  # D3: timeout se cablea de Settings
     settings = get_settings()
 
     deps = main.build_deps(settings)
@@ -97,6 +100,9 @@ def test_build_deps_wiring_real(tmp_path, monkeypatch):
     assert deps.variables._packages_dir == settings.packages_dir
     assert isinstance(deps.refs, JsonGenerationRefsRepository)
     assert deps.refs._path == settings.generation_refs_file
+
+    # El timeout de refine_uc se cablea desde Settings (D3: refinado confirmación).
+    assert deps.refine_uc._timeout == 123.0
 
     # IDs allowlist/admin.
     assert deps.allowed_telegram_ids == {111111111}
@@ -194,3 +200,34 @@ async def test_assembly_smoke_allowlist_deny_y_allow(tmp_path, monkeypatch):
     await dp.feed_update(_BOT, message_update(text_message("/start")))
     texts = _sent_texts(gateway)
     assert any("Modelo actual:" in t for t in texts)
+
+
+# -- 8. Error-handler global de updates (O2 arch: C3 sin secrets) -------------------
+async def test_error_handler_global_loguea_solo_tipo_sin_payload(
+    tmp_path, monkeypatch, caplog
+):
+    _set_base_env(monkeypatch, tmp_path)
+    settings = get_settings()
+    gateway = FakeTelegramGateway()
+    deps = main.build_deps(settings, gateway=gateway, downloader=FakeMediaDownloader())
+    dp = main.assemble_dispatcher(deps)
+
+    # Handler sintético que lanza: deriva la excepción al @dp.errors.register que
+    # registra assemble_dispatcher (el error-handler real; no se mockea). El payload
+    # del raise nunca debe filtrarse al log (C3).
+    async def _boom_handler(message) -> None:
+        raise RuntimeError("SECRET-PAYLOAD-O2")
+
+    dp.message.register(_boom_handler, Command("boom"))
+
+    with caplog.at_level(logging.ERROR, logger="grokbot.main"):
+        await dp.feed_update(_BOT, message_update(text_message("/boom")))
+
+    assert any(
+        r.name == "grokbot.main"
+        and r.getMessage() == "Error procesando update (tipo=RuntimeError)."
+        for r in caplog.records
+    ), f"no se logueó el tipo de error: {caplog.text}"
+    assert "SECRET-PAYLOAD-O2" not in caplog.text
+    # C3: tampoco se filtran textos del update (p. ej. el comando) en el record.
+    assert not any("/boom" in r.getMessage() for r in caplog.records)
