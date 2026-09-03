@@ -22,6 +22,8 @@ from grokbot.domain.generation import (
 from grokbot.domain.user_config import (
     DEFAULT_COMFYUI_LORA,
     DEFAULT_COMFYUI_MODEL,
+    VALID_COMFYUI_LORAS,
+    VALID_COMFYUI_MODELS,
 )
 from grokbot.providers.base import (
     ProviderGenerationError,
@@ -121,9 +123,20 @@ class ComfyUIProvider:
 
     # -- internals --------------------------------------------------------
     def _model_lora(self, request: GenerationRequest) -> tuple[str, str]:
-        cm = request.params.get("model") or DEFAULT_COMFYUI_MODEL
-        cl = request.params.get("lora") or DEFAULT_COMFYUI_LORA
-        return str(cm), str(cl)
+        """Resolve comfyui model/lora and validate against the known sets.
+
+        Values are interpolated into a remote shell command; only catalog-valid
+        identifiers are accepted so a crafted ``params`` value (quote, ``;``,
+        ``$()``) can never break out of the single quotes (M1 hardening).
+        """
+        cm = str(request.params.get("model") or DEFAULT_COMFYUI_MODEL)
+        cl = str(request.params.get("lora") or DEFAULT_COMFYUI_LORA)
+        if cm not in VALID_COMFYUI_MODELS or cl not in VALID_COMFYUI_LORAS:
+            raise ProviderInputError(
+                "Configuración de ComfyUI inválida.",
+                user_message="Error en la generación. Intenta de nuevo más tarde.",
+            )
+        return cm, cl
 
     @staticmethod
     def _gen_command(comfyui_model: str, lora: str) -> str:
@@ -171,6 +184,13 @@ class ComfyUIProvider:
     ) -> GenerationResult:
         self._raise_if_not_configured()
         cm, cl = self._model_lora(request)
+        # M2: a VIDEO request with an image-only comfyui model is a caller seam —
+        # never silently run an image generation and report IMAGE.
+        if request.media_type is MediaType.VIDEO and not _is_comfy_video_model(cm):
+            raise ProviderInputError(
+                "El modelo ComfyUI configurado no genera video.",
+                user_message="El modelo ComfyUI configurado no genera video.",
+            )
         run_timeout = _COMFY_VIDEO_TIMEOUT if _is_comfy_video_model(cm) else _COMFY_IMAGE_TIMEOUT
         cmd = self._gen_command(cm, cl)
 

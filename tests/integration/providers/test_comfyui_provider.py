@@ -217,6 +217,64 @@ async def test_refine_returncodes_map_to_typed_errors():
         await prov.refine(_req(), ["/workspace/a.png"])
 
 
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"model": "krea2' ; touch /tmp/pwned", "lora": "none"},
+        {"model": "krea2", "lora": "none'; rm -rf /tmp"},
+        {"model": "modelo_inexistente", "lora": "none"},
+        {"model": "krea2", "lora": "$(id)"},
+    ],
+)
+@pytest.mark.asyncio
+async def test_m1_invalid_model_or_lora_raises_before_command(params):
+    fake = FakeSsh()
+    prov = _provider(fake)
+
+    with pytest.raises(ProviderInputError):
+        await prov.generate(_req(params=params))
+
+    assert fake.run_calls == []  # never composed/ran a shell command
+
+
+@pytest.mark.asyncio
+async def test_m1_refine_validates_model_and_lora():
+    fake = FakeSsh()
+    prov = _provider(fake)
+
+    with pytest.raises(ProviderInputError):
+        await prov.refine(_req(params={"model": "krea2'; id", "lora": "none"}), ["/workspace/a.png"])
+
+    assert fake.run_calls == []
+
+
+@pytest.mark.asyncio
+async def test_m1_valid_model_lora_command_is_plain():
+    fake = FakeSsh(remotes=("/workspace/ok.png",))
+    prov = _provider(fake)
+    await prov.generate(_req(params={"model": "krea2_raw", "lora": "krea_snapshot"}))
+
+    cmd = fake.run_calls[0]["cmd"]
+    model_part = cmd.split("MODEL='")[1].split("'", 1)[0]
+    lora_part = cmd.split("LORA='")[1].split("'", 1)[0]
+    # Only the validated identifiers reach the shell command (no raw params).
+    assert model_part == "krea2_raw"
+    assert lora_part == "krea_snapshot"
+
+
+@pytest.mark.asyncio
+async def test_m2_video_request_with_image_model_raises():
+    fake = FakeSsh()
+    prov = _provider(fake)
+    req = _req(media_type=MediaType.VIDEO, params={"model": "krea2"})
+
+    with pytest.raises(ProviderInputError) as exc:
+        await prov.generate(req, source_image=PNG_1x1)
+
+    assert "no genera video" in exc.value.user_message
+    assert fake.run_calls == []
+
+
 @pytest.mark.asyncio
 async def test_supports_routing():
     fake = FakeSsh()
