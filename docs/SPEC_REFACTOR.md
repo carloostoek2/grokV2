@@ -125,7 +125,7 @@ grok-bot/
 │       └── shared/
 │           ├── __init__.py
 │           ├── logging.py
-│           └── errors.py              # excepciones de dominio (ProviderError, ValidationError...)
+│           └── errors.py              # helpers user-safe del entrypoint (D8: sin jerarquía de errores)
 │
 └── tests/
     ├── unit/                          # domain + application, sin red ni Telegram
@@ -137,6 +137,13 @@ grok-bot/
     └── e2e/                           # handlers de Telegram con mensajes simulados
         └── telegram/
 ```
+
+> **C13/D8 — jerarquía de errores.** A diferencia de lo que sugería un borrador
+> anterior, `shared/errors.py` NO contiene la jerarquía de excepciones del dominio.
+> Las excepciones tipadas viven en su capa: `ProviderError*` en `providers/base.py`,
+> errores de media/descarga en `telegram/ports.py` y `telegram/downloader.py`.
+> `shared/errors.py` solo expone helpers user-safe del entrypoint (p. ej. formatear
+> errores de Settings por nombre de campo para el mensaje al usuario).
 
 ### 5.2 Flujo de una petición típica (ej. `/variables 5` con foto)
 
@@ -226,7 +233,7 @@ Se carga una sola vez en `main.py`, se valida con Pydantic (falla rápido si fal
 | **Extensibilidad de proveedores** | Agregar un proveedor nuevo de imagen/video no debe requerir cambios en `application/` ni `telegram/`, solo una nueva clase en `providers/` + registro en `registry.py` |
 | **Observabilidad** | Logging estructurado centralizado (`shared/logging.py`), reemplaza los `print`/logs ad-hoc dispersos |
 | **Resiliencia ante reinicio** | El `JobManager` y el FSM deben poder respaldarse en un backend persistente (Redis) sin romper contratos, aunque la implementación default siga siendo in-memory para desarrollo |
-| **Seguridad** | Allowlist y admin-list se mantienen como middleware transversal, ahora testeado de forma aislada; validación de inputs (prompts, tamaños de imagen, hosts permitidos para descarga) se mueve a `domain`/`shared/errors.py` como reglas explícitas, no funciones sueltas con prefijo `_` |
+| **Seguridad** | Allowlist y admin-list se mantienen como middleware transversal, ahora testeado de forma aislada; validación de inputs (prompts, tamaños de imagen, hosts permitidos para descarga) se mueve a `domain`/`providers`/`repositories` como reglas explícitas, no funciones sueltas con prefijo `_`. D8: las excepciones tipadas viven en su capa (`ProviderError*` en `providers/base.py`, errores de media/descarga en `telegram/ports.py`/`telegram/downloader.py`); `shared/errors.py` solo tiene helpers user-safe del entrypoint (C13). |
 | **Migración de datos** | Los JSON existentes (`sessions.json`, `variables_lists.json`) deben poder leerse tal cual por los nuevos repositorios sin requerir migración de datos manual |
 | **Compatibilidad de comandos** | Los comandos y alias actuales (`/config`, `/model`, `/imagine`, `/imaginess`, `/video`, `/variables`, `/var`, `/listas`) se mantienen sin cambios de cara al usuario |
 
