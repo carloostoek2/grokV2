@@ -13,7 +13,7 @@ from grokbot.application.events import ItemFailed, ItemResult
 from grokbot.application.generate_video import GenerateVideoUseCase
 from grokbot.domain.generation import MediaType
 from grokbot.domain.user_config import ComfyUIConfig, UserConfig
-from grokbot.providers.base import ProviderTimeoutError
+from grokbot.providers.base import ProviderRateLimitError, ProviderTimeoutError
 
 from conftest import USER_ID, FakeComfyuiProvider, FakeVideoProvider, make_registry, make_result
 
@@ -141,3 +141,40 @@ async def test_comfyui_video_model_allowed(sessions):
     assert ev.result is result
     request, _ = prov.calls[0]
     assert request.params["model"] == "wan_i2v"
+
+
+async def test_resolve_video_not_configured_is_terminal(sessions):
+    cfg = _video_cfg(grok_imagine_provider="kie")
+    sessions.save_config(USER_ID, cfg)
+    reg = make_registry(kie=None)  # usuario en kie video sin provider disponible
+
+    events = await _run(_uc(reg, sessions), user_id=USER_ID, prompt="escena")
+
+    assert len(events) == 1
+    ev = events[0]
+    assert isinstance(ev, ItemFailed)
+    assert ev.terminal is True
+    assert ev.exhausted is False
+    assert "Kie.ai no está disponible" in ev.reason
+
+
+async def test_transient_error_video_single_attempt_no_retry(sessions):
+    """Un transitorio (rate-limit) en video NO reintenta (paridad single-attempt).
+
+    Documenta la invariante O3 del arch-enforcer: el video emite UN SOLO
+    ItemFailed (nunca RetryScheduled) y no relanza; ítem 5 debe tratarlo como
+    final aunque el flag terminal sea False para un error retryable.
+    """
+    cfg = _video_cfg(grok_imagine_provider="kie")
+    sessions.save_config(USER_ID, cfg)
+    err = ProviderRateLimitError("rate", user_message="Demasiadas peticiones.")
+    prov = FakeVideoProvider(name="kie", outcomes=[err])
+    reg = make_registry(kie=prov)
+
+    events = await _run(_uc(reg, sessions), user_id=USER_ID, prompt="escena")
+
+    assert len(events) == 1
+    ev = events[0]
+    assert isinstance(ev, ItemFailed)
+    assert ev.reason == "Demasiadas peticiones."
+    assert prov.generate_count == 1  # single-attempt: el transitorio no se reintenta
