@@ -38,10 +38,12 @@ from grokbot.telegram.handlers._common import (
     D8_FACESWAP_MSG,
     D8_INTEGRATE_MSG,
     D8_LONG_PROMPT_MSG,
+    SOURCE_MEDIA_UNAVAILABLE_MSG,
     TELEGRAM_CAPTION_COLLECT_THRESHOLD,
     answer_callback,
     cfg_override_from_regen,
     effective_image_provider,
+    fetch_source_bytes,
     is_album,
     is_photo_caption,
     is_photo_no_caption,
@@ -121,7 +123,10 @@ async def handle_photo_caption(message: types.Message, deps: BotDeps) -> None:
         return
     file_id = largest_photo(message)
     if is_video_cfg(cfg):
-        image_data = await deps.gateway.get_file_bytes(file_id)
+        image_data = await fetch_source_bytes(deps.gateway, file_id)
+        if image_data is None:
+            await ui.send_text(SOURCE_MEDIA_UNAVAILABLE_MSG)
+            return
         await run_video_generation(
             deps, message, uid=message.from_user.id, cfg=cfg,
             prompt=prompt, source_image=image_data, prefix="Edit",
@@ -176,7 +181,10 @@ async def handle_reply_edit(message: types.Message, deps: BotDeps) -> None:
     if source is None:
         file_id = largest_photo(reply)
         if file_id:
-            source_image = await deps.gateway.get_file_bytes(file_id)
+            source_image = await fetch_source_bytes(deps.gateway, file_id)
+            if source_image is None:
+                await ui.send_text(SOURCE_MEDIA_UNAVAILABLE_MSG)
+                return
             source_file_id = file_id
 
     if is_video_cfg(cfg):
@@ -287,7 +295,12 @@ async def handle_regenerate(callback: types.CallbackQuery, deps: BotDeps) -> Non
                     reply_markup=None,
                 )
                 return
-            source_image = await deps.gateway.get_file_bytes(file_id)
+            source_image = await fetch_source_bytes(deps.gateway, file_id)
+            if source_image is None:
+                await ui.edit_text(
+                    status_id, SOURCE_MEDIA_UNAVAILABLE_MSG, reply_markup=None
+                )
+                return
             source_file_id = file_id
         await _run_single_image(
             deps, callback.message, cfg, prompt, uid=uid,
@@ -356,7 +369,13 @@ async def _process_single_photo_edit(
     ui = _chat_ui(deps, message)
     cfg = deps.sessions.get_config(uid)
     model = model_display(cfg)
-    source_image = await deps.gateway.get_file_bytes(file_id) if file_id else None
+    if file_id:
+        source_image = await fetch_source_bytes(deps.gateway, file_id)
+        if source_image is None:
+            await ui.send_text(SOURCE_MEDIA_UNAVAILABLE_MSG)
+            return
+    else:
+        source_image = None
 
     job = deps.job_manager.start(uid, "edit")
     if job is None:

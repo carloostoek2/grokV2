@@ -231,6 +231,26 @@ async def present_video(
 # --------------------------------------------------------------------------- #
 # Batch (variables / var / multipose)
 # --------------------------------------------------------------------------- #
+def _batch_job(
+    job_manager: "JobManager | None",
+    user_id: int | None,
+    job_id: str | None,
+) -> "Job | None":
+    """Localiza el Job activo del batch (M1: cancel_event para refine).
+
+    El use case arranca el job dentro de su generator y lo termina en un
+    ``finally`` al agotarse el stream; mientras el presenter lo consume (incluso
+    durante el refine, donde el generator queda suspendido en un ``yield``) el
+    job sigue activo en el ``JobManager``.
+    """
+    if job_manager is None or user_id is None or job_id is None:
+        return None
+    for job in job_manager.active_jobs(user_id):
+        if job.job_id == job_id:
+            return job
+    return None
+
+
 async def present_batch(
     ui: ChatUI,
     events: AsyncIterator,
@@ -244,6 +264,7 @@ async def present_batch(
     refine_uc: "ResolveRefineUseCase | None" = None,
     cfg: "UserConfig | None" = None,
     user_id: int | None = None,
+    job_manager: "JobManager | None" = None,
 ) -> None:
     """Presenta un batch de variables/var/multipose sobre UN status message.
 
@@ -252,6 +273,10 @@ async def present_batch(
     teclado de cancelar. Los ítems se envían con ``delete_status=False``; un ítem
     fallido se notifica aparte y el batch continúa. El terminal (summary/cancel/
     reject/jobs_full/empty_list) reemplaza o cierra el status.
+
+    ``job_manager`` (inyectado por los handlers) se usa SOLO para consultar el
+    ``cancel_event`` del job del batch y pasarlo al refine (M1): un cancel durante
+    el refine post-yes suprime la refinada en vuelo, igual que en single-image.
     """
     status_id: int | None = None
     job_id: str | None = None
@@ -321,6 +346,7 @@ async def present_batch(
                 and user_id is not None
                 and refine_uc.offer(cfg.comfyui, ev.result)
             ):
+                job = _batch_job(job_manager, user_id, job_id)
                 await run_refine_flow(
                     ui,
                     item=ev,
@@ -333,7 +359,11 @@ async def present_batch(
                     caption_prompt=True,
                     user_id=user_id,
                     job_id=job_id,
-                    cancel_event=None,
+                    cancel_event=(
+                        job_manager.cancel_event(job)
+                        if job_manager is not None and job is not None
+                        else None
+                    ),
                 )
             else:
                 await sender.send_image(

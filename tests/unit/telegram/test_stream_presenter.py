@@ -176,6 +176,24 @@ class _AutoYesRefineUseCase(ResolveRefineUseCase):
         return token
 
 
+class _CancelDuringRefineProvider(FakeComfyuiProvider):
+    """Refine que setea el cancel del job justo cuando corre el refine (M1).
+
+    Reproduce el "cancel del job durante ``refine_uc.refine``" (después de que el
+    usuario confirmó Refinar): el hook del JobManager no aborta el provider en
+    vuelo, así que el refine SÍ completa; la supresión de la refinada depende del
+    ``cancel_event`` que el presenter pasa a ``run_refine_flow``.
+    """
+
+    def __init__(self, *, on_refine, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._on_refine = on_refine
+
+    async def refine(self, request, remote_paths):
+        self._on_refine()
+        return await super().refine(request, remote_paths)
+
+
 def _refine_cfg() -> UserConfig:
     return replace(
         UserConfig.defaults(),
@@ -442,6 +460,65 @@ async def test_batch_cancelled_reflected(gateway, downloader, refs_repo):
     assert edits[-1] == "⏹ Cancelado. Completadas 1/2 imágenes."
     assert edits[-1].endswith("imágenes.")  # copy exacta sin fuga de ids
     assert gateway.calls_by_method("send_photo") == []
+
+
+@pytest.mark.asyncio
+async def test_batch_refine_cancel_during_refine_suppresses_refined(
+    tmp_path, gateway, downloader, refs_repo
+):
+    """M1: un cancel del job DURANTE el refine de un batch (post-yes) no entrega la refinada.
+
+    El refine llega a completarse (el cancel no aborta el provider en vuelo),
+    pero el ``cancel_event`` del job que ahora pasa ``present_batch`` hace que
+    ``run_refine_flow`` descarte la refinada y resuelva ``cancelled``; el batch
+    sigue y el use case emite ``BatchCancelled``.
+    """
+    jm = JobManager()
+    job = jm.start(USER_ID, "variables")
+    assert job is not None
+    refined_p = tmp_path / "refined.png"
+    refined_p.write_bytes(b"ref")
+    provider = _CancelDuringRefineProvider(
+        on_refine=lambda: jm.cancel(USER_ID, job.job_id),
+        refine_outcomes=[
+            make_result(
+                provider="comfyui",
+                model_id="krea2",
+                media_type=MediaType.IMAGE,
+                file_path=str(refined_p),
+                meta={
+                    "file_paths": [str(refined_p)],
+                    "comfyui_remotes": ["/workspace/refined.png"],
+                    "elapsed_sec": 25,
+                },
+            )
+        ],
+    )
+    refine_uc = _AutoYesRefineUseCase(provider=provider, timeout=10.0)
+    ui = _ui(gateway)
+    sender = _sender(gateway, downloader, refs_repo)
+    events = _stream(
+        BatchStarted(style="variables", total=1, job_id=job.job_id),
+        ItemStarted(index=1, total=1),
+        _comfy_local_item(tmp_path),
+        BatchCancelled(completed=1, failed=0, total=1),
+    )
+
+    await present_batch(
+        ui, events, verb="generando", count=1, model=MODEL, sender=sender,
+        refine_uc=refine_uc, cfg=_refine_cfg(), user_id=USER_ID,
+        job_manager=jm,
+    )
+
+    # la refinada NO se entregó: solo la base se envió como foto.
+    photos = gateway.calls_by_method("send_photo")
+    assert len(photos) == 1
+    assert photos[0]["photo"] == b"base"
+    # el refine sí corrió (el cancel fue post-yes, durante el refine en vuelo).
+    assert len(provider.refine_calls) == 1
+    # el status refleja el BatchCancelled que emite el use case al reanudar.
+    edits = [c["text"] for c in gateway.calls_by_method("edit_message_text")]
+    assert edits[-1] == "⏹ Cancelado. Completadas 1/1 imágenes."
 
 
 # --------------------------------------------------------------------------- #

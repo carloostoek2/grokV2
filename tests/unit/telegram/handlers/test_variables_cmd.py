@@ -23,6 +23,7 @@ from conftest import (
 from grokbot.domain.variables import VARIABLES_MAX
 from grokbot.telegram.formatters import JOBS_FULL_MSG
 from grokbot.telegram.handlers._common import (
+    SOURCE_MEDIA_UNAVAILABLE_MSG,
     parse_var_count_and_text,
     parse_var_prompt,
     parse_variables_count,
@@ -94,6 +95,20 @@ async def test_variables_photo_caption_edit():
     assert "get_file_bytes" in methods
     texts = _texts(deps)
     assert any(t.startswith("🎲 <b>Variables</b>: editando 0/1 imágenes con Seedream 5.0...") for t in texts)
+
+
+async def test_variables_photo_source_fetch_failure_degrades():
+    """M2: /variables con foto de file_id expirado → degrada user-safe, sin batch."""
+    deps = make_deps()
+    _use_seedream(deps)
+    deps = await _msg(
+        deps,
+        make_photo_message(caption="/variables 1", file_id="EXPIRED:var_src", message_id=5),
+    )
+    texts = _texts(deps)
+    assert SOURCE_MEDIA_UNAVAILABLE_MSG in texts
+    assert not deps.gateway.calls_by_method("send_photo")
+    assert deps.job_manager.active_jobs(_UID) == (), "sin fuente no arranca el batch"
 
 
 async def test_variables_reply_to_photo_edit():

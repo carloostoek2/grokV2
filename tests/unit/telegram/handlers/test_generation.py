@@ -21,6 +21,7 @@ from conftest import (
     message_update,
     text_message,
 )
+from grokbot.telegram.handlers._common import SOURCE_MEDIA_UNAVAILABLE_MSG
 
 _UID = USER_ID
 _CHAT = CHAT_ID
@@ -92,6 +93,55 @@ async def test_photo_caption_edit_job_downloads_source():
     data = flat_callback_data(status["reply_markup"])
     assert data and data[0].startswith("cancel_job:"), "job edit lleva cancel_job:<id>"
     assert deps.gateway.calls_by_method("send_photo")
+
+
+async def test_photo_caption_edit_source_fetch_failure_degrades():
+    """M2: file_id expirado en foto+caption de edición → mensaje user-safe, sin job."""
+    deps = make_deps()
+    deps.update_config.set_model(_UID, "seedream")
+    deps = await _msg(
+        deps,
+        make_photo_message(caption="ponle un sombrero", file_id="EXPIRED:photo_edit", message_id=5),
+    )
+    last = deps.gateway.calls_by_method("send_message")[-1]
+    assert last["text"] == SOURCE_MEDIA_UNAVAILABLE_MSG
+    assert "EXPIRED" not in last["text"], "no filtra el file_id al usuario"
+    assert deps.gateway.calls_by_method("send_photo") == [], "sin edición no se genera"
+    assert deps.job_manager.active_jobs(_UID) == (), "no se abre job sin fuente"
+
+
+async def test_reply_edit_source_fetch_failure_degrades():
+    """M2: reply a foto del bot con file_id roto (no-kie) → degrada user-safe."""
+    deps = make_deps()
+    deps.update_config.set_model(_UID, "seedream")
+    reply_photo = make_photo_message(message_id=9000, file_id="EXPIRED:reply_src")
+    deps = await _msg(
+        deps,
+        text_message("hazla sonreir", message_id=6, reply_to_message=reply_photo),
+    )
+    last = deps.gateway.calls_by_method("send_message")[-1]
+    assert last["text"] == SOURCE_MEDIA_UNAVAILABLE_MSG
+    assert deps.gateway.calls_by_method("send_photo") == []
+
+
+async def test_regen_edit_source_fetch_failure_degrades():
+    """M2: regen en modo edit con file_id expirado → status degradado y job cerrado."""
+    deps = make_deps()
+    ref_photo = make_photo_message(message_id=7002)
+    deps.refs.save(
+        _CHAT, 7002,
+        provider="replicate", kind="image", prompt="retrato de pie",
+        regen={
+            "model_key": "seedream", "mode": "edit",
+            "prompt": "retrato de pie", "source_file_id": "EXPIRED:regen_src",
+        },
+    )
+    deps = await _cb(deps, callback_query("regen", message_id=7002, message=ref_photo))
+    edits = deps.gateway.calls_by_method("edit_message_text")
+    assert edits[-1]["text"] == SOURCE_MEDIA_UNAVAILABLE_MSG
+    assert edits[-1]["reply_markup"] is None
+    assert deps.gateway.calls_by_method("send_photo") == []
+    assert deps.job_manager.active_jobs(_UID) == (), "el job regen se cierra en finally"
 
 
 async def test_reply_to_kie_photo_uses_ref_without_download():

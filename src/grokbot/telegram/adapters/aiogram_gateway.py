@@ -25,7 +25,7 @@ from aiogram.types import (
     InputMediaVideo,
 )
 
-from grokbot.telegram.ports import OutboundMedia, SentMessage
+from grokbot.telegram.ports import MediaFetchError, OutboundMedia, SentMessage
 
 _NOT_MODIFIED_FRAGMENT = "message is not modified"
 _NOT_FOUND_FRAGMENT = "message to delete not found"
@@ -235,8 +235,16 @@ class AiogramGateway(Bot):
         return [self._sent(msg) for msg in sent]
 
     async def get_file_bytes(self, file_id: str) -> bytes:
-        """Descargar un ``file_id`` de Telegram a bytes (adaptador)."""
-        file = await super().get_file(file_id)
-        buf = BytesIO()
-        await super().download_file(file.file_path, destination=buf)
-        return buf.getvalue()
+        """Descargar un ``file_id`` de Telegram a bytes (adaptador).
+
+        Un ``file_id`` expirado/roto lanza ``TelegramBadRequest`` de aiogram; se
+        traduce a :class:`MediaFetchError` (neutral, user-safe, sin loguear el id)
+        para que los handlers degraden sin filtrar el error crudo (M2).
+        """
+        try:
+            file = await super().get_file(file_id)
+            buf = BytesIO()
+            await super().download_file(file.file_path, destination=buf)
+            return buf.getvalue()
+        except TelegramBadRequest as exc:
+            raise MediaFetchError() from exc

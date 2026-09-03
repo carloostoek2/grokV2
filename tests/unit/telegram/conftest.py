@@ -67,7 +67,7 @@ from grokbot.application.refine_flow import ResolveRefineUseCase  # noqa: E402
 from grokbot.application.run_variable_batch import RunVariableBatchUseCase  # noqa: E402
 from grokbot.domain.variables import DEFAULT_TEMPLATE  # noqa: E402
 from grokbot.telegram.deps import BotDeps  # noqa: E402
-from grokbot.telegram.ports import SentMessage  # noqa: E402
+from grokbot.telegram.ports import MediaFetchError, SentMessage  # noqa: E402
 
 
 # --- Builders de updates aiogram (offline; sin red/token) ----------------------
@@ -291,7 +291,8 @@ class FakeTelegramGateway:
         elif file_id.startswith("FAKE:"):
             payload = b"fake-file-bytes"
         else:
-            raise ValueError(f"file_id desconocido: {file_id!r}")
+            # M2: file_id no resuelto → MediaFetchError neutral (sin el id en el msg).
+            raise MediaFetchError()
         self._record("get_file_bytes", chat_id=0, file_id=file_id)
         return payload
 

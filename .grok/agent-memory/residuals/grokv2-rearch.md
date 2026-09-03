@@ -34,3 +34,18 @@ Pool: grokv2-rearch · Fuente: ítems del pipeline. Clasificación §5b.
   9. Crear paquete de variables pegando JSON (`/listas` → “➕ Crear paquete”): degrada por layering §5.2 (handlers sin parseo de JSON) aunque el resto del flujo de paquetes opera sobre payloads persistidos.
 - Archivos: `src/grokbot/telegram/handlers/generation.py` (D8_CMD_MSG + degradaciones), `src/grokbot/telegram/handlers/listas_cmd.py` (_PACK_NEW_D8), `src/grokbot/telegram/handlers/start.py` (notice faceswap).
 - Acción: registrar como follow-ups del pool; NO expandir el PLAN en silencio.
+
+## R5 — Item 5 M1 (arch): cancel en refine de batch no suprime la refinada en vuelo
+- Origen: arch-enforcer item5 (M1). `stream_presenter.present_batch` llama `run_refine_flow(... cancel_event=None)` (:336) aun con job real; un cancel del job durante el refine en batch (post-yes) no suprime la refinada en vuelo, a diferencia del single-image (:167).
+- Clase: in-scope-followup (ítem 5). Fix: pasar el cancel_event del job en present_batch, o confirmar paridad grok y documentar. A resolver en fix round / review-loop.
+- Archivos: `src/grokbot/telegram/stream_presenter.py`.
+
+## R6 — Item 5 M2 (arch): get_file_bytes sin try/except user-safe
+- Origen: arch-enforcer item5 (M2). `deps.gateway.get_file_bytes` en `handlers/generation.py` y `variables_cmd.py` sin manejo user-safe: file_id expirado lanza `TelegramBadRequest` crudo al usuario.
+- Clase: in-scope-followup (ítem 5 / robustez ítem 6). Fix: envolver en error user-safe (mensaje degradado, log sin file_id).
+- Archivos: `src/grokbot/telegram/handlers/generation.py`, `src/grokbot/telegram/handlers/variables_cmd.py`.
+
+## R7 — Import transitivo de transport al importar telegram/ (lazy re-exports)
+- Origen: arch-enforcer item4 (M2) — pendiente de registro; arch-enforcer item5 (M3) confirma que sigue sin registrarse.
+- Clase: deferred (pool, cierre item 6/review-loop). `providers/__init__.py` y `repositories/__init__.py` re-exportan eager todos los concretos → `import grokbot.telegram.*` (y application) carga transitivamente xai/kie/replicate/comfyui-ssh + JSON repos. Sin I/O/env en import-time (settings NO se carga), no rompe hoy. Lazy re-exports de ambos `__init__` en ensamblaje (item 6).
+- Archivos: `src/grokbot/providers/__init__.py`, `src/grokbot/repositories/__init__.py`.

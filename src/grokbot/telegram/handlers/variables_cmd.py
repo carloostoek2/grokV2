@@ -27,6 +27,8 @@ from grokbot.telegram.chat_ui import ChatUI
 from grokbot.telegram.deps import BotDeps
 from grokbot.telegram.formatters import model_display, validate_prompt
 from grokbot.telegram.handlers._common import (
+    SOURCE_MEDIA_UNAVAILABLE_MSG,
+    fetch_source_bytes,
     is_album,
     largest_photo,
     make_sender,
@@ -69,6 +71,22 @@ def _var_usage() -> str:
 # --------------------------------------------------------------------------- #
 # Runners de batch (edit/text) — comparten use case + present_batch
 # --------------------------------------------------------------------------- #
+async def _source_bytes_or_degrade(gateway, ui, file_id: str | None) -> tuple[bytes | None, bool]:
+    """Descarga la imagen fuente → (bytes, False) o degrada user-safe (M2).
+
+    ``(None, True)`` cuando el file_id no se pudo recuperar (el handler debe
+    retornar; ya se envió el mensaje degradado). ``(None, False)`` sin file_id.
+    Nunca loguea el ``file_id``.
+    """
+    if not file_id:
+        return None, False
+    source_image = await fetch_source_bytes(gateway, file_id)
+    if source_image is None:
+        await ui.send_text(SOURCE_MEDIA_UNAVAILABLE_MSG)
+        return None, True
+    return source_image, False
+
+
 async def _run_variables_batch(
     deps: BotDeps,
     message: types.Message,
@@ -104,6 +122,7 @@ async def _run_variables_batch(
         refine_uc=deps.refine_uc,
         cfg=cfg,
         user_id=uid,
+        job_manager=deps.job_manager,
     )
 
 
@@ -145,6 +164,7 @@ async def _run_var_batch(
         refine_uc=deps.refine_uc,
         cfg=cfg,
         user_id=uid,
+        job_manager=deps.job_manager,
     )
 
 
@@ -180,7 +200,10 @@ async def cmd_variables_photo(message: types.Message, deps: BotDeps) -> None:
         )
         return
     file_id = largest_photo(message)
-    source_image = await deps.gateway.get_file_bytes(file_id) if file_id else None
+    ui = ChatUI.for_message(deps.gateway, message)
+    source_image, degraded = await _source_bytes_or_degrade(deps.gateway, ui, file_id)
+    if degraded:
+        return
     await _run_variables_batch(
         deps, message, count,
         source_image=source_image, source_file_id=file_id, mode="edit",
@@ -203,7 +226,10 @@ async def cmd_variables_reply(message: types.Message, deps: BotDeps) -> None:
         await ui.send_text("Responde a una foto para editarla con /variables.")
         return
     file_id = largest_photo(reply)
-    source_image = await deps.gateway.get_file_bytes(file_id) if file_id else None
+    ui = ChatUI.for_message(deps.gateway, message)
+    source_image, degraded = await _source_bytes_or_degrade(deps.gateway, ui, file_id)
+    if degraded:
+        return
     await _run_variables_batch(
         deps, message, count,
         source_image=source_image, source_file_id=file_id, mode="edit",
@@ -251,7 +277,9 @@ async def cmd_var_photo(message: types.Message, deps: BotDeps) -> None:
         await ui.send_text(prompt_err)
         return
     file_id = largest_photo(message)
-    source_image = await deps.gateway.get_file_bytes(file_id) if file_id else None
+    source_image, degraded = await _source_bytes_or_degrade(deps.gateway, ui, file_id)
+    if degraded:
+        return
     await _run_var_batch(
         deps, message, count, prompt,
         source_image=source_image, source_file_id=file_id, mode="edit",
@@ -274,7 +302,9 @@ async def cmd_var_reply(message: types.Message, deps: BotDeps) -> None:
         await ui.send_text(prompt_err)
         return
     file_id = largest_photo(reply)
-    source_image = await deps.gateway.get_file_bytes(file_id) if file_id else None
+    source_image, degraded = await _source_bytes_or_degrade(deps.gateway, ui, file_id)
+    if degraded:
+        return
     await _run_var_batch(
         deps, message, count, prompt,
         source_image=source_image, source_file_id=file_id, mode="edit",

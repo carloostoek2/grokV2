@@ -22,6 +22,7 @@ from grokbot.domain.catalog import DEFAULT_MODEL, MODELS, resolve_grok_config
 from grokbot.domain.generation import KieTaskRef
 from grokbot.domain.user_config import UserConfig
 from grokbot.telegram.deps import BotDeps
+from grokbot.telegram.ports import TelegramGateway
 from grokbot.telegram.sender import ResultSender
 
 # Tope de captions que disparaban long-prompt collection en grok (bot.py:74);
@@ -44,6 +45,13 @@ D8_LONG_PROMPT_MSG = (
 )
 D8_CMD_MSG = "Este comando no está disponible en esta versión todavía."
 D8_REPLY_NO_PHOTO = "Responde a una foto para editarla."
+
+# Degradación user-safe de media de origen no recuperable (M2): file_id
+# expirado/roto → este mensaje, nunca el error crudo del gateway.
+SOURCE_MEDIA_UNAVAILABLE_MSG = (
+    "No se pudo recuperar la imagen. Puede que el archivo haya expirado. "
+    "Envíala de nuevo."
+)
 
 # Comandos residuales que se degradan (D8) sin implementar su flujo.
 D8_COMMANDS = ("cambiar_source", "cambiar_referencia", "estado")
@@ -241,6 +249,22 @@ async def answer_callback(gateway, callback: types.CallbackQuery, text: str | No
     await gateway.answer_callback(callback.id, text, show_alert=show_alert)
 
 
+async def fetch_source_bytes(gateway: TelegramGateway, file_id: str | None) -> bytes | None:
+    """Descargar el ``file_id`` de la imagen fuente → bytes, o ``None``.
+
+    ``None`` cuando no hay ``file_id`` o cuando el gateway no pudo recuperar la
+    media (file_id expirado/roto). Todo error se traduce a ``None`` — el handler
+    degrada con :data:`SOURCE_MEDIA_UNAVAILABLE_MSG` (M2). Nunca loguea ni expone
+    el ``file_id`` (R6/R8).
+    """
+    if not file_id:
+        return None
+    try:
+        return await gateway.get_file_bytes(file_id)
+    except Exception:  # noqa: BLE001 — todo error de fetch es user-safe (M2/R6)
+        return None
+
+
 __all__ = [
     "D8_ALBUM_MSG",
     "D8_CMD_MSG",
@@ -249,10 +273,12 @@ __all__ = [
     "D8_INTEGRATE_MSG",
     "D8_LONG_PROMPT_MSG",
     "D8_REPLY_NO_PHOTO",
+    "SOURCE_MEDIA_UNAVAILABLE_MSG",
     "TELEGRAM_CAPTION_COLLECT_THRESHOLD",
     "answer_callback",
     "cfg_override_from_regen",
     "effective_image_provider",
+    "fetch_source_bytes",
     "is_album",
     "is_d8_command",
     "is_photo_caption",

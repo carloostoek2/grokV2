@@ -42,6 +42,22 @@ class OutboundMedia:
     kind: str = "photo"  # "photo" | "video"
 
 
+class MediaFetchError(Exception):
+    """No se pudo obtener media de Telegram vía ``get_file_bytes``.
+
+    Excepción neutral del seam: el adaptador real traduce los errores de aiogram
+    (file_id expirado/roto) a esta clase y los handlers degradan con un mensaje
+    user-safe (R6/M2) sin exponer el ``file_id``. ``user_message`` es el texto
+    seguro para el usuario; nunca incluye ids/URLs de contenido.
+    """
+
+    def __init__(
+        self, user_message: str = "No se pudo obtener la imagen. Intenta de nuevo."
+    ) -> None:
+        super().__init__(user_message)
+        self.user_message = user_message
+
+
 class TelegramGateway(Protocol):
     """Contrato de outbound hacia la Bot API de Telegram (sin chat_id fijo)."""
 
