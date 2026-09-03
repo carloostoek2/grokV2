@@ -20,6 +20,11 @@ Pool: grokv2-rearch · Fuente: ítems del pipeline. Clasificación §5b.
 - Acción: fix en el review-loop de cierre (anonimizar con usuario 111111111 y paths dummy preservando forma).
 - **Confirmado (ítem 6):** sigue abierto para el review-loop de cierre del pool (el ítem 6 no
   toca tests existentes).
+- **Resuelto:** d6f55fe (review-loop Round 1, C3) — anonimizado: user `6181290784` →
+  `111111111` y path absoluto `/home/ubuntu/repos/grok/sources/6181290784.jpg` →
+  `/var/tmp/grok-fixtures/sources/111111111.jpg`, assert ajustado a la forma preservada.
+  El ID real queda mencionado solo en este registry (registro intencional del hallazgo) y en
+  artefactos de proceso untracked (`.planning/*`, `.grok/agent-memory/*`) que no se commitean.
 
 ## R4 — Item 5 D8: flujos grok degradados (capa telegram)
 - Origen: gsd-executor item5 (Task 4; degradación D8 en handlers con mensaje user-safe, sin implementación).
@@ -60,3 +65,59 @@ Pool: grokv2-rearch · Fuente: ítems del pipeline. Clasificación §5b.
   `repositories/__init__` (ítem 6). `__all__` idéntico; probe (test_lazy_reexports) en
   subproceso: `import grokbot.telegram.handlers` ya NO carga xai/kie/replicate/comfyui+ssh
   ni los 3 JSON repos, y la API pública sigue resolviendo.
+
+## O-series ítem 6 (arch) — observaciones del arch-enforcer item6 resueltas en review-loop
+- Origen: gsd-arch-enforcer item6 (auditoría de ensamblaje). Registro obligatorio (C11).
+- O1 — `run()` no capturaba errores fatales del polling (main.py:248-252). **Resuelto:** 3fd3167 (C6)
+  — handler que loguea `type(exc).__name__` (C3-safe, sin secretos), imprime aviso a stderr y
+  retorna 1. Test: `test_run_polling_error_fatal_loguea_tipo_y_sale_1`.
+- O2 — `@dp.errors` global del dispatcher (TelegramBadRequest 409 etc.). **Resuelto en ítem 6** —
+  cubierto por test del guardian (error handler registrado + test en test_main).
+- O3 — SPEC §5.1 drift sobre `shared/errors.py` (lo describía como jerarquía de errores). **Resuelto:**
+  691c1e1 (C13) — texto reconciliado con D8 + nota de implementación.
+- O4 — docstrings EN/ES mezclados en `providers/__init__.py` y `repositories/__init__.py`.
+  **Resuelto:** 438004e (C14) — traducidos a español.
+
+## Quirk pytest 8.4.2 — colección de rutas anidadas
+- Origen: gsd-executor item6 / review-loop (hallazgo de tooling, C11).
+- Clase: documentar. Detalle: en una MISMA invocación, `pytest <directorio> <ruta-anidada>` colecciona
+  solo la ruta más específica (el directorio ya no expande al resto). No es falla de la suite.
+- Acción: al correr subset + directorio juntos, invocarlos por separado o como directorios completos.
+
+## R8 — Botón "Regenerar" no scopeado al owner (C5, review-loop Round 1)
+- Origen: review 3e662ee1 C5. Ref por chat_id:message_id sin owner_uid; en modo edit un tercero
+  en grupo puede inducir a reprocesar el source_file_id ajeno vía regen.
+- Clase: in-scope-followup (diferido). NO fix en Round 1.
+- Por qué wontfix ahora: paridad grok — el regen original no scopea por owner; el job corre bajo el
+  user que clickea (allowlist-gated en grupos) y no escala privilegios ni costo. Scopear exige
+  threadear owner_uid por el path de guardado de refs del sender (varios call sites).
+- Acción sugerida: en un follow-up, persistir `owner_uid` en `generation_refs` y validarlo en el
+  callback `regen` (misma mecánica que C4 en PendingPrompts).
+- Archivos: `src/grokbot/telegram/sender.py`, `src/grokbot/telegram/handlers/generation.py` (regen).
+
+## R9 — Bot abierto por default + sin rate limiting + estado sin TTL (C8, review-loop Round 1)
+- Origen: review 3e662ee1 C8. `sessions.json` crece con cada user nuevo; PendingPrompts sin
+  eviction; abuso de generación paga.
+- Clase: out-of-scope (diferido). NO fix en Round 1.
+- Por qué wontfix ahora: paridad grok — grok no tiene rate limit ni TTL de sesión; la allowlist
+  vacía (bot abierto) es una decisión de settings del deploy (gate de admisión por
+  `allowed_telegram_ids`); PendingPrompts está acotado a una entrada por user + TTL implícito del
+  refine confirm timeout.
+- Acción sugerida: follow-up de hardening (deploy real): documentar configuración de allowlist,
+  evaluar rate limit por user y expiración de entradas de sesión.
+- Archivos: `src/grokbot/settings.py`, `src/grokbot/main.py`, `src/grokbot/telegram/deps.py`.
+
+## R10 — Video remoto rechazado publica URL firmada + rama >50MB muerta (C9a/b, review-loop Round 1)
+- Origen: review 3e662ee1 C9a/b. (a) El fallback de `send_video` rechazado edita el status con la
+  URL firmada cruda (visible en grupos). (b) Rama ">50MB → fallback de texto" muerta: downloader y
+  sender usan la MISMA constante (el downloader ya corta en 50MB).
+- Clase: in-scope-followup (diferido). NO fix en Round 1 (C9c — video local con TelegramBadRequest
+  — SÍ se fixeó: 98350a7).
+- Por qué wontfix (a): paridad grok — la URL es el único camino de recuperación del video; el
+  warning (`SENSITIVE_DOWNLOAD_WARNING`) ya avisa que el link es privado/temporal.
+- Por qué wontfix (b): rama defensiva detrás de un `MediaDownloader` inyectado; en producción el
+  downloader capa con la misma constante → invariante alcanzable solo si un downloader futuro no
+  capa; mantener como red de seguridad.
+- Acción sugerida: follow-up — mover el tope de 50MB a configuración única compartida o evaluar
+  ocultar la URL tras un comando de descarga autenticado.
+- Archivos: `src/grokbot/telegram/sender.py`, `src/grokbot/telegram/downloader.py`.
