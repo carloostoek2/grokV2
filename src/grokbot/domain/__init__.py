@@ -30,6 +30,13 @@ from grokbot.domain.job import (
     Job,
     JobStatus,
 )
+from grokbot.domain.user_config import ComfyUIConfig, UserConfig, VideoConfig
+from grokbot.domain.variables import (
+    PromptTemplate,
+    combo_key,
+    combo_label,
+    normalize_items,
+)
 
 __all__ = [
     "MODELS",
@@ -51,4 +58,11 @@ __all__ = [
     "Job",
     "JobStatus",
     "MAX_ACTIVE_JOBS_PER_USER",
+    "UserConfig",
+    "VideoConfig",
+    "ComfyUIConfig",
+    "PromptTemplate",
+    "normalize_items",
+    "combo_key",
+    "combo_label",
 ]

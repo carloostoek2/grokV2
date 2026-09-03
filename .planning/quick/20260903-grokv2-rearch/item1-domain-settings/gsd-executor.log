@@ -48,3 +48,13 @@ python3 = 3.14.4, venv OK, red a PyPI = 200. grok venv tiene pydantic 2.13.4/pyt
 - 16:20: tests domain 3a (catalog+generation+job) → 16 passed. Suite completa → 26 passed.
 - Solo stdlib en domain/. grok sin cambios.
 - Commit: feat(domain): catalog + generation + job
+
+## Gate 5 — TASK 3b: domain/user_config + variables + tests
+- 2026-09-03 16:21: commit 3a OK (ver git). Se crean user_config.py, variables.py; __init__ ampliado.
+
+### TASK 3b resultado
+- 16:23: suite completa → 48 passed. Fix de expectativa en test_clean_gaps (espejo exacto grok: ", ,"→",").
+- domain solo stdlib (dataclasses/enum/re/collections.abc + imports intra-domain). Sin dirs ítems 2-6.
+- import grokbot.settings+grokbot.domain sin env → ok.
+- grok sin cambios (mismo baseline).
+- Commit: feat(domain): user_config + variables
