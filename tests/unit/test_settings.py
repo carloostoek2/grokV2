@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pydantic
 import pytest
 
@@ -86,6 +88,27 @@ def test_comfyui_port_int(monkeypatch):
     assert settings.comfyui_port == 19956
     assert isinstance(settings.comfyui_port, int)
     assert settings.refine_confirm_timeout == 10
+
+
+def test_data_dir_default_and_derived_paths(monkeypatch):
+    """D1: GROK_DATA_DIR absent -> Path('data') and 4 derived repo paths."""
+    _set_required(monkeypatch)
+    settings = Settings()
+    assert settings.data_dir == Path("data")
+    assert settings.sessions_file == Path("data") / "sessions.json"
+    assert settings.variables_file == Path("data") / "variables_lists.json"
+    assert settings.generation_refs_file == Path("data") / "generation_refs.json"
+    assert settings.packages_dir == Path("data") / "variables_packages"
+
+
+def test_data_dir_env_override(monkeypatch):
+    """D1: GROK_DATA_DIR overrides the default data_dir and derived paths."""
+    _set_required(monkeypatch)
+    monkeypatch.setenv("GROK_DATA_DIR", "/tmp/grokdata")
+    settings = Settings()
+    assert settings.data_dir == Path("/tmp/grokdata")
+    assert settings.sessions_file == Path("/tmp/grokdata") / "sessions.json"
+    assert settings.packages_dir == Path("/tmp/grokdata") / "variables_packages"
 
 
 def test_import_does_not_instantiate(monkeypatch):
