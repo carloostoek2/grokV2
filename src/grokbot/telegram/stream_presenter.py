@@ -15,8 +15,12 @@ cada flujo con paridad de copy de grok:
 * :func:`present_batch` — variables/var/multipose: header ``0/N``, cada
   ``ItemStarted`` pinta ``i/N`` (re-markup), retries idem con intento, items se
   envían con ``delete_status=False``, ítem fallido → notify aparte y el batch
-  sigue, y el resumen/cancel reemplaza el status. Multipose resume el resumen de
-  poses desde ``combos`` (O4), nunca desde ``total``.
+  sigue, y el resumen/cancel reemplaza el status. El estilo efectivo se toma del
+  ``BatchStarted`` (C1: un handler ``/variables`` que deriva a multipose pinta el
+  header multipose, no "Variables"); en multipose un ``ItemFailed`` es terminal
+  del batch (C2: el status se edita al error, sin notify aparte ni header
+  colgado). Multipose resume el resumen de poses desde ``combos`` (O4), nunca
+  desde ``total``.
 
 Nunca se loguean IDs/prompts/payloads/file_ids/URLs de contenido (R6/R8). El
 ``try/finally`` de jobs lo hace el propio use case; acá solo se refleja el evento.
@@ -292,6 +296,10 @@ async def present_batch(
         if isinstance(ev, BatchStarted):
             total = ev.total or count
             job_id = ev.job_id
+            if ev.style:
+                # C1: el estilo lo manda el evento (un /variables puede derivar a
+                # multipose); el param del handler es solo el default inicial.
+                style = ev.style
             sent = await ui.send_text(
                 _batch_status_label(style, verb, total, 0, model["name"]),
                 reply_markup=_markup(),
@@ -376,6 +384,13 @@ async def present_batch(
             continue
 
         if isinstance(ev, ItemFailed):
+            if style == "multipose" and status_id is not None:
+                # Multipose es single-shot (1 round-trip, N poses): el fallo del
+                # ítem ES el terminal del batch (C2). Se edita el status al error
+                # y se vuelve; sin notify aparte ni header colgado (grok edita el
+                # header a "Error: ...").
+                await ui.edit_text(status_id, ev.reason, reply_markup=None)
+                return
             # ítem fallido → notify aparte y el batch sigue (grok 2119-2135).
             i = ev.index or item_index or 0
             t = ev.total or item_total or total

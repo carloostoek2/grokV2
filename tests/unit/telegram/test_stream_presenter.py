@@ -610,3 +610,63 @@ async def test_batch_multipose_album_then_poses_summary(tmp_path, gateway, downl
     )
     status_id = gateway.calls_by_method("send_message")[0]["sent"].message_id
     assert status_id in [c["message_id"] for c in gateway.calls_by_method("delete_message")]
+
+
+@pytest.mark.asyncio
+async def test_batch_multipose_style_comes_from_event_not_handler_param(
+    gateway, downloader, refs_repo
+):
+    """C1: un /variables que deriva a multipose pinta el header multipose.
+
+    El handler pasa ``style="variables"`` (default) pero el ``BatchStarted`` trae
+    ``style="multipose"``: el evento manda, no el parámetro.
+    """
+    ui = _ui(gateway)
+    sender = _sender(gateway, downloader, refs_repo)
+    events = _stream(
+        BatchStarted(style="multipose", total=5, job_id="mpjob"),
+        BatchCancelled(completed=0, failed=0, total=1),
+    )
+
+    # Sin style (el default "variables" del handler del flujo random).
+    await present_batch(
+        ui, events, verb="generando", count=5, model=MODEL, sender=sender
+    )
+
+    texts = [c["text"] for c in gateway.calls_by_method("send_message")]
+    assert texts[0] == f"🎲 <b>Multi-pose ×5</b>: generando 5 poses con {NAME}..."
+    assert flat_callback_data(
+        gateway.calls_by_method("send_message")[0]["reply_markup"]
+    ) == ["cancel_job:mpjob"]
+    edits = [c["text"] for c in gateway.calls_by_method("edit_message_text")]
+    assert edits[-1] == "⏹ Cancelado. Completadas 0/1 imágenes."
+
+
+@pytest.mark.asyncio
+async def test_batch_multipose_item_failed_is_terminal(gateway, downloader, refs_repo):
+    """C2: un fallo del ítem en multipose (single-shot) NO deja el status colgado.
+
+    Se edita el header al error user-safe y el flujo termina; sin notify aparte
+    ni resumen.
+    """
+    ui = _ui(gateway)
+    sender = _sender(gateway, downloader, refs_repo)
+    events = _stream(
+        BatchStarted(style="multipose", total=5, job_id="mpjob"),
+        ItemFailed(reason="Se agotaron los intentos", prompt=PROMPT),
+    )
+
+    await present_batch(
+        ui, events, verb="generando", count=5, model=MODEL, sender=sender
+    )
+
+    texts = [c["text"] for c in gateway.calls_by_method("send_message")]
+    assert len(texts) == 1, "solo el header multipose"
+    assert texts[0].startswith("🎲 <b>Multi-pose ×5</b>")
+    edit_calls = gateway.calls_by_method("edit_message_text")
+    assert len(edit_calls) == 1
+    assert edit_calls[-1]["text"] == "Se agotaron los intentos"
+    assert edit_calls[-1]["reply_markup"] is None
+    # sin notify aparte de ítem fallido ni media.
+    assert not any("falló" in t for t in texts)
+    assert gateway.calls_by_method("send_photo") == []
