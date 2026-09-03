@@ -153,6 +153,30 @@ async def test_multi_output_meta_lists():
 
 
 @pytest.mark.asyncio
+async def test_c7_generate_filters_malicious_remote_paths():
+    """C7: los remotes con charset inválido se descartan antes del scp/pull."""
+    fake = FakeSsh(remotes=("/workspace/ok.png", "/workspace/$(touch pwn).png"))
+    prov = _provider(fake)
+
+    result = await prov.generate(_req())
+
+    assert fake.pull_calls == ["/workspace/ok.png"], "solo se pullea el path válido"
+    assert result.meta["file_paths"] == ["local-ok.png"]
+    assert result.meta["comfyui_remotes"] == ["/workspace/ok.png"]
+
+
+@pytest.mark.asyncio
+async def test_c7_generate_all_invalid_raises_unavailable():
+    """C7: si todos los remotes fallan el charset, el generate es un fallo."""
+    fake = FakeSsh(remotes=("/workspace/bad;rm -rf.png",))
+    prov = _provider(fake)
+
+    with pytest.raises(ProviderUnavailableError):
+        await prov.generate(_req())
+
+    assert fake.pull_calls == []
+
+
 async def test_no_remotes_raises_unavailable():
     fake = FakeSsh(remotes=())
     prov = _provider(fake)

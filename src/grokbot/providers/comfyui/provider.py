@@ -210,6 +210,9 @@ class ComfyUIProvider:
             payload = json.dumps(payload_obj)
 
         remotes, _rc = await self._ssh.run_remote(cmd, payload, timeout=run_timeout)
+        # C7: defense-in-depth en el límite scp — los remotes llegan por stdout
+        # del box; validar el charset (igual que refine) antes de pull()/shell.
+        remotes = [rp for rp in remotes if _validate_refine_remote_path(rp)]
         if not remotes:
             raise ProviderUnavailableError(
                 _NO_IMAGE_RETURNED_MSG, user_message=_NO_IMAGE_RETURNED_MSG
