@@ -216,6 +216,10 @@ def run() -> int:
 
     Nota D7/C5: el ``data_dir`` default es relativo al cwd (``./data``); correr
     el bot desde la raíz del repo o setear ``GROK_DATA_DIR`` absoluto en deploy.
+
+    O1/C6: un error fatal del polling (p. ej. ``TelegramAPIError`` 409 de
+    ``get_updates``) se loguea SOLO por tipo (C3, nunca ``str(exc)``) y el proceso
+    sale con código 1.
     """
     load_dotenv()
     configure_logging()
@@ -249,6 +253,10 @@ def run() -> int:
         asyncio.run(run_polling(dp, deps))
     except KeyboardInterrupt:
         logger.info("Interrupción recibida; cerrando.")
+    except Exception as exc:  # O1/C6: fatal del polling (p.ej. 409 de get_updates)
+        logger.error("Error fatal en el polling (tipo=%s).", type(exc).__name__)
+        print("Error fatal en el polling. Revisa los logs.", file=sys.stderr)
+        return 1
     return 0
 
 

@@ -231,3 +231,27 @@ async def test_error_handler_global_loguea_solo_tipo_sin_payload(
     assert "SECRET-PAYLOAD-O2" not in caplog.text
     # C3: tampoco se filtran textos del update (p. ej. el comando) en el record.
     assert not any("/boom" in r.getMessage() for r in caplog.records)
+
+
+# -- 9. run() captura errores fatales del polling (O1/C6) --------------------------
+def test_run_polling_error_fatal_loguea_tipo_y_sale_1(tmp_path, monkeypatch, caplog):
+    _set_base_env(monkeypatch, tmp_path)
+    # No tocar el entorno/raíz reales del proceso de test.
+    monkeypatch.setattr(main, "load_dotenv", lambda **_: None)
+    monkeypatch.setattr(main, "configure_logging", lambda **_: None)
+
+    async def _boom_polling(dp, deps) -> None:
+        raise RuntimeError("SECRET-POLL-O1")
+
+    monkeypatch.setattr(main, "run_polling", _boom_polling)
+
+    with caplog.at_level(logging.ERROR, logger="grokbot.main"):
+        code = main.run()
+
+    assert code == 1
+    assert any(
+        r.name == "grokbot.main"
+        and r.getMessage() == "Error fatal en el polling (tipo=RuntimeError)."
+        for r in caplog.records
+    ), f"no se logueó el tipo: {caplog.text}"
+    assert "SECRET-POLL-O1" not in caplog.text, "C3: no filtra el payload del error"
