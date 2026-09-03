@@ -159,8 +159,10 @@ def _simple_model_text(cfg) -> str:
         f"<i>{model['desc']}</i>\n",
     ]
     if cfg.model == "faceswap":
-        lines.append("Usa /cambiar_source para configurar tu cara fuente.\n")
-        lines.append("Luego Envía fotos (incluso albumes) para hacer face swap.")
+        # C10/R4: el modo Face Swap (y /cambiar_source + álbumes) están degradados
+        # en grokV2; no anunciar flujos que no existen.
+        lines.append("El modo Face Swap no está disponible en esta versión.\n")
+        lines.append("Usa /config para cambiar de modelo.")
     elif cfg.model == "seedream":
         lines.append("Enviame un prompt para generar una imagen.")
         lines.append("O Envía una foto con caption para editarla.")
