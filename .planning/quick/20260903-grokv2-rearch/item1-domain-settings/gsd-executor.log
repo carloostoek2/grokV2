@@ -70,3 +70,9 @@ python3 = 3.14.4, venv OK, red a PyPI = 200. grok venv tiene pydantic 2.13.4/pyt
 - [x] Tests del PLAN corridos (48 passed)
 - [x] 0 regresiones atribuibles
 - [x] Convenciones del proyecto respetadas (domain stdlib frozen, settings pydantic sin instanciar en import, sin print, sin str.format)
+
+## Gate 7 — Commit Gate (orquestador, ítem 1)
+- 2026-09-03 16:40: sin reimplementar. Suite 49 passed (test-guardian agregó test_invalid_model_provider_variant_fall_back).
+- Commit 1: test(domain): fija fallback de model/provider/variant inválidos en UserConfig.
+- Commit 2: docs(pool): item1 SUMMARY y reportes agent-memory.
+- Verificación final: grokV2 tree limpio; grok = mismo baseline pre-existente.
