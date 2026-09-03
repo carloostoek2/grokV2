@@ -58,3 +58,15 @@ python3 = 3.14.4, venv OK, red a PyPI = 200. grok venv tiene pydantic 2.13.4/pyt
 - import grokbot.settings+grokbot.domain sin env → ok.
 - grok sin cambios (mismo baseline).
 - Commit: feat(domain): user_config + variables
+
+## Gate 6 — Self-check final + SUMMARY
+- 16:25: suite completa .venv/bin/pytest tests/unit -q → 48 passed, 10 warnings (DeprecationWarning asyncio en pytest-asyncio/Python 3.14, cosmético).
+- git log: 5 commits (ver SUMMARY). git status grokV2 limpio. grok: mismo baseline (M sources/6181290784.jpg + ?? variables_packages/hot.json + sexy.json) — 0 cambios atribuibles a este ítem.
+- Verificación DoD script: get_settings sin requeridos → ValidationError; blank→None; CSV→{1,2,3}; exports de domain OK.
+- No existen dirs providers/repositories/application/telegram/shared/main.py.
+
+## Self-Check: PASSED
+- [x] Todas las tareas completadas (Task 1, 2, 3a, 3b + pre-task git)
+- [x] Tests del PLAN corridos (48 passed)
+- [x] 0 regresiones atribuibles
+- [x] Convenciones del proyecto respetadas (domain stdlib frozen, settings pydantic sin instanciar en import, sin print, sin str.format)
