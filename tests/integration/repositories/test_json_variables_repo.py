@@ -187,6 +187,18 @@ def test_packages_save_list_load_activate_delete(tmp_path):
     assert isinstance(err, str)
 
 
+def test_delete_package_non_active_removes_file(tmp_path):
+    """D3: deleting an existing, non-active package succeeds and removes the file."""
+    path = tmp_path / "variables_lists.json"
+    repo = JsonVariablesRepository(path)
+    assert repo.save_package("victima", {"lists": {"cuerpos": ["A"]}, "template": "{cuerpos}"}) == (True, None)
+    pkg = path.parent / "variables_packages" / "victima.json"
+    assert pkg.exists()
+    assert repo.delete_package("victima") is True
+    assert not pkg.exists()
+    assert repo.delete_package("victima") is False  # now missing
+
+
 def test_activate_package_missing_returns_false(tmp_path):
     path = tmp_path / "variables_lists.json"
     repo = JsonVariablesRepository(path)

@@ -190,6 +190,17 @@ def test_round_trip_parity(tmp_path):
     assert json.loads(path.read_text(encoding="utf-8"))[str(UID)] == canonical_record()
 
 
+def test_count_video_hourly_usage_missing_user_creates_default(tmp_path):
+    """Parity _get_or_create_full: counting a brand-new user persists a default record and returns 0."""
+    path = tmp_path / "sessions.json"
+    repo = JsonSessionRepository(path)
+    assert repo.count_video_hourly_usage(UID, now=5000.0) == 0
+    raw = json.loads(path.read_text(encoding="utf-8"))[str(UID)]
+    assert raw["model"] == "grok"
+    assert raw["video_hourly_timestamps"] == []
+    assert raw["source_path"] is None
+
+
 def test_write_json_atomic_ensure_ascii_default_true(tmp_path):
     path = tmp_path / "nested" / "sessions.json"
     repo = JsonSessionRepository(path)

@@ -138,6 +138,24 @@ def test_extra_keys_in_live_record_preserved_across_other_save(tmp_path):
     assert "11:1" in load(path)
 
 
+def test_save_prunes_expired_records(tmp_path):
+    """Parity: the TTL prune also runs on save, dropping expired records of other keys."""
+    path = tmp_path / "generation_refs.json"
+    repo = JsonGenerationRefsRepository(path)
+    now = time.time()
+    repo.save(10, 1, kie_task_id="live", now=now)
+    data = load(path)
+    data["10:9"] = {"provider": "kie", "kind": "image", "prompt": "", "created_at": now - (GENERATION_REF_TTL_SEC + 1)}
+    write(path, data)
+    # a later save must prune the expired record while keeping the live one
+    repo.save(11, 1, kie_task_id="other", now=now)
+    after = load(path)
+    assert "10:9" not in after  # expired pruned by save
+    assert "10:1" in after  # live record preserved
+    assert "11:1" in after  # new record persisted
+    assert after["10:1"]["kie_task_id"] == "live"
+
+
 def test_regen_opaque_round_trip(tmp_path):
     path = tmp_path / "generation_refs.json"
     repo = JsonGenerationRefsRepository(path)
