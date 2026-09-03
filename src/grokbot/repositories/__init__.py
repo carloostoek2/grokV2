@@ -13,6 +13,7 @@ from grokbot.repositories.base import (
     VariablesRepository,
     write_json_atomic,
 )
+from grokbot.repositories.generation_refs_repo import JsonGenerationRefsRepository
 from grokbot.repositories.json_session_repo import JsonSessionRepository
 from grokbot.repositories.json_variables_repo import DEFAULT_LISTS, JsonVariablesRepository
 
@@ -24,4 +25,5 @@ __all__ = [
     "JsonSessionRepository",
     "JsonVariablesRepository",
     "DEFAULT_LISTS",
+    "JsonGenerationRefsRepository",
 ]
