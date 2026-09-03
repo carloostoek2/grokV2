@@ -39,11 +39,15 @@ Pool: grokv2-rearch · Fuente: ítems del pipeline. Clasificación §5b.
 - Origen: arch-enforcer item5 (M1). `stream_presenter.present_batch` llama `run_refine_flow(... cancel_event=None)` (:336) aun con job real; un cancel del job durante el refine en batch (post-yes) no suprime la refinada en vuelo, a diferencia del single-image (:167).
 - Clase: in-scope-followup (ítem 5). Fix: pasar el cancel_event del job en present_batch, o confirmar paridad grok y documentar. A resolver en fix round / review-loop.
 - Archivos: `src/grokbot/telegram/stream_presenter.py`.
+- **Resuelto:** d79edde — `present_batch` recibe `job_manager` (inyectado por handlers/variables_cmd) y pasa el `cancel_event` del job del batch a `run_refine_flow` (paridad single-image). Suite 487 passed.
+
+## R6 — Item 5 M2 (arch): get_file_bytes sin try/except user-safe
 
 ## R6 — Item 5 M2 (arch): get_file_bytes sin try/except user-safe
 - Origen: arch-enforcer item5 (M2). `deps.gateway.get_file_bytes` en `handlers/generation.py` y `variables_cmd.py` sin manejo user-safe: file_id expirado lanza `TelegramBadRequest` crudo al usuario.
 - Clase: in-scope-followup (ítem 5 / robustez ítem 6). Fix: envolver en error user-safe (mensaje degradado, log sin file_id).
 - Archivos: `src/grokbot/telegram/handlers/generation.py`, `src/grokbot/telegram/handlers/variables_cmd.py`.
+- **Resuelto:** d79edde — excepción neutral `MediaFetchError` (ports), `AiogramGateway` traduce `TelegramBadRequest`, handlers degradan con `SOURCE_MEDIA_UNAVAILABLE_MSG` sin exponer el file_id. Suite 487 passed.
 
 ## R7 — Import transitivo de transport al importar telegram/ (lazy re-exports)
 - Origen: arch-enforcer item4 (M2) — pendiente de registro; arch-enforcer item5 (M3) confirma que sigue sin registrarse.
