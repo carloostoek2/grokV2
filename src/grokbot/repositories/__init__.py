@@ -1,12 +1,13 @@
-"""Infrastructure persistence package — repository contracts + JSON backends.
+"""Paquete de persistencia — contratos de repositorio + backends JSON.
 
-Re-exports the public repository API. Concrete backends are added task by task
-(``JsonSessionRepository`` in task 3, ``JsonVariablesRepository``/``DEFAULT_LISTS``
-in task 4, ``JsonGenerationRefsRepository`` in task 5). Since item 6 (R7), the
-package re-exports lazily via PEP 562 (module ``__getattr__``): importing
-``grokbot.repositories`` or any layer that imports it does NOT load the JSON
-backends until a public name is actually accessed. ``__all__`` es idéntico al
-eager anterior — la API pública no cambia, solo se aplaza la carga.
+Re-exporta la API pública de repositorios. Los backends concretos se agregan
+tarea por tarea (``JsonSessionRepository`` en task 3,
+``JsonVariablesRepository``/``DEFAULT_LISTS`` en task 4,
+``JsonGenerationRefsRepository`` en task 5). Desde el ítem 6 (R7), el paquete
+re-exporta de forma lazy vía PEP 562 (``__getattr__`` de módulo): importar
+``grokbot.repositories`` (o cualquier capa que lo importe) NO carga los backends
+JSON hasta que se accede a un nombre público. ``__all__`` es idéntico al eager
+anterior — la API pública no cambia, solo se aplaza la carga.
 """
 
 from __future__ import annotations
@@ -40,11 +41,11 @@ _NAMES = {name: mod for mod, names in _SOURCES.items() for name in names}
 
 
 def __getattr__(name: str):
-    """Resolver un nombre público del paquete importando su submódulo (PEP 562).
+    """Resuelve un nombre público del paquete importando su submódulo (PEP 562).
 
     Para cualquier otro nombre (submódulos como ``base``, dunder, etc.) se
     levanta ``AttributeError`` para que el import system resuelva los submódulos
-    con normalidad y los proxies de herramienta no rompan.
+    con normalidad y las herramientas no rompan.
     """
     module = _NAMES.get(name)
     if module is None:

@@ -1,11 +1,12 @@
-"""Generation providers (xAI, Replicate, Kie.ai, ComfyUI) behind a common contract.
+"""Paquete de providers (xAI, Replicate, Kie.ai, ComfyUI) tras un contrato común.
 
-Concrete providers are added by their own modules and re-exported here. Since
-item 6 (R7), the package re-exports lazily via PEP 562 (module ``__getattr__``):
-importing ``grokbot.providers`` or any layer that imports it does NOT load the
-concrete providers (xai/kie/replicate/comfyui+ssh) nor their transport deps
-until a public name is actually accessed. ``__all__`` es idéntico al eager
-anterior — la API pública no cambia, solo se aplaza la carga.
+Cada provider concreto vive en su propio módulo y se re-exporta aquí. Desde el
+ítem 6 (R7), el paquete re-exporta de forma lazy vía PEP 562 (``__getattr__`` de
+módulo): importar ``grokbot.providers`` (o cualquier capa que lo importe) NO
+carga los providers concretos (xai/kie/replicate/comfyui+ssh) ni sus
+dependencias de transporte hasta que se accede a un nombre público.
+``__all__`` es idéntico al eager anterior — la API pública no cambia, solo se
+aplaza la carga.
 """
 
 from __future__ import annotations
@@ -79,11 +80,11 @@ _NAMES = {name: mod for mod, names in _SOURCES.items() for name in names}
 
 
 def __getattr__(name: str):
-    """Resolver un nombre público del paquete importando su submódulo (PEP 562).
+    """Resuelve un nombre público del paquete importando su submódulo (PEP 562).
 
     Para cualquier otro nombre (submódulos como ``base``/``registry``, dunder,
     etc.) se levanta ``AttributeError`` para que el import system resuelva los
-    submódulos con normalidad y los proxies de herramienta no rompan.
+    submódulos con normalidad y las herramientas no rompan.
     """
     module = _NAMES.get(name)
     if module is None:
