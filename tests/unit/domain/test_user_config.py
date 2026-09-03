@@ -56,6 +56,29 @@ def test_legacy_grok_provider_alias():
     assert rec["grok_imagine_provider"] == "xai"
 
 
+def test_invalid_model_provider_variant_fall_back():
+    """R4/D2: top-level model/provider/variant outside the valid sets -> defaults."""
+    uc = UserConfig.from_record(
+        {
+            "model": "no_existe",
+            "grok_imagine_provider": "bogus",
+            "grok_imagine_variant": "bogus",
+        }
+    )
+    assert uc.model == "grok"
+    assert uc.grok_imagine_provider == "kie"
+    assert uc.grok_imagine_variant == "quality"
+    # Valid non-default values are preserved (no cross-field validation).
+    uc2 = UserConfig.from_record(
+        {"model": "seedream", "grok_imagine_provider": "xai", "grok_imagine_variant": "standard"}
+    )
+    assert uc2.model == "seedream"
+    assert uc2.grok_imagine_provider == "xai"
+    assert uc2.grok_imagine_variant == "standard"
+    # Normalized record persists through a round-trip.
+    assert UserConfig.from_record({"model": "no_existe"}).to_record()["model"] == "grok"
+
+
 def test_video_config_coercion_and_valid_sets():
     assert UserConfig.from_record({"video_duration": "10"}).video.duration == 10
     assert UserConfig.from_record({"video_duration": "99"}).video.duration == 5
