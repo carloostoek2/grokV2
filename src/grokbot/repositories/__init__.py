@@ -13,10 +13,12 @@ from grokbot.repositories.base import (
     VariablesRepository,
     write_json_atomic,
 )
+from grokbot.repositories.json_session_repo import JsonSessionRepository
 
 __all__ = [
     "SessionRepository",
     "VariablesRepository",
     "GenerationRefsRepository",
     "write_json_atomic",
+    "JsonSessionRepository",
 ]
