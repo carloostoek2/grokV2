@@ -27,6 +27,7 @@ from grokbot.providers.base import (
     detect_image_mime,
     validate_image_for_i2v,
 )
+from grokbot.providers.xai_provider import XaiProvider
 
 __all__ = [
     "DEFAULT_IMAGE_ASPECT_RATIO",
@@ -50,4 +51,5 @@ __all__ = [
     "bytes_to_data_uri",
     "detect_image_mime",
     "validate_image_for_i2v",
+    "XaiProvider",
 ]
