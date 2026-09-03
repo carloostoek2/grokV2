@@ -17,3 +17,17 @@ python3 = 3.14.4, venv OK, red a PyPI = 200. grok venv tiene pydantic 2.13.4/pyt
 - 2026-09-03 16:14: git init OK en grokV2 (branch master, config Chrs).
 - Creado .gitignore (excluye .venv/, .env, __pycache__/, *.egg-info, etc.).
 - Se commitea base: .planning/ docs/ .grok/ .gitignore.
+
+## Gate 2 — TASK 1: Scaffolding (pyproject, .env.example, README, src layout, smoke)
+- 2026-09-03 16:15: creados pyproject.toml, .env.example, README.md, src/grokbot/__init__.py, tests/unit/test_smoke.py.
+- .gitignore ya creado en pre-task (contemplado en commit base).
+- Pasos: python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
+
+### TASK 1 resultado
+- 16:16: venv creado con python3 3.14.4; pip install -e ".[dev]" OK.
+  pydantic 2.13.5, pydantic-settings 2.15.0, pytest 8.4.2, pytest-asyncio 0.26.0 (coinciden con versión validada del PLAN).
+- .venv/bin/pytest tests/unit -q → 1 passed (test_smoke), 10 warnings DeprecationWarning asyncio (Python 3.14, inofensivo).
+- .venv/bin/python -c "import grokbot; print(grokbot.__version__)" → 0.1.0.
+- .venv IGNORED (git check-ignore OK). .env.example sin REPLICATE_MODEL (grep rc=1).
+- git status: solo archivos esperados. grok: mismo baseline (sin cambios nuevos).
+- Commit: feat(scaffold)
