@@ -1,0 +1,63 @@
+# gsd-executor log — Item 2: Providers (grokv2-rearch)
+
+Pool: grokv2-rearch · Ítem: item2-providers · Agente: gsd-executor
+Fecha: 2026-09-03
+
+## Baseline (pre-edit)
+- grokV2 git repo OK (branch: main/default). Último commit item1.
+- grok read-only baseline esperado y confirmado (0 cambios atribuibles al ítem):
+  M sources/6181290784.jpg ; ?? variables_packages/hot.json ; ?? variables_packages/sexy.json
+- Python 3.14.4; venv .venv con pydantic/pytest ya instalados; NO aiohttp/replicate/aioresponses aún.
+- No existen src/grokbot/{providers,application,repositories,telegram,main.py,shared}.
+
+## Task 1 — D1 + base + deps (work units 1-2)
+- pyproject.toml: +aiohttp>=3.11,<4 +replicate>=1,<2 (runtime); +aioresponses>=0.7,<1 (dev). Instalado OK: aiohttp 3.14.3 (cp314 wheel disponible), replicate 1.0.7, aioresponses 0.7.9. NO desvío cp314.
+- domain/generation.py: + params: dict (default_factory dict, último campo). Aditivo, posicional estable.
+- tests/unit/domain/test_generation.py: + casos params (default, carrier, aislamiento, posicional).
+- providers/__init__.py + providers/base.py: Protocol ImageProvider/VideoProvider (runtime_checkable), jerarquía D3, DEFAULT_IMAGE_ASPECT_RATIO, consts poll/size, helpers bytes.
+- tests/unit/providers/test_base.py: jerarquía retryable, mime/data-uri/i2v, default aspect.
+- Verificación: pytest tests/unit/domain/test_generation.py tests/unit/providers/test_base.py -q → 25 passed. pytest tests/unit -q → 69 passed (sin regresión item1). import grokbot.providers ok.
+
+## Work units 1-2 committed
+- f088220 feat(domain): GenerationRequest.params carrier aditivo + tests
+- 4f88610 feat(providers): base contract ImageProvider/VideoProvider + errores tipados + helpers + deps
+- grok intacto (0 cambios atribuibles) en gate.
+
+## Task 2 — xai + replicate (work units 3-4)
+- xai_provider.py (XaiProvider: image t2i/i2i, edit_with_reference, video create/poll; token solo en header; errores tipados). Tests integration aioresponses (10) incl. token-no-en-body, i2v oversized, video done/failed/moderation/timeout.
+- replicate_provider.py (ReplicateProvider: helpers puros _replicate_kind/_normalize_output_urls; client inyectable; run en to_thread; seedream image_input+2K; faceswap BytesIO+base64; grok aspect_ratio). Tests unit normalize + integration fake client (7).
+- AVISO compat tooling: aioresponses 0.7.9 incompatible con aiohttp 3.14.3 (ClientResponse requiere stream_writer). Shim test-only en test_xai_provider.py (subclass aiohttp ClientResponse). Se reusará en test_kie_provider.py. Residual tooling a documentar en SUMMARY.
+- Verificación Task 2: 21 passed.
+
+## Task 2 commits
+- 3a3e3f5 feat(providers): xai provider (image + video + edit_with_reference) + tests
+- f567291 feat(providers): replicate provider (grok/seedream/faceswap) + tests
+- grok intacto en gate.
+
+## Task 3 — kie provider (work unit 5)
+- kie_provider.py (KieProvider: t2i/i2i + video t2v/i2v; upload; createTask/poll recordInfo; allowlist hosts D5; KieTaskRef->index; D8 spicy sin ref -> ProviderInputError; helpers puros unit-testeados).
+- tests/unit/providers/test_kie_helpers.py (8) + tests/integration/providers/test_kie_provider.py (8) con shim aioresponses; token no en body (R2 header).
+- providers/__init__.py: + KieProvider export.
+- Verificación Task 3: pytest tests/unit/providers/test_kie_helpers.py tests/integration/providers/test_kie_provider.py -q → 16 passed.
+## Task 3 committed
+- adf5f20 feat(providers): kie provider (image/video/helpers/allowlist/D8) + tests
+- grok intacto en gate (solo baseline M/??).
+## Task 4 — comfyui ssh_client + provider (work unit 6)
+- comfyui/{__init__,ssh_client,provider}.py: SshClient aísla ssh/scp (ControlMaster; runner inyectable; tmpdir configurable, default repo-local tmp/comfyui). ComfyUIProvider generate t2i/img2img (payload JSON image_b64 por stdin), precondiciones foto (ProviderInputError), video por model wan_i2v/minimax_i2v (timeout 1500), refine 2-stage (REFINE_ONLY/REFINE_INPUT; rc 2/3 tipados; regex /workspace), meta D4.
+- tests/integration/providers/test_comfyui_ssh_client.py (8) + test_comfyui_provider.py (16): fake runner y fake ssh; 24 passed.
+## Task 5 — registry + suite completa (work unit 7)
+- registry.py (ProviderResolution frozen + ProviderRegistry: provider/is_available/resolve_image/resolve_video/resolve; D6 reglas replicate->xai video; ProviderNotConfiguredError user-facing; ProviderInputError media/model).
+- providers/__init__.py: re-export ComfyUIProvider/SshClient/ProviderRegistry/ProviderResolution.
+- tests/integration/providers/test_registry.py (16): grok->xai/replicate/kie, seedream/faceswap->replicate, comfyui, video replicate->xai / kie video model, not-configured, unsupported.
+- Verificación Task 5: suite completa .venv/bin/pytest tests/unit tests/integration/providers -q → 146 passed.
+## Task 5 committed
+- 8ac638c feat(providers): registry resolve por UserConfig + disponibilidad + tests
+- 493aa74 test(providers): replicate R2 assert token ausente del input serializado
+
+## Self-Check: PASSED
+- [x] Todas las tareas completadas (1-5)
+- [x] Suite del PLAN corrida: .venv/bin/pytest tests/unit tests/integration/providers -q → 146 passed
+- [x] 0 regresiones atribuibles (tests ítem 1 en verde dentro de la suite)
+- [x] Convenciones del proyecto respetadas (DI por constructor, sin env/settings/telegram/grok, D4 meta, R2)
+- grok intacto: baseline solo (M sources/6181290784.jpg ; ?? variables_packages/hot.json sexy.json)
+- No existen src/grokbot/{application,repositories,telegram,main.py,shared}
