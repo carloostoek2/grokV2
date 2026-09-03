@@ -1,0 +1,4 @@
+# arch-enforcer log — item3-repositories
+Fecha: 2026-09-03. Veredicto: PASS WITH NOTES (0 critical).
+Corridas: pytest tests/unit tests/integration/repositories -> 120 passed; pytest tests -> 201 passed; grep I/O JSON (data-file IO solo en repositories/); grep imports settings/providers/telegram/grok/print en repositories -> none; grok status == baseline pre-existente; diff domain/providers entre 4a6a8e6..d6ecb83 -> vacío; file-list commits item3 == PLAN.
+Hallazgos: 0 critical. Observations: O1 get_list KeyError (constante no presente en paquete activo, paridad grok), O2 add_item puede crear lista constante en paquete activo (paridad grok, no alcanzable por UI self-describing), O3 save_config asume config previa vía get_config (legacy), O4 sin logging (paridad grok; item 6 logging central), O5 residual POOL (fuera de item 3): tests/unit/domain/test_user_config.py (item 1) contiene ID real 6181290784 + path real grok/sources — anonimizar en cierre.
