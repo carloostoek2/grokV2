@@ -1,0 +1,19 @@
+# gsd-executor log — Item 1 (domain + settings), pool grokv2-rearch
+Fecha: 2026-09-03. Agente: gsd-executor. PLAN: PLAN.md (38KB) leído completo.
+CLARIFY leído: decisiones bloqueadas 1-7 respetadas. No hay CLAUDE.md/AGENTS.md/rules.md en grokV2.
+
+## Paso 0 — Baseline grok (read-only)
+git -C /home/ubuntu/repos/grok status --porcelain ANTES de empezar:
+  M sources/6181290784.jpg
+  ?? variables_packages/hot.json
+  ?? variables_packages/sexy.json
+=> cambios PRE-EXISTENTES ajenos a este ítem. Se verifica al cierre que el status no cambia.
+grok HEAD: 81832a5 fix(variables): modelo self-describing para que cada paquete use sus propios campos
+
+## Entorno
+python3 = 3.14.4, venv OK, red a PyPI = 200. grok venv tiene pydantic 2.13.4/pytest 8.4.2 (sin pydantic-settings). Se crea .venv propio con pip (hay red).
+
+## Gate 1 — PRE-TASK (D5): git init + commit base
+- 2026-09-03 16:14: git init OK en grokV2 (branch master, config Chrs).
+- Creado .gitignore (excluye .venv/, .env, __pycache__/, *.egg-info, etc.).
+- Se commitea base: .planning/ docs/ .grok/ .gitignore.
