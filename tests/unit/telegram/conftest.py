@@ -313,24 +313,52 @@ class FakeMediaDownloader:
         return self.payload
 
 
-# --- PendingPrompts (A6: confirmación efímera, sin FSM) ------------------------
+# --- PendingPrompts (A6/C4: confirmación efímera, sin FSM) ---------------------
 class PendingPrompts:
-    """Mapa user_id → prompt pendiente de confirmación (paridad grok)."""
+    """Mapa user_id → prompt atado a (chat, mensaje) y dueño (paridad prod)."""
 
     def __init__(self) -> None:
-        self._pending: dict[int, str] = {}
+        self._pending: dict[int, tuple[str, int | None, int | None]] = {}
+        self._owners: dict[tuple[int, int], int] = {}
 
-    def set(self, user_id: int, prompt: str) -> None:
-        self._pending[user_id] = prompt
+    def set(
+        self,
+        user_id: int,
+        prompt: str,
+        *,
+        chat_id: int | None = None,
+        message_id: int | None = None,
+    ) -> None:
+        prev = self._pending.get(user_id)
+        if prev is not None and prev[1] is not None and prev[2] is not None:
+            self._owners.pop((prev[1], prev[2]), None)
+        self._pending[user_id] = (prompt, chat_id, message_id)
+        if chat_id is not None and message_id is not None:
+            self._owners[(chat_id, message_id)] = user_id
 
     def get(self, user_id: int) -> str | None:
-        return self._pending.get(user_id)
+        entry = self._pending.get(user_id)
+        return entry[0] if entry else None
 
     def pop(self, user_id: int) -> str | None:
-        return self._pending.pop(user_id, None)
+        entry = self._pending.pop(user_id, None)
+        if entry is not None and entry[1] is not None and entry[2] is not None:
+            self._owners.pop((entry[1], entry[2]), None)
+        return entry[0] if entry else None
 
     def clear(self, user_id: int) -> None:
-        self._pending.pop(user_id, None)
+        self.pop(user_id)
+
+    def owns(self, chat_id: int, message_id: int, user_id: int) -> bool:
+        entry = self._pending.get(user_id)
+        if entry is None:
+            return False
+        if entry[1] is None and entry[2] is None:
+            return True
+        return entry[1] == chat_id and entry[2] == message_id
+
+    def owner_of(self, chat_id: int, message_id: int) -> int | None:
+        return self._owners.get((chat_id, message_id))
 
 
 # --- Fixtures de pytest --------------------------------------------------------

@@ -67,6 +67,60 @@ async def test_text_grok_confirm_no():
     assert deps.pending.get(_UID) is None
 
 
+_OTHER = 222222222
+_GROUP = 333333333
+
+
+async def test_group_other_user_cannot_confirm_others_prompt():
+    """C4: en un grupo, otro usuario no consume ni ve la confirmación ajena."""
+    deps = make_deps()
+    # A ofrece un prompt en el grupo.
+    deps = await _msg(
+        deps,
+        text_message("retrato de pie", user_id=_UID, chat_id=_GROUP, chat_type="group", message_id=10),
+    )
+    confirm = deps.gateway.calls_by_method("send_message")[-1]
+    mid = confirm["sent"].message_id
+    assert deps.pending.get(_UID) is not None
+
+    # B clickea Confirmar sobre el mensaje de A.
+    deps = await _cb(
+        deps,
+        callback_query("confirm:yes", user_id=_OTHER, chat_id=_GROUP, chat_type="group", message_id=mid),
+    )
+    ans = deps.gateway.calls_by_method("answer_callback")[-1]
+    assert ans["text"] == "Esta confirmación pertenece a otro usuario."
+    assert ans["show_alert"] is True
+    # el pendiente de A sigue intacto y no se generó nada para B.
+    assert deps.pending.get(_UID) is not None
+    assert deps.gateway.calls_by_method("send_photo") == []
+    # el mensaje de confirmación de A no se tocó.
+    assert deps.gateway.calls_by_method("edit_message_text") == []
+
+
+async def test_group_other_user_cannot_cancel_others_prompt():
+    """C4: en un grupo, otro usuario no cancela la confirmación ajena."""
+    deps = make_deps()
+    deps = await _msg(
+        deps,
+        text_message("retrato de pie", user_id=_UID, chat_id=_GROUP, chat_type="group", message_id=11),
+    )
+    confirm = deps.gateway.calls_by_method("send_message")[-1]
+    mid = confirm["sent"].message_id
+
+    deps = await _cb(
+        deps,
+        callback_query("confirm:no", user_id=_OTHER, chat_id=_GROUP, chat_type="group", message_id=mid),
+    )
+    ans = deps.gateway.calls_by_method("answer_callback")[-1]
+    assert ans["text"] == "Esta confirmación pertenece a otro usuario."
+    assert deps.pending.get(_UID) is not None, "A sigue pendiente"
+    assert not any(
+        c["text"] == "Generacion cancelada."
+        for c in deps.gateway.calls_by_method("edit_message_text")
+    )
+
+
 async def test_text_seedream_direct():
     deps = make_deps()
     deps.update_config.set_model(_UID, "seedream")

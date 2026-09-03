@@ -91,11 +91,16 @@ async def handle_text(message: types.Message, deps: BotDeps) -> None:
         await ui.send_text(prompt_err)
         return
     if cfg.model in ("grok", "grok_video"):
-        deps.pending.set(message.from_user.id, prompt)
         media_word = "video" if cfg.model == "grok_video" else "imagen"
-        await ui.send_text(
+        sent = await ui.send_text(
             f"¿Confirmas generar este {media_word}?\n\n<i>{escape(prompt)}</i>",
             reply_markup=confirmation_keyboard(),
+        )
+        # C4: el pendiente queda atado a este mensaje concreto (chat/message_id)
+        # y a su dueño; en grupos otro usuario no puede consumirlo.
+        deps.pending.set(
+            message.from_user.id, prompt,
+            chat_id=message.chat.id, message_id=sent.message_id,
         )
         return
     await _run_single_image(deps, message, cfg, prompt, uid=message.from_user.id, prefix="Prompt")
@@ -209,11 +214,19 @@ async def handle_confirm_yes(callback: types.CallbackQuery, deps: BotDeps) -> No
     ui = _chat_ui(deps, callback.message)
     uid = callback.from_user.id
     message_id = callback.message.message_id
-    prompt = deps.pending.pop(uid)
-    if not prompt:
+    chat_id = callback.message.chat.id
+    if not deps.pending.owns(chat_id, message_id, uid):
+        if deps.pending.owner_of(chat_id, message_id) is not None:
+            # C4: el mensaje pertenece a otro user (grupos) → no consumir ni editar.
+            await answer_callback(
+                deps.gateway, callback,
+                "Esta confirmación pertenece a otro usuario.", show_alert=True,
+            )
+            return
         await ui.edit_text(message_id, _NO_PENDING, reply_markup=None)
         await answer_callback(deps.gateway, callback)
         return
+    prompt = deps.pending.pop(uid)
     cfg = deps.sessions.get_config(uid)
     model = model_display(cfg)
     if cfg.model == "grok_video":
@@ -241,9 +254,22 @@ async def handle_confirm_no(callback: types.CallbackQuery, deps: BotDeps) -> Non
     if callback.message is None:
         await answer_callback(deps.gateway, callback, "Acción inválida.", show_alert=True)
         return
-    deps.pending.clear(callback.from_user.id)
     ui = _chat_ui(deps, callback.message)
-    await ui.edit_text(callback.message.message_id, "Generacion cancelada.", reply_markup=None)
+    uid = callback.from_user.id
+    message_id = callback.message.message_id
+    chat_id = callback.message.chat.id
+    if not deps.pending.owns(chat_id, message_id, uid):
+        if deps.pending.owner_of(chat_id, message_id) is not None:
+            # C4: el mensaje pertenece a otro user (grupos) → no cancelar lo ajeno.
+            await answer_callback(
+                deps.gateway, callback,
+                "Esta confirmación pertenece a otro usuario.", show_alert=True,
+            )
+            return
+        await answer_callback(deps.gateway, callback)
+        return
+    deps.pending.clear(uid)
+    await ui.edit_text(message_id, "Generacion cancelada.", reply_markup=None)
     await answer_callback(deps.gateway, callback)
 
 
