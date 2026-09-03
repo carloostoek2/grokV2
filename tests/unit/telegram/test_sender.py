@@ -252,6 +252,35 @@ async def test_video_local_comfyui_saves_ref(tmp_path, gateway, downloader, refs
 
 
 @pytest.mark.asyncio
+async def test_video_local_send_rejected_degrades_user_safe(tmp_path, refs_repo):
+    """C9c: la API rechaza un video LOCAL → degrada user-safe sin crash ni path."""
+    gateway = _RejectingVideoGateway()
+    downloader = FakeMediaDownloader()
+    ui = ChatUI(gateway, CHAT_ID)
+    sender = _make_sender(gateway, downloader, refs_repo)
+    clip = tmp_path / "clip.mp4"
+    clip.write_bytes(b"mp4-bytes")
+    item = _item(
+        provider="comfyui",
+        media_type=MediaType.VIDEO,
+        file_paths=[str(clip)],
+        meta={"comfyui_remotes": ["/workspace/clip.mp4"]},
+        regen={"provider": "comfyui", "mode": "edit"},
+    )
+    status = await ui.send_text("Generando video...")
+    sent = await sender.send_video(ui, item, "Edit", status_id=status.message_id)
+    assert sent is None
+    assert gateway.calls_by_method("send_video") == [], "el envío fue rechazado"
+    edits = gateway.calls_by_method("edit_message_text")
+    assert edits[-1]["text"] == (
+        "No se pudo enviar el video por Telegram. "
+        "Prueba con otro modelo o una duración/resolución menor."
+    )
+    assert edits[-1]["reply_markup"] is None
+    assert not any("clip.mp4" in c["text"] for c in edits), "no filtra el path local"
+
+
+@pytest.mark.asyncio
 async def test_video_over_limit_fallback_text_no_send(
     gateway, downloader, refs_repo, monkeypatch
 ):

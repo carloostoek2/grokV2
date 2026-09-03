@@ -47,6 +47,10 @@ _ERR_NO_IMAGE = "No se pudo leer la imagen generada."
 _ERR_NO_VIDEO = "No se pudo leer el video generado."
 _ERR_NO_ALBUM = "No se pudieron leer las imágenes generadas."
 _ERR_NO_URL = "Error: el modelo no devolvio ninguna URL. Intenta con otro prompt."
+_ERR_VIDEO_REJECTED = (
+    "No se pudo enviar el video por Telegram. "
+    "Prueba con otro modelo o una duración/resolución menor."
+)
 _GENERIC_DOWNLOAD_ERROR = "No se pudo descargar el archivo. Intenta de nuevo más tarde."
 
 _COMFYUI_FILENAME = "comfyui.png"
@@ -222,10 +226,17 @@ class ResultSender:
                 prefix, elapsed, model=caption_model,
                 prompt=item.prompt if meta.get("caption_prompt") else None,
             )
-            sent = await ui.send_video(
-                data, filename=_GENERATED_VIDEO_FILENAME,
-                caption=caption, reply_markup=image_regenerate_keyboard(),
-            )
+            try:
+                sent = await ui.send_video(
+                    data, filename=_GENERATED_VIDEO_FILENAME,
+                    caption=caption, reply_markup=image_regenerate_keyboard(),
+                )
+            except TelegramBadRequest:
+                # C9c: Telegram rechaza el video local (códec/formato o >50MB) →
+                # degradar user-safe sobre el status, sin exponer path de contenido.
+                if status_id is not None:
+                    await ui.edit_text(status_id, _ERR_VIDEO_REJECTED, reply_markup=None)
+                return None
             if item.regen_context is not None:
                 self._refs.save(
                     ui.chat_id, sent.message_id,
