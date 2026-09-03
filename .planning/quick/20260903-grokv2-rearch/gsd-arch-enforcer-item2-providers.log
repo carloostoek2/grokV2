@@ -1,0 +1,4 @@
+# arch-enforcer log — item2-providers
+Fecha: 2026-09-03. Veredicto: PASS WITH NOTES (0 critical).
+Corridas: pytest tests/unit tests/integration/providers -> 146 passed; grep imports providers (sin env/settings/telegram/grok/print); grok status == baseline pre-existente; file-list item2 == PLAN; generation.py diff == solo params (D1); R2 asserts token-not-in-body en xai/kie/replicate.
+Hallazgos: M1 (comfyui shell-interp model/lora sin validar), M2 (comfyui generate ignora media_type / seam registry-video), M3 (4xx no-auth -> ProviderUnavailable retryable), O* (A7 aceptable, provider:object, sin logging, shim aioresponses residual).

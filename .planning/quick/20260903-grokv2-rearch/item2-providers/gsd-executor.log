@@ -61,3 +61,19 @@ Fecha: 2026-09-03
 - [x] Convenciones del proyecto respetadas (DI por constructor, sin env/settings/telegram/grok, D4 meta, R2)
 - grok intacto: baseline solo (M sources/6181290784.jpg ; ?? variables_packages/hot.json sexy.json)
 - No existen src/grokbot/{application,repositories,telegram,main.py,shared}
+## Fix round (orquestador, post arch-enforcer PASS WITH NOTES M1-M3)
+- M1 comfyui: _model_lora valida cm in VALID_COMFYUI_MODELS / cl in VALID_COMFYUI_LORAS -> ProviderInputError (cubre generate y refine; sin inyección shell).
+- M2 comfyui: generate() media VIDEO + modelo no-video -> ProviderInputError (seam video).
+- M3 xai/kie: 4xx terminales (no auth/429) -> ProviderInputError; api_code no-200 -> ProviderInputError/ProviderGenerationError; Unavailable reservado a 5xx/red.
+- Tests: +11 (comfyui 7, xai 2, kie 2). Suite completa 157 passed.
+## Fix round committed
+- a063ec8 fix(providers): comfyui validate model/lora and enforce video seam + tests
+- 18e6458 fix(providers): xai terminal 4xx -> ProviderInputError (retryable False) + tests
+- f49ac74 fix(providers): kie terminal 4xx/api-code -> retryable False + tests
+- Suite final: .venv/bin/pytest tests/unit tests/integration/providers -q → 157 passed
+- grok intacto: baseline solo. grokV2: no dirs ítems 3-6.
+## Self-Check (fix round): PASSED
+- [x] M1/M2/M3 aplicados con tests
+- [x] Suite completa verde (157)
+- [x] 0 regresiones atribuibles
+- [x] Convenciones respetadas
