@@ -42,8 +42,6 @@ Pool: grokv2-rearch · Fuente: ítems del pipeline. Clasificación §5b.
 - **Resuelto:** d79edde — `present_batch` recibe `job_manager` (inyectado por handlers/variables_cmd) y pasa el `cancel_event` del job del batch a `run_refine_flow` (paridad single-image). Suite 487 passed.
 
 ## R6 — Item 5 M2 (arch): get_file_bytes sin try/except user-safe
-
-## R6 — Item 5 M2 (arch): get_file_bytes sin try/except user-safe
 - Origen: arch-enforcer item5 (M2). `deps.gateway.get_file_bytes` en `handlers/generation.py` y `variables_cmd.py` sin manejo user-safe: file_id expirado lanza `TelegramBadRequest` crudo al usuario.
 - Clase: in-scope-followup (ítem 5 / robustez ítem 6). Fix: envolver en error user-safe (mensaje degradado, log sin file_id).
 - Archivos: `src/grokbot/telegram/handlers/generation.py`, `src/grokbot/telegram/handlers/variables_cmd.py`.
