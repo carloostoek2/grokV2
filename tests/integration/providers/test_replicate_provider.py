@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import json
 
 import pytest
 
@@ -55,6 +56,8 @@ async def test_grok_t2i_adds_default_aspect_ratio():
     assert model_id == GROK_REPLICATE_ID
     assert input_data == {"prompt": "hello", "aspect_ratio": "9:16"}
     assert kwargs == {}
+    # R2: the api token never travels in the serialized model input.
+    assert API_TOKEN not in json.dumps({"model_id": model_id, "input": input_data, **kwargs})
 
 
 @pytest.mark.asyncio
