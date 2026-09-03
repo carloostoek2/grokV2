@@ -23,6 +23,7 @@ from grokbot.providers.base import (
     ProviderGenerationError,
     ProviderInputError,
     ProviderTimeoutError,
+    ProviderUnavailableError,
 )
 from grokbot.providers.xai_provider import XaiProvider
 
@@ -156,6 +157,26 @@ def test_i2i_single_image_body_data_uri():
         assert img["url"].startswith("data:image/png;base64,")
         body_str = json.dumps(body)
         assert API_KEY not in body_str
+
+
+def test_http_400_raises_input_error_not_unavailable():
+    import asyncio
+
+    prov = XaiProvider(API_KEY)
+    with aioresponses() as m:
+        m.post(f"{XAI_BASE}/images/generations", status=400, body=b"bad request")
+        with pytest.raises(ProviderInputError):
+            asyncio.run(prov.generate(_img_request()))
+
+
+def test_http_500_raises_unavailable():
+    import asyncio
+
+    prov = XaiProvider(API_KEY)
+    with aioresponses() as m:
+        m.post(f"{XAI_BASE}/images/generations", status=500, body=b"boom")
+        with pytest.raises(ProviderUnavailableError):
+            asyncio.run(prov.generate(_img_request()))
 
 
 def test_i2v_oversized_image_raises_input_error():

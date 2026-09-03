@@ -54,7 +54,12 @@ def _xai_http_ok(status: int) -> bool:
 
 
 def _raise_for_http_status(status: int, *, context: str = "generación") -> None:
-    """Map a non-ok HTTP status to a typed, user-safe ProviderError."""
+    """Map a non-ok HTTP status to a typed, user-safe ProviderError.
+
+    D3/M3: terminal 4xx responses (invalid payload, unknown model/endpoint, ...)
+    are NOT retryable — they surface as :class:`ProviderInputError`. Only 5xx /
+    transport conditions map to :class:`ProviderUnavailableError` (retryable).
+    """
     if status in (401, 403):
         raise ProviderAuthenticationError(
             f"xAI authentication failed ({context}).",
@@ -64,6 +69,11 @@ def _raise_for_http_status(status: int, *, context: str = "generación") -> None
         raise ProviderRateLimitError(
             f"xAI rate limit ({context}).",
             user_message="Demasiadas solicitudes. Intenta de nuevo en unos segundos.",
+        )
+    if 400 <= status < 500:
+        raise ProviderInputError(
+            f"xAI rechazó la solicitud (HTTP {status}, {context}).",
+            user_message="Error en la generación. Intenta de nuevo más tarde.",
         )
     raise ProviderUnavailableError(
         f"xAI HTTP {status} ({context}).",
