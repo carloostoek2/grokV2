@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from grokbot.domain.user_config import ComfyUIConfig, UserConfig, VideoConfig
 
-# Session record anchored to grok HEAD 81832a5 (sessions.json, user 6181290784).
+# Session record de sesión real de grok (HEAD 81832a5) con IDs/identidad
+# anonimizados (R3): usuario dummy 111111111 + source_path dummy de forma similar.
 REAL_GROK_SESSION_REC = {
-    "source_path": "/home/ubuntu/repos/grok/sources/6181290784.jpg",
+    "source_path": "/var/tmp/grok-fixtures/sources/111111111.jpg",
     "integrate_ref_path": None,
     "state": "IDLE",
     "model": "grok",
@@ -135,7 +136,7 @@ def test_real_grok_session_record_loads_without_loss():
     assert uc.comfyui.refine_enabled is False
     assert uc.grok_imagine_provider == "kie"
     assert uc.grok_imagine_variant == "standard"
-    assert uc.source_path == "/home/ubuntu/repos/grok/sources/6181290784.jpg"
+    assert uc.source_path == "/var/tmp/grok-fixtures/sources/111111111.jpg"
     assert uc.state == "IDLE"
 
 
