@@ -61,6 +61,7 @@ class GenerationRequest:
     video_duration: int | None = None
     video_resolution: str | None = None
     video_mode: str | None = None
+    params: dict = field(default_factory=dict)  # provider/model extras (comfyui model/lora/refine, mode, prompts, key); read-only by convention
 
 
 @dataclass(frozen=True)
