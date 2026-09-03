@@ -18,3 +18,19 @@ Pool: grokv2-rearch · Fuente: ítems del pipeline. Clasificación §5b.
 - Clase: in-scope-followup del pool (limpieza/privacidad, test-only).
 - Detalle: contiene ID real de Telegram 6181290784 y path absoluto /home/ubuntu/repos/grok/sources/6181290784.jpg (viola regla de fixtures anonimizados del pool).
 - Acción: fix en el review-loop de cierre (anonimizar con usuario 111111111 y paths dummy preservando forma).
+
+## R4 — Item 5 D8: flujos grok degradados (capa telegram)
+- Origen: gsd-executor item5 (Task 4; degradación D8 en handlers con mensaje user-safe, sin implementación).
+- Clase: in-scope-followup (cierre item 6 / review-loop). Cada uno necesita use case o dato de providers antes de cablearse.
+- Detalle (features de grok que en grokV2 degradan con mensaje, NO silencioso):
+  1. Face Swap (modo `faceswap`; requiere pipeline de swap + `/cambiar_source`).
+  2. Álbumes entrantes / media groups (recibir varias fotos de una).
+  3. integrate_ref (`/s` foto + caption con referencia).
+  4. Long-prompt collection (caption > 1024 en foto sin caption limpio).
+  5. `/cambiar_source` (configurar cara fuente de Face Swap).
+  6. `/cambiar_referencia` (referencia de estilo/integración).
+  7. `/estado` (estado de un job/cola por mensaje).
+  8. Regen de integración (regenerar un resultado de integrate_ref).
+  9. Crear paquete de variables pegando JSON (`/listas` → “➕ Crear paquete”): degrada por layering §5.2 (handlers sin parseo de JSON) aunque el resto del flujo de paquetes opera sobre payloads persistidos.
+- Archivos: `src/grokbot/telegram/handlers/generation.py` (D8_CMD_MSG + degradaciones), `src/grokbot/telegram/handlers/listas_cmd.py` (_PACK_NEW_D8), `src/grokbot/telegram/handlers/start.py` (notice faceswap).
+- Acción: registrar como follow-ups del pool; NO expandir el PLAN en silencio.
