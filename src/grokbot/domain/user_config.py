@@ -20,6 +20,7 @@ from grokbot.domain.catalog import (
     VALID_GROK_IMAGINE_PROVIDERS,
     VALID_GROK_IMAGINE_VARIANTS,
     VALID_MODELS,
+    resolve_grok_config,
 )
 
 # --- Video generation constants (grok sessions.py:16-39). ---
@@ -68,6 +69,64 @@ VALID_COMFYUI_LORAS = (
 )
 
 IDLE_STATE = "IDLE"
+
+# --- ComfyUI video-only models (D10, item 4). ---
+# Models whose ComfyUI workflow produces MP4 (video), never a still image.
+# Mirrors the private provider constant ``providers/comfyui/provider.py`` but
+# lives in domain so the application layer can validate media_type (M2) without
+# importing a transport provider (layering rule).
+COMFY_VIDEO_MODELS = ("wan_i2v", "minimax_i2v")
+
+
+def is_comfy_video_model(model: str) -> bool:
+    """True when ``model`` is a ComfyUI video-only model (produces MP4)."""
+    return model in COMFY_VIDEO_MODELS
+
+
+# --- Kie.ai video aspect-ratio sets (D12, item 4). ---
+# Transcribed from grok bot.py:1107-1108 / kie_provider.py:70-71.
+KIE_BASE_VIDEO_ASPECT_RATIOS = ("16:9", "9:16", "1:1", "3:2", "2:3")
+KIE_15_VIDEO_ASPECT_RATIOS = ("16:9", "9:16", "1:1", "4:3", "3:4", "3:2", "2:3")
+
+
+def video_provider_for_config(cfg: "UserConfig") -> str | None:
+    """Effective video backend for ``cfg``, without touching the registry.
+
+    Pure mirror of grok ``get_video_provider_for_user`` (bot.py:664-669): only the
+    ``grok``/``grok_video`` top models route through the Grok Imagine provider
+    (Replicate has no video API → xAI); ``comfyui`` maps to itself; any other
+    model returns None (no video backend).
+    """
+    if cfg.model == "comfyui":
+        return "comfyui"
+    if cfg.model not in ("grok", "grok_video"):
+        return None
+    resolved = resolve_grok_config(cfg.grok_imagine_provider, cfg.grok_imagine_variant)
+    return "xai" if resolved["provider"] == "replicate" else resolved["provider"]
+
+
+def kie_video_aspect_ratios(video_model: str) -> tuple[str, ...]:
+    """Allowed Kie.ai aspect ratios for a video model id (grok bot.py:1111-1114)."""
+    if video_model == "grok-imagine-video-1.5":
+        return KIE_15_VIDEO_ASPECT_RATIOS
+    return KIE_BASE_VIDEO_ASPECT_RATIOS
+
+
+def kie_aspect_ratio_fallback(cfg: "UserConfig", *, video_model: str | None = None) -> str | None:
+    """New aspect ratio to show when the persisted one is invalid for Kie video.
+
+    Pure mirror of grok ``_maybe_reset_kie_aspect_ratio`` (bot.py:1117-1136) for
+    the application layer: returns None unless the effective video provider is
+    Kie and the current aspect ratio is outside the model's allowed set. The
+    fallback is the domain default when allowed, else the first allowed ratio.
+    """
+    if video_provider_for_config(cfg) != "kie":
+        return None
+    model = video_model or cfg.video.model
+    allowed = kie_video_aspect_ratios(model)
+    if cfg.video.aspect_ratio in allowed:
+        return None
+    return DEFAULT_VIDEO_ASPECT_RATIO if DEFAULT_VIDEO_ASPECT_RATIO in allowed else allowed[0]
 
 
 def _prefix_group(rec: Mapping, prefix: str, *, skip: frozenset[str] = frozenset()) -> dict:

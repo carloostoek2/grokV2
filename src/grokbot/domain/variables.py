@@ -8,6 +8,7 @@ join of the supplied values.
 
 from __future__ import annotations
 
+import random
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -144,3 +145,31 @@ def combo_key(template: str, values: Mapping[str, str]) -> tuple[str, ...]:
 def combo_label(values: Mapping[str, str]) -> str:
     """Human-readable label for a combo (all values joined)."""
     return ", ".join(values.values())
+
+
+# --- Batch constants (D11, item 4). ---
+# Transcribed from grok bot.py:77 / variables_store.py (parity ranges 340-353,
+# 374-417). Range/derangement limits used by the batch strategies live here so
+# the application layer never redefines them.
+VARIABLES_MAX = 10
+MAX_COMBO_ATTEMPTS = 30
+MULTIPOSE_BATCH_SIZE = 5
+
+
+def build_shuffled_prompt(template: str, values: Mapping[str, str]) -> str:
+    """Render ``template`` with the contributing values in a different order.
+
+    Pure mirror of grok ``variables_store.build_prompt_shuffled`` (340-353): the
+    values that actually contribute are shuffled and, when the shuffle reproduces
+    the canonical order, reversed — guaranteeing a derangement for two or more
+    contributing fields (with two fields this is a plain swap).
+    """
+    pt = PromptTemplate(template)
+    ordered = [values.get(field, "") for field in pt.fields()]
+    ordered = [value for value in ordered if value]
+    if len(ordered) >= 2:
+        canonical = list(ordered)
+        random.shuffle(ordered)
+        if ordered == canonical:
+            ordered.reverse()
+    return pt.render_positional(ordered)
