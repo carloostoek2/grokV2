@@ -13,7 +13,11 @@ dependencies = [
     "aiohttp>=3.11,<4",
     "replicate>=1,<2",
     "aiogram>=3,<4",
+    "python-dotenv>=1,<2",
 ]
+
+[project.scripts]
+grokbot = "grokbot.main:run"
 
 [project.optional-dependencies]
 dev = [
