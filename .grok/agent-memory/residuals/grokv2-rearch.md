@@ -18,6 +18,8 @@ Pool: grokv2-rearch · Fuente: ítems del pipeline. Clasificación §5b.
 - Clase: in-scope-followup del pool (limpieza/privacidad, test-only).
 - Detalle: contiene ID real de Telegram 6181290784 y path absoluto /home/ubuntu/repos/grok/sources/6181290784.jpg (viola regla de fixtures anonimizados del pool).
 - Acción: fix en el review-loop de cierre (anonimizar con usuario 111111111 y paths dummy preservando forma).
+- **Confirmado (ítem 6):** sigue abierto para el review-loop de cierre del pool (el ítem 6 no
+  toca tests existentes).
 
 ## R4 — Item 5 D8: flujos grok degradados (capa telegram)
 - Origen: gsd-executor item5 (Task 4; degradación D8 en handlers con mensaje user-safe, sin implementación).
@@ -34,6 +36,9 @@ Pool: grokv2-rearch · Fuente: ítems del pipeline. Clasificación §5b.
   9. Crear paquete de variables pegando JSON (`/listas` → “➕ Crear paquete”): degrada por layering §5.2 (handlers sin parseo de JSON) aunque el resto del flujo de paquetes opera sobre payloads persistidos.
 - Archivos: `src/grokbot/telegram/handlers/generation.py` (D8_CMD_MSG + degradaciones), `src/grokbot/telegram/handlers/listas_cmd.py` (_PACK_NEW_D8), `src/grokbot/telegram/handlers/start.py` (notice faceswap).
 - Acción: registrar como follow-ups del pool; NO expandir el PLAN en silencio.
+- **Nota ítem 6:** El entrypoint (ítem 6) registra estos comandos como degradados vía
+  `register_all`; NO los habilita (fuera de scope). `/estado` tiene backing parcial
+  (`JobManager.active_jobs`) pero requiere handler nuevo → queda para el review-loop de cierre.
 
 ## R5 — Item 5 M1 (arch): cancel en refine de batch no suprime la refinada en vuelo
 - Origen: arch-enforcer item5 (M1). `stream_presenter.present_batch` llama `run_refine_flow(... cancel_event=None)` (:336) aun con job real; un cancel del job durante el refine en batch (post-yes) no suprime la refinada en vuelo, a diferencia del single-image (:167).
@@ -51,3 +56,7 @@ Pool: grokv2-rearch · Fuente: ítems del pipeline. Clasificación §5b.
 - Origen: arch-enforcer item4 (M2) — pendiente de registro; arch-enforcer item5 (M3) confirma que sigue sin registrarse.
 - Clase: deferred (pool, cierre item 6/review-loop). `providers/__init__.py` y `repositories/__init__.py` re-exportan eager todos los concretos → `import grokbot.telegram.*` (y application) carga transitivamente xai/kie/replicate/comfyui-ssh + JSON repos. Sin I/O/env en import-time (settings NO se carga), no rompe hoy. Lazy re-exports de ambos `__init__` en ensamblaje (item 6).
 - Archivos: `src/grokbot/providers/__init__.py`, `src/grokbot/repositories/__init__.py`.
+- **Resuelto:** e74dd59 — lazy re-exports PEP 562 en `providers/__init__` y
+  `repositories/__init__` (ítem 6). `__all__` idéntico; probe (test_lazy_reexports) en
+  subproceso: `import grokbot.telegram.handlers` ya NO carga xai/kie/replicate/comfyui+ssh
+  ni los 3 JSON repos, y la API pública sigue resolviendo.
