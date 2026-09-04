@@ -321,6 +321,52 @@ def format_multipose_summary(combos: tuple[str, ...]) -> str:
     return "\n".join(lines)
 
 
+# --- Face swap progress (parity grok bot.py:3274-3298 / 3326-3354) ------------
+FACESWAP_PROGRESS_WIDTH = 10
+
+
+def faceswap_progress_bar(completed: int, total: int, *, width: int = FACESWAP_PROGRESS_WIDTH) -> str:
+    if total <= 0:
+        return f"[{'?' * width}] 0/0 (0%)"
+    completed = max(0, min(completed, total))
+    filled = round(width * completed / total)
+    empty = width - filled
+    pct = completed * 100 // total
+    return f"[{'█' * filled}{'░' * empty}] {completed}/{total} ({pct}%)"
+
+
+def faceswap_progress_message(completed: int, total: int, *, current: int | None = None) -> str:
+    bar = faceswap_progress_bar(completed, total)
+    if current is not None and 1 <= current <= total:
+        return f"Face swap\n{bar}\nImagen {current}/{total} en Replicate..."
+    return f"Face swap\n{bar}"
+
+
+def format_faceswap_batch_status(processed: int, total: int, failures: list[str], *, cancelled: bool = False) -> str:
+    bar = faceswap_progress_bar(processed, total)
+    if cancelled:
+        summary = f"⏹ Cancelado. Completadas {processed}/{total} imagenes."
+        if failures:
+            shown = failures[:3]
+            detail = "; ".join(shown)
+            if len(failures) > 3:
+                detail += f"; y {len(failures) - 3} mas"
+            return f"{bar}\n{summary}\nFallos: {detail}"
+        return f"{bar}\n{summary}"
+    if failures:
+        summary = f"Completadas {processed}/{total} imagenes."
+        if processed == 0:
+            summary = f"No se pudo procesar ninguna de las {total} imagenes."
+        shown = failures[:3]
+        detail = "; ".join(shown)
+        if len(failures) > 3:
+            detail += f"; y {len(failures) - 3} mas"
+        return f"{bar}\n{summary}\nFallos: {detail}"
+    if total == 1:
+        return f"{bar}\nProcesada 1 imagen."
+    return f"{bar}\nProcesadas {processed}/{total} imagenes."
+
+
 # --- /estado (grok cmd_estado bot.py:1467-1513) ------------------------------
 def kie_map_duration(duration: int) -> int:
     """Clamp de duración efectiva de video en Kie.ai (bot.py 1455-1457)."""
@@ -344,8 +390,8 @@ def estado_card(cfg: UserConfig, *, integrate_ref: bool = False) -> str:
     """Tarjeta de configuración de /estado (transcripción de grok, sin jobs).
 
     A5: la rama faceswap muestra Source/Estado desde ``cfg.source_path``/
-    ``cfg.state`` (en grokV2 no hay flujo face swap; en la práctica No
-    configurado/IDLE). A6: texto plano, se envía con ``parse_mode=None``.
+    ``cfg.state`` (``IDLE`` o ``AWAITING_SOURCE`` mientras se configura la cara
+    fuente con /cambiar_source). A6: texto plano, se envía con ``parse_mode=None``.
     """
     model = model_display(cfg)
     lines = ["Estado\n", f"Modelo: {model['name']}\n"]

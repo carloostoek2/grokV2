@@ -15,6 +15,13 @@ def test_confirmation_keyboard():
     assert flat_callback_data(kb.confirmation_keyboard()) == ["confirm:yes", "confirm:no"]
 
 
+def test_faceswap_confirmation_keyboard_dedicated_no_collision():
+    """Confirm faceswap usa store/keyboard dedicados (sin colisión con prompts)."""
+    data = flat_callback_data(kb.faceswap_confirmation_keyboard())
+    assert data == ["faceswap:confirm:yes", "faceswap:confirm:no"]
+    assert data != flat_callback_data(kb.confirmation_keyboard())
+
+
 def test_cancel_job_keyboard_with_and_without_id():
     assert flat_callback_data(kb.cancel_job_keyboard("abc123")) == ["cancel_job:abc123"]
     assert flat_callback_data(kb.cancel_job_keyboard()) == ["cancel_job"]

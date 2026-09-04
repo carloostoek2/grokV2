@@ -2,13 +2,19 @@
 
 Rutea los updates aiogram de generación a los use cases con copy exacto de grok:
 
-* texto → faceswap D8; validar prompt; grok/grok_video → confirm efímero
-  ``PendingPrompts`` + keyboard ``confirm:yes/no`` (D7/A6); resto → single image.
+* texto → faceswap delega en faceswap.send_faceswap_text (guía con/sin source);
+  validar prompt; grok/grok_video → confirm efímero ``PendingPrompts`` + keyboard
+  ``confirm:yes/no`` (D7/A6); resto → single image.
 * foto+caption → var/variables ya los capturó variables_cmd (Command antes); aquí
   degrade integrate ``/s`` y long-prompt; grok_video → imagen-a-video
-  (video.run_video_generation, sin job); faceswap D8; resto → edit con job "edit".
-* foto sin caption → hint de editar/video (grok 2895-2928).
-* reply texto→foto → edit sin job (KieTaskRef o download por gateway); video si
+  (video.run_video_generation, sin job); faceswap delega en
+  faceswap.handle_faceswap_photo (source-save o confirm single); resto → edit
+  con job "edit".
+* foto sin caption → faceswap delega en faceswap.handle_faceswap_photo; resto →
+  hint de editar/video (grok 2895-2928).
+* álbum → faceswap agenda faceswap.drain_faceswap_album; grok → _drain_grok_album.
+* reply texto→foto → faceswap responde reply-not-used solo si el reply es foto;
+  resto → edit sin job (KieTaskRef o download por gateway); video si
   grok_video (grok 2934-3061).
 * callbacks ``confirm:yes/no`` (1274-1271) y ``regen`` (1305-1418, job "regen").
 
@@ -37,7 +43,6 @@ from grokbot.telegram.formatters import (
 )
 from grokbot.telegram.handlers._common import (
     D8_CMD_MSG,
-    D8_FACESWAP_MSG,
     D8_INTEGRATE_MSG,
     INTEGRATE_MAX_ALBUM,
     SOURCE_MEDIA_UNAVAILABLE_MSG,
@@ -57,6 +62,7 @@ from grokbot.telegram.handlers._common import (
     resolve_reply_kie_ref,
 )
 from grokbot.telegram.handlers.video import is_video_cfg, run_video_generation
+from grokbot.telegram.handlers import faceswap as faceswap_handlers
 from grokbot.telegram.keyboards import cancel_job_keyboard, confirmation_keyboard
 from grokbot.telegram.stream_presenter import present_single_image
 
@@ -153,10 +159,10 @@ async def handle_text(message: types.Message, deps: BotDeps) -> None:
         await _complete_long_prompt_collection(deps, message)
         return
     cfg = deps.sessions.get_config(message.from_user.id)
-    ui = _chat_ui(deps, message)
     if cfg.model == "faceswap":
-        await ui.send_text(D8_FACESWAP_MSG)
+        await faceswap_handlers.send_faceswap_text(deps, message)
         return
+    ui = _chat_ui(deps, message)
     prompt = message.text.strip()
     prompt_err = validate_prompt(prompt)
     if prompt_err:
@@ -183,10 +189,10 @@ async def handle_text(message: types.Message, deps: BotDeps) -> None:
 # --------------------------------------------------------------------------- #
 async def handle_photo_caption(message: types.Message, deps: BotDeps) -> None:
     cfg = deps.sessions.get_config(message.from_user.id)
-    ui = _chat_ui(deps, message)
     if cfg.model == "faceswap":
-        await ui.send_text(D8_FACESWAP_MSG)
+        await faceswap_handlers.handle_faceswap_photo(deps, message)
         return
+    ui = _chat_ui(deps, message)
     integrate_mode, prompt = parse_integrate_caption(message.caption)
     if integrate_mode:
         await ui.send_text(D8_INTEGRATE_MSG)
@@ -224,10 +230,10 @@ async def handle_photo_caption(message: types.Message, deps: BotDeps) -> None:
 
 async def handle_photo_no_caption(message: types.Message, deps: BotDeps) -> None:
     cfg = deps.sessions.get_config(message.from_user.id)
-    ui = _chat_ui(deps, message)
     if cfg.model == "faceswap":
-        await ui.send_text(D8_FACESWAP_MSG)
+        await faceswap_handlers.handle_faceswap_photo(deps, message)
         return
+    ui = _chat_ui(deps, message)
     # Long-prompt pendiente: recordar el prompt por texto (grok 2907-2913).
     if deps.long_prompt.is_awaiting(message.from_user.id):
         await ui.send_text(_LONG_PROMPT_REMINDER)
@@ -239,11 +245,14 @@ async def handle_photo_no_caption(message: types.Message, deps: BotDeps) -> None
 
 
 async def handle_album(message: types.Message, deps: BotDeps) -> None:
-    """Media group → colección efímera y edición secuencial (modelo grok)."""
+    """Media group → colección efímera y edición/drain secuencial (grok/faceswap)."""
     cfg = deps.sessions.get_config(message.from_user.id)
-    ui = _chat_ui(deps, message)
     if cfg.model == "faceswap":
-        await ui.send_text(D8_FACESWAP_MSG)
+        # El drain decide por cfg.state: source-save (AWAITING_SOURCE, final-wins)
+        # o confirm N (parity grok 3088-3113; A2: respuestas una sola vez).
+        key = (message.chat.id, message.media_group_id)
+        if deps.album.add(key, message):
+            asyncio.create_task(faceswap_handlers.drain_faceswap_album(deps, key, message))
         return
     if cfg.model != "grok":
         return  # paridad grok 3088-3089: seedream/comfyui/grok_video en silencio
@@ -412,10 +421,12 @@ async def handle_reply_edit(message: types.Message, deps: BotDeps) -> None:
         return
     reply = message.reply_to_message
     cfg = deps.sessions.get_config(message.from_user.id)
-    ui = _chat_ui(deps, message)
     if cfg.model == "faceswap":
-        await ui.send_text(D8_FACESWAP_MSG)
+        # Si el reply NO es una foto → silencio (parity grok 2957-2965).
+        if reply is not None and reply.photo:
+            await faceswap_handlers.send_faceswap_reply(deps, message)
         return
+    ui = _chat_ui(deps, message)
     if reply is None or not reply.photo:
         return
     prompt = message.text.strip()
@@ -690,7 +701,8 @@ def register_generation(dp: Dispatcher, deps: BotDeps) -> None:
     from aiogram.filters import Command
 
     # Comandos residuales D8 (flujos de grok sin use case).
-    for command in ("cambiar_source", "cambiar_referencia"):
+    # /cambiar_source sale de D8: lo registra faceswap.register_faceswap (Task 3).
+    for command in ("cambiar_referencia",):
         dp.message.register(partial(_cmd_unavailable, deps=deps), Command(command))
     # /estado sale del bucle D8: responde la tarjeta de configuración.
     dp.message.register(partial(handle_estado, deps=deps), Command("estado"))

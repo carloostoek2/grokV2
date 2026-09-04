@@ -138,6 +138,27 @@ async def test_select_seedream_simple_screen():
     assert _last_answer(deps)["text"] == "Modelo: Seedream 5.0"
 
 
+async def test_select_faceswap_simple_screen_parity():
+    """Modelo faceswap → pantalla simple con el flujo real anunciado (config_flow 371-373)."""
+    from grokbot.domain.catalog import MODELS
+
+    dp, deps = await _open_config()
+    mid = _panel_id(deps)
+    await dp.feed_update(_BOT, callback_update(callback_query("cfg:model:faceswap", message_id=mid)))
+    edit = _last_edit_text(deps)
+    assert edit["text"] == (
+        f"Modelo cambiado a <b>{MODELS['faceswap']['name']}</b>.\n"
+        f"\n"
+        f"<i>{MODELS['faceswap']['desc']}</i>\n"
+        "\n"
+        "Usa /cambiar_source para configurar tu cara fuente.\n"
+        "\n"
+        "Luego Envía fotos (incluso albumes) para hacer face swap."
+    )
+    assert _last_answer(deps)["text"] == f"Modelo: {MODELS['faceswap']['name']}"
+    assert deps.sessions.get_config(_UID).model == "faceswap"
+
+
 async def test_select_comfyui_screen():
     dp, deps = await _open_config()
     mid = _panel_id(deps)

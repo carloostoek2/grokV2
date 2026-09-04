@@ -87,6 +87,24 @@ async def test_estado_faceswap_card():
     assert "Estado: IDLE" in text
 
 
+async def test_estado_faceswap_card_awaiting_source():
+    deps = make_deps()
+    deps.update_config.set_model(_UID, "faceswap")
+    deps.source_faces.begin_awaiting_source(_UID)
+    text = await _estado_text(deps)
+    assert "Source: No configurado" in text
+    assert "Estado: AWAITING_SOURCE" in text
+
+
+async def test_estado_faceswap_card_source_configured():
+    deps = make_deps()
+    deps.update_config.set_model(_UID, "faceswap")
+    deps.source_faces.save_source(_UID, b"src-bytes")
+    text = await _estado_text(deps)
+    assert "Source: Configurado" in text
+    assert "Estado: IDLE" in text
+
+
 async def test_estado_does_not_leak_ids():
     deps = make_deps()
     text = await _estado_text(deps)
@@ -132,18 +150,40 @@ async def test_estado_is_plain_text_parse_mode_none():
     assert "<" not in send["text"]
 
 
-async def test_cambiar_source_still_d8():
-    """cambiar_source/cambiar_referencia siguen en D8_COMMANDS → D8_CMD_MSG."""
-    from grokbot.telegram.handlers._common import D8_COMMANDS
+async def test_cambiar_source_real_and_referencia_still_d8():
+    """D8_COMMANDS quedó solo con cambiar_referencia; /cambiar_source es real.
+
+    /cambiar_source en default grok responde el copy other-model (no degrada);
+    /cambiar_referencia sigue en D8 → D8_CMD_MSG (R4 Item 2).
+    """
+    from grokbot.telegram.handlers._common import D8_CMD_MSG, D8_COMMANDS
 
     assert "estado" not in D8_COMMANDS
-    assert "cambiar_source" in D8_COMMANDS and "cambiar_referencia" in D8_COMMANDS
+    assert "cambiar_source" not in D8_COMMANDS
+    assert D8_COMMANDS == ("cambiar_referencia",)
+
     deps = make_deps()
     dp, deps = make_dispatcher(deps)
     await dp.feed_update(_BOT, message_update(text_message("/cambiar_source")))
     last = deps.gateway.calls_by_method("send_message")[-1]
-    assert last["text"] == "Este comando no está disponible en esta versión todavía."
+    assert last["text"] == (
+        "Este comando solo esta disponible en modo <b>Face Swap</b>.\n"
+        "Usa /config para cambiar al modo Face Swap."
+    )
+    assert deps.sessions.get_config(_UID).state == "IDLE", "no se configura fuera de faceswap"
+
     dp, deps = make_dispatcher(deps)
     await dp.feed_update(_BOT, message_update(text_message("/cambiar_referencia")))
     last = deps.gateway.calls_by_method("send_message")[-1]
-    assert last["text"] == "Este comando no está disponible en esta versión todavía."
+    assert last["text"] == D8_CMD_MSG
+
+
+async def test_cambiar_source_faceswap_prompt_and_state():
+    """/cambiar_source en modo faceswap → prompt real + estado AWAITING_SOURCE."""
+    deps = make_deps()
+    deps.update_config.set_model(_UID, "faceswap")
+    dp, deps = make_dispatcher(deps)
+    await dp.feed_update(_BOT, message_update(text_message("/cambiar_source")))
+    last = deps.gateway.calls_by_method("send_message")[-1]
+    assert last["text"] == "Envia tu foto source (la cara que quieres usar para el swap)."
+    assert deps.sessions.get_config(_UID).state == "AWAITING_SOURCE"

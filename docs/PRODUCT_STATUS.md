@@ -53,22 +53,20 @@ READ-ONLY; su baseline pre-existente se mantuvo intacto en todo momento.
 
 Imagen (xai/replicate), video (kie/comfyui), `/variables`+`/var` (random y prompt fijo,
 incl. multipose), refine 2-stage, `/config`, `/listas` (sobre payloads persistidos),
-jobs single-image (`cancel_job:<id>`), allowlist. Backing completo de capa `application`.
+jobs single-image (`cancel_job:<id>`), allowlist, `/estado`, long-prompt collection,
+álbumes entrantes (grok y **face swap**), y el modo **Face Swap** completo: `/cambiar_source`
+(cara fuente), foto/álbum con confirm dedicado, progreso + cancel y terminales byte-parity
+de grok (R4 Item 2). Backing completo de capa `application`.
 
 ### Flujos degradados D8 (responden con mensaje user-safe, NO silencioso) — R4
 
 Estos flujos de grok **no** tienen backing en esta versión y responden con un mensaje
 claro de no-disponible. Requieren un use case o dato de providers antes de cablearse:
 
-1. Face Swap (modo `faceswap` + pipeline de swap).
-2. Álbumes entrantes / media groups (recibir varias fotos de una).
-3. `integrate_ref` (`/s` foto + caption con referencia).
-4. Long-prompt collection (caption > 1024 en foto sin caption limpio).
-5. `/cambiar_source` (configurar cara fuente de Face Swap).
-6. `/cambiar_referencia` (referencia de estilo/integración).
-7. `/estado` (estado de un job/cola por mensaje — hay backing parcial en `JobManager`).
-8. Regen de integración (regenerar un resultado de `integrate_ref`).
-9. Crear paquete de variables pegando JSON (el resto del flujo de paquetes sí opera).
+1. `integrate_ref` (`/s` foto + caption con referencia).
+2. `/cambiar_referencia` (referencia de estilo/integración).
+3. Regen de integración (regenerar un resultado de `integrate_ref`).
+4. Crear paquete de variables pegando JSON (el resto del flujo de paquetes sí opera).
 
 ---
 
@@ -82,7 +80,7 @@ resueltos. Ver commits y cierre en `.grok/agent-memory/residuals/grokv2-rearch.m
 | **R8** | Botón "Regenerar" no scopeado al owner | hardening | **Resuelto** — `c25c1fe` (`owner_uid` en refs + validación en `regen`). |
 | **R9** | Sin límites de uso + perímetro | hardening / decisión | **Cerrado por decisión** — sin tope de procesos ni cuota horaria (`2bbfdd3`, `5900809`); gate SOLO chat privado + aviso de allowlist abierta (`5e9e88b`). |
 | **R10** | Tope 50MB duplicado; URL firmada | hardening / decisión | **Resuelto** — `096dd0d` (tope único `MAX_MEDIA_BYTES`); la URL se muestra: camino de recuperación por decisión del owner. |
-| **R4** | 9 flujos degradados D8 (§2) | follow-up de producto (wave 2) | cablear use cases/datos por flujo. Degradaciones user-safe activas. |
+| **R4** | Flujos degradados D8 (§2) | follow-up de producto (wave 2) | cablear use cases/datos por flujo. Degradaciones user-safe activas. Face Swap + álbumes + `/cambiar_source` entregados (Item 2). |
 | **Deploy** | grokV2 como bot permanente | decisión de deploy (owner) | **Resuelto 2026-09-04** — `grok-bot.service` repunteado a grokV2 (`.venv/bin/grokbot`), administrado por el shell `grokbot`; `enable`+start, lingering activo, allowlist activa desde `.env` (detalle abajo). v1 decommissioned (unidad respaldada). |
 | **Smoke live** | Probar con infraestructura real | follow-up (owner) | **Completado 2026-09-04** con credenciales reales de grok v1: bug del panel `/config` corregido (nota abajo) y recorrido §4.3 validado por el owner — **todo ok** (sesión 36 updates, 0 errores). Pendiente: decidir el deploy (abajo). |
 | R1/R2 | Baseline sucio de `grok/**` + DeprecationWarnings pytest-asyncio (Py3.14) | out-of-scope | cosmético / no tocar |

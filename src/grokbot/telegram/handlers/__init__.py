@@ -17,6 +17,7 @@ from aiogram import Dispatcher
 from grokbot.telegram.deps import BotDeps
 from grokbot.telegram.handlers import (
     config_cmd,
+    faceswap,
     generation,
     jobs,
     listas_cmd,
@@ -38,5 +39,8 @@ def register_all(dp: Dispatcher, deps: BotDeps) -> None:
     # Flujos de generación (texto/foto/reply/video) después de los comandos.
     video.register_video(dp, deps)
     generation.register_generation(dp, deps)
+    # /cambiar_source real + callbacks dedicados faceswap:confirm:* (no colisionan
+    # con confirm:yes/no de prompts; pool R4 Item 2).
+    faceswap.register_faceswap(dp, deps)
     # Callbacks transaccionales (confirm/refine/regen/cancel).
     jobs.register_jobs(dp, deps)

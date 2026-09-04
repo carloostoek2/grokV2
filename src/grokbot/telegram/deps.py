@@ -89,6 +89,60 @@ class PendingPrompts:
         return self._owners.get((chat_id, message_id))
 
 
+class FaceswapPending:
+    """file_ids de face swap pendientes de confirmar, atados a (chat, msg, uid).
+
+    Misma semántica de ownership que :class:`PendingPrompts` (C4): cada
+    confirmación queda ligada al ``(chat_id, message_id)`` del mensaje de
+    confirmación y a su dueño, y un click de OTRO usuario o sobre un mensaje
+    distinto no consume ni reemplaza el pendiente ajeno. Store dedicado al flujo
+    face swap (``faceswap:confirm:*``) para NO colisionar con el ``confirm:yes/no``
+    de prompts (pool R4 Item 2). Sin FSM (paridad grok ``pending_faceswap_file_ids``).
+    """
+
+    def __init__(self) -> None:
+        self._pending: dict[int, tuple[list[str], int, int]] = {}
+        self._owners: dict[tuple[int, int], int] = {}
+
+    def set(
+        self,
+        user_id: int,
+        file_ids: list[str],
+        *,
+        chat_id: int,
+        message_id: int,
+    ) -> None:
+        prev = self._pending.get(user_id)
+        if prev is not None:
+            self._owners.pop((prev[1], prev[2]), None)
+        self._pending[user_id] = (list(file_ids), chat_id, message_id)
+        self._owners[(chat_id, message_id)] = user_id
+
+    def get(self, user_id: int) -> list[str] | None:
+        entry = self._pending.get(user_id)
+        return list(entry[0]) if entry else None
+
+    def pop(self, user_id: int) -> list[str] | None:
+        entry = self._pending.pop(user_id, None)
+        if entry is not None:
+            self._owners.pop((entry[1], entry[2]), None)
+        return list(entry[0]) if entry else None
+
+    def clear(self, user_id: int) -> None:
+        self.pop(user_id)
+
+    def owns(self, chat_id: int, message_id: int, user_id: int) -> bool:
+        """True si el pendiente del ``user_id`` es el de este mensaje concreto."""
+        entry = self._pending.get(user_id)
+        if entry is None:
+            return False
+        return entry[1] == chat_id and entry[2] == message_id
+
+    def owner_of(self, chat_id: int, message_id: int) -> int | None:
+        """Dueño del pendiente publicado en este mensaje (si existe)."""
+        return self._owners.get((chat_id, message_id))
+
+
 @dataclass
 class LongPromptStore:
     """Colección efímera de long-prompt: user_id → {file_ids, integrate_mode, is_video}.
@@ -164,10 +218,17 @@ class BotDeps:
     source_faces: SourceFacesUseCase
     swap_face: SwapFaceUseCase
     pending: PendingPrompts = field(default_factory=PendingPrompts)
+    faceswap_pending: FaceswapPending = field(default_factory=FaceswapPending)
     long_prompt: LongPromptStore = field(default_factory=LongPromptStore)
     album: AlbumStore = field(default_factory=AlbumStore)
     allowed_telegram_ids: set[int] | None = None
     variables_admin_ids: set[int] | None = None
 
 
-__all__ = ["AlbumStore", "BotDeps", "LongPromptStore", "PendingPrompts"]
+__all__ = [
+    "AlbumStore",
+    "BotDeps",
+    "FaceswapPending",
+    "LongPromptStore",
+    "PendingPrompts",
+]

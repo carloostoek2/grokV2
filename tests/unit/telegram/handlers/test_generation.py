@@ -298,13 +298,27 @@ async def test_regen_on_non_photo_message_invalid():
     assert ans["show_alert"] is True
 
 
-async def test_faceswap_text_degrades():
+async def test_faceswap_text_guidance_without_source():
+    """Texto plano en faceswap sin source → guía real (no degrada; R4 Item 2)."""
     deps = make_deps()
     deps.update_config.set_model(_UID, "faceswap")
     deps = await _msg(deps, text_message("hola"))
     last = deps.gateway.calls_by_method("send_message")[-1]
     assert last["text"] == (
-        "El modo Face Swap no está disponible en esta versión. Usa /config para cambiar de modelo."
+        "Primero configura tu cara fuente con /cambiar_source.\n"
+        "Luego enviame fotos para intercambiar las caras."
+    )
+
+
+async def test_faceswap_text_guidance_with_source():
+    deps = make_deps()
+    deps.update_config.set_model(_UID, "faceswap")
+    deps.source_faces.save_source(_UID, b"src-bytes")
+    deps = await _msg(deps, text_message("hola"))
+    last = deps.gateway.calls_by_method("send_message")[-1]
+    assert last["text"] == (
+        "Envia una <b>foto</b> para hacer el face swap.\n"
+        "Usa /cambiar_source si quieres cambiar la cara fuente."
     )
 
 
@@ -450,14 +464,17 @@ async def test_album_non_grok_model_silent():
     assert deps.gateway.calls_by_method("send_photo") == []
 
 
-async def test_album_faceswap_degrades():
+async def test_album_faceswap_schedules_drain_and_confirm():
+    """Álbum faceswap con source → handle_album agenda drain y pide confirm N."""
     deps = make_deps()
     deps.update_config.set_model(_UID, "faceswap")
+    deps.source_faces.save_source(_UID, b"src-bytes")
     deps.album.delay = 0.05
-    deps = await _feed_album(deps, 2, caption_on=1)
-    # Cada foto faceswap degrada en handle_album (sin drain): asserts directos.
+    deps = await _feed_album(deps, 2, caption_on=1, file_prefix="FAKE:fs_gen")
+    await _wait_until(lambda: deps.faceswap_pending.get(_UID) is not None)
     last = deps.gateway.calls_by_method("send_message")[-1]
-    assert "El modo Face Swap no está disponible en esta versión." in last["text"]
+    assert last["text"] == "¿Confirmas hacer face swap con estas 2 imágenes?"
+    assert deps.faceswap_pending.get(_UID) == ["FAKE:fs_gen1", "FAKE:fs_gen2"]
 
 
 async def test_album_integrate_caption_still_d8():

@@ -31,9 +31,6 @@ from grokbot.telegram.sender import ResultSender
 TELEGRAM_CAPTION_COLLECT_THRESHOLD = 1020
 
 # --- Degradaciones D8 (flujos de grok sin use case; residuales del pool) ------
-D8_FACESWAP_MSG = (
-    "El modo Face Swap no está disponible en esta versión. Usa /config para cambiar de modelo."
-)
 D8_INTEGRATE_MSG = (
     "La edición con referencia (/s) no está disponible en esta versión. "
     "Envía el caption sin /s."
@@ -53,7 +50,8 @@ SOURCE_MEDIA_UNAVAILABLE_MSG = (
 )
 
 # Comandos residuales que se degradan (D8) sin implementar su flujo.
-D8_COMMANDS = ("cambiar_source", "cambiar_referencia")
+# /cambiar_source salió de D8 (flujo Face Swap real, R4 Item 2).
+D8_COMMANDS = ("cambiar_referencia",)
 
 
 def is_d8_command(command: str | None) -> bool:
@@ -267,7 +265,6 @@ async def fetch_source_bytes(gateway: TelegramGateway, file_id: str | None) -> b
 __all__ = [
     "D8_CMD_MSG",
     "D8_COMMANDS",
-    "D8_FACESWAP_MSG",
     "D8_INTEGRATE_MSG",
     "D8_REPLY_NO_PHOTO",
     "INTEGRATE_MAX_ALBUM",

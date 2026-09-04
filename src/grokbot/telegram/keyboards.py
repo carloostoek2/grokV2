@@ -42,6 +42,14 @@ def confirmation_keyboard() -> InlineKeyboardMarkup:
     ])
 
 
+def faceswap_confirmation_keyboard() -> InlineKeyboardMarkup:
+    """Confirmación de face swap (dedicada; no colisiona con confirm:yes/no)."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Confirmar", callback_data="faceswap:confirm:yes"),
+         InlineKeyboardButton(text="Cancelar", callback_data="faceswap:confirm:no")],
+    ])
+
+
 def cancel_job_keyboard(job_id: str | None = None) -> InlineKeyboardMarkup:
     """Keyboard de cancelación con ``cancel_job:<job_id>`` (o ``cancel_job``)."""
     data = f"cancel_job:{job_id}" if job_id else "cancel_job"

@@ -41,12 +41,27 @@ async def test_start_grok_video_prompt():
     assert "Modelo actual: <b>Grok Imagine Video" in text
 
 
-async def test_start_faceswap_notice():
+async def test_start_faceswap_lines():
+    """/start en faceswap anuncia el flujo real (parity grok bot.py 1078-1086)."""
     deps = make_deps()
     deps.update_config.set_model(_UID, "faceswap")
     text = _text(await _start(deps))
+    assert "Modo <b>Face Swap</b> activo.\n" in text
+    assert "Usa /cambiar_source para configurar la cara fuente.\n" in text
+    assert "Luego envia fotos para intercambiar las caras.\n" in text
+    assert "Tambien puedes enviar albumes de fotos.\n" in text
     assert "Modelo actual: <b>Face Swap</b>" in text
-    assert "El modo Face Swap no está disponible en esta versión." in text
+    assert "no está disponible en esta versión" not in text
+
+
+async def test_start_faceswap_source_configured_line():
+    """Con cara fuente configurada /start muestra la línea 'Source ya configurado'."""
+    deps = make_deps()
+    deps.update_config.set_model(_UID, "faceswap")
+    deps.source_faces.save_source(_UID, b"src-bytes")
+    text = _text(await _start(deps))
+    assert "Source ya configurado. Envia tus fotos.\n" in text
+    assert "Modo <b>Face Swap</b> activo.\n" in text
 
 
 async def test_start_comfyui_generic():

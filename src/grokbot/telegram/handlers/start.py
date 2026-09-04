@@ -1,8 +1,8 @@
 """Handler de /start (item 5).
 
-Texto de bienvenida por modelo activo (paridad grok bot.py 1066-1101). En
-faceswap NO se muestra el flujo residual de Face Swap: cae en el texto genérico
-de imagen (D8: el modo no está disponible en esta versión).
+Texto de bienvenida por modelo activo (paridad grok bot.py 1066-1101). La rama
+faceswap anuncia el flujo real (R4 Item 2): /cambiar_source, fotos y álbumes,
+con la línea "Source ya configurado" cuando hay cara fuente.
 
 Todo outbound sale por :class:`ChatUI` (0 ``message.answer`` directo). El deps
 se inyecta por ``functools.partial`` en el registro (aiogram 3 no acepta kwargs
@@ -34,9 +34,13 @@ _VIDEO_LINES = [
     "la IA tomara tu imagen y generara un video segun el caption.\n",
 ]
 
-_FACESWAP_NOTICE = (
-    "El modo Face Swap no está disponible en esta versión. Usa /config para cambiar de modelo."
-)
+# Parity grok bot.py 1078-1086 (typos originales incluidos).
+_FACESWAP_LINES = [
+    "Modo <b>Face Swap</b> activo.\n",
+    "Usa /cambiar_source para configurar la cara fuente.\n",
+    "Luego envia fotos para intercambiar las caras.\n",
+    "Tambien puedes enviar albumes de fotos.\n",
+]
 
 
 async def cmd_start(message: types.Message, deps: BotDeps) -> None:
@@ -45,8 +49,9 @@ async def cmd_start(message: types.Message, deps: BotDeps) -> None:
     if cfg.model == "grok_video":
         lines = list(_VIDEO_LINES)
     elif cfg.model == "faceswap":
-        lines = list(_GENERIC_LINES)
-        lines.append(f"\n⚠️ {_FACESWAP_NOTICE}\n")
+        lines = list(_FACESWAP_LINES)
+        if cfg.source_path:
+            lines.insert(2, "Source ya configurado. Envia tus fotos.\n")
     else:
         lines = list(_GENERIC_LINES)
     lines.append(f"Modelo actual: <b>{model['name']}</b>\n")
