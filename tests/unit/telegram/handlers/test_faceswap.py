@@ -31,6 +31,7 @@ from conftest import (
     message_update,
     text_message,
 )
+from grokbot.providers.base import ProviderUnavailableError
 
 _UID = USER_ID
 _OTHER = 222222222  # segundo user anonimizado (R8/C4)
@@ -462,3 +463,104 @@ async def test_group_other_user_cannot_confirm_faceswap():
     assert deps.gateway.calls_by_method("send_photo") == []
     assert deps.gateway.calls_by_method("edit_message_text") == [], "no se toca el mensaje ajeno"
     assert deps.job_manager.active_jobs(_UID) == ()
+
+
+# --------------------------------------------------------------------------- #
+# Fix round test-guardian GAP-A/GAP-B: rama `failures` del terminal y
+# source-missing batch de álbum (0-mock; copy byte-exacto; A8 sin file_ids).
+# --------------------------------------------------------------------------- #
+async def test_confirm_yes_batch_partial_failure_terminal(monkeypatch):
+    """Un ítem del batch falla (ProviderUnavailableError) y el resto completa.
+
+    Terminal byte-exacto "Completadas 2/3 imagenes.\nFallos: imagen 2: ..." sin
+    filtrar el detalle interno (A8: type name, no el mensaje crudo del provider).
+    """
+    real_sleep = asyncio.sleep
+
+    async def _short_sleep(delay):
+        if delay and delay >= 1.0:  # neutraliza el rate-limit real (10s) del batch
+            await real_sleep(0)
+        else:
+            await real_sleep(delay)
+
+    monkeypatch.setattr(asyncio, "sleep", _short_sleep)
+    provider = FakeImageProvider(
+        name="replicate",
+        outcomes=[
+            make_result(provider="replicate", model_id="fake-faceswap"),
+            ProviderUnavailableError(
+                "http 503 upstream", user_message="El proveedor no está disponible temporalmente."
+            ),
+        ],
+    )
+    deps = _set_faceswap(make_deps(registry=make_registry(replicate=provider)), source=True)
+    deps.faceswap_pending.set(
+        _UID, ["FAKE:f1", "FAKE:f2", "FAKE:f3"], chat_id=_CHAT, message_id=893
+    )
+    deps = await _cb(deps, callback_query("faceswap:confirm:yes", message_id=893))
+
+    last = deps.gateway.calls_by_method("edit_message_text")[-1]["text"]
+    assert last == (
+        "[███████░░░] 2/3 (66%)\n"
+        "Completadas 2/3 imagenes.\n"
+        "Fallos: imagen 2: El proveedor no está disponible temporalmente."
+    )
+    assert "FAKE" not in last and "/sources" not in last, "A8: sin file_ids/paths"
+    assert "http 503 upstream" not in last, "A8: no filtra el detalle técnico"
+    groups = deps.gateway.calls_by_method("send_media_group")
+    assert len(groups) == 1 and len(groups[0]["media"]) == 2, "las 2 fotos OK salen en álbum"
+    assert deps.faceswap_pending.get(_UID) is None
+    assert deps.job_manager.active_jobs(_UID) == (), "el job se cierra en finally"
+
+
+async def test_confirm_yes_single_failure_terminal():
+    """Fallo total single → terminal "No se pudo procesar ninguna..." + job cerrado."""
+    provider = FakeImageProvider(
+        name="replicate",
+        outcomes=[
+            ProviderUnavailableError(
+                "http 503 caido", user_message="El proveedor no está disponible temporalmente."
+            )
+        ],
+    )
+    deps = _set_faceswap(make_deps(registry=make_registry(replicate=provider)), source=True)
+    deps.faceswap_pending.set(_UID, ["FAKE:f_solo"], chat_id=_CHAT, message_id=894)
+    deps = await _cb(deps, callback_query("faceswap:confirm:yes", message_id=894))
+
+    last = deps.gateway.calls_by_method("edit_message_text")[-1]["text"]
+    assert last == (
+        "[░░░░░░░░░░] 0/1 (0%)\n"
+        "No se pudo procesar ninguna de las 1 imagenes.\n"
+        "Fallos: imagen 1: El proveedor no está disponible temporalmente."
+    )
+    assert "FAKE" not in last and "http 503 caido" not in last, "A8: sin file_ids ni detalle técnico"
+    assert deps.gateway.calls_by_method("send_photo") == []
+    assert deps.gateway.calls_by_method("send_media_group") == []
+    assert deps.faceswap_pending.get(_UID) is None
+    assert deps.job_manager.active_jobs(_UID) == ()
+
+
+async def test_album_source_missing_batch_clears_and_responds_once():
+    """GAP-B: álbum con source stale (path sin archivo) → _SOURCE_MISSING_BATCH.
+
+    Copy batch exacto, clear del source_path y una sola respuesta (A2).
+    """
+    deps = make_deps()
+    cfg = deps.sessions.get_config(_UID)
+    deps.sessions.save_config(
+        _UID, dataclasses.replace(cfg, model="faceswap", source_path="/stale/source.jpg")
+    )
+    deps.album.delay = 0.05
+    deps = await _feed_album(deps, 2, file_prefix="FAKE:fs_miss")
+    await _wait_until(lambda: any(
+        s["text"] == "Source no encontrado. Usa /cambiar_source."
+        for s in deps.gateway.calls_by_method("send_message")
+    ))
+    missing = [
+        s["text"]
+        for s in deps.gateway.calls_by_method("send_message")
+        if s["text"] == "Source no encontrado. Usa /cambiar_source."
+    ]
+    assert len(missing) == 1, "A2: una sola respuesta desde el drain"
+    assert deps.sessions.get_config(_UID).source_path is None, "A4: clear del path stale"
+    assert deps.faceswap_pending.get(_UID) is None

@@ -86,7 +86,7 @@ def test_providers_lazy_no_arrastra_concretos_ni_rompe_api():
         + (
             "from grokbot.providers import ("
             "XaiProvider, ComfyUIProvider, SshClient, ProviderRegistry, "
-            "ProviderResolution, ProviderError)\n"
+            "ProviderResolution, ProviderError, FaceSwapProvider)\n"
             "print('providers api ok')\n"
         )
     )

@@ -99,6 +99,7 @@ def test_data_dir_default_and_derived_paths(monkeypatch):
     assert settings.variables_file == Path("data") / "variables_lists.json"
     assert settings.generation_refs_file == Path("data") / "generation_refs.json"
     assert settings.packages_dir == Path("data") / "variables_packages"
+    assert settings.sources_dir == Path("data") / "sources"
 
 
 def test_data_dir_env_override(monkeypatch):
@@ -109,6 +110,7 @@ def test_data_dir_env_override(monkeypatch):
     assert settings.data_dir == Path("/tmp/grokdata")
     assert settings.sessions_file == Path("/tmp/grokdata") / "sessions.json"
     assert settings.packages_dir == Path("/tmp/grokdata") / "variables_packages"
+    assert settings.sources_dir == Path("/tmp/grokdata") / "sources"
 
 
 def test_import_does_not_instantiate(monkeypatch):

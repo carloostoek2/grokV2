@@ -23,6 +23,7 @@ nunca exponen file_ids/URLs/paths (R6/R8/A8).
 from __future__ import annotations
 
 import asyncio
+import logging
 from functools import partial
 
 from aiogram import Dispatcher, types
@@ -46,6 +47,8 @@ from grokbot.telegram.keyboards import (
     faceswap_confirmation_keyboard,
 )
 from grokbot.telegram.ports import OutboundMedia
+
+_logger = logging.getLogger(__name__)
 
 # --------------------------------------------------------------------------- #
 # Copy (byte-parity grok; typos/acentos originales)
@@ -92,8 +95,8 @@ async def _edit_quietly(ui: ChatUI, message_id: int, text: str, *, reply_markup=
     """Edit best-effort del status (el mensaje puede haber desaparecido)."""
     try:
         await ui.edit_text(message_id, text, reply_markup=reply_markup)
-    except Exception:  # noqa: BLE001 — sin canal no hay nada más que hacer
-        pass
+    except Exception as exc:  # noqa: BLE001 — sin canal no hay nada más que hacer
+        _logger.debug("edit_quietly ignorado (%s)", type(exc).__name__)
 
 
 # --------------------------------------------------------------------------- #
@@ -263,11 +266,7 @@ async def handle_faceswap_confirm_yes(callback: types.CallbackQuery, deps: BotDe
         await answer_callback(deps.gateway, callback)
         return
     total = len(file_ids)
-    job = deps.job_manager.start(uid, "faceswap")
-    if job is None:  # defensivo; R9 no tiene tope real de concurrencia
-        await _edit_quietly(ui, message_id, _NO_PENDING)
-        await answer_callback(deps.gateway, callback)
-        return
+    job = deps.job_manager.start(uid, "faceswap")  # JobManager.start nunca devuelve None
     try:
         await ui.edit_text(
             message_id,
@@ -279,7 +278,10 @@ async def handle_faceswap_confirm_yes(callback: types.CallbackQuery, deps: BotDe
             await _run_single(deps, uid, file_ids[0], ui=ui, status_id=message_id, job=job)
         else:
             await _run_batch(deps, uid, file_ids, ui=ui, status_id=message_id, job=job)
-    except Exception:  # noqa: BLE001 — contención del task (parity grok 3629-3645)
+    except Exception as exc:  # noqa: BLE001 — contención del task (parity grok 3629-3645)
+        # Un bug interno no debe quedar 100% silencioso: se loguea el tipo y se
+        # degrada user-safe (A8/C3). Llega al log, no al @dp.errors.
+        _logger.error("confirm faceswap falló (%s)", type(exc).__name__)
         await _edit_quietly(ui, message_id, _FACESWAP_UNEXPECTED_ERROR)
     finally:
         deps.job_manager.finish(uid, job.job_id)
@@ -384,7 +386,8 @@ async def _run_batch(deps: BotDeps, uid: int, file_ids: list[str], *, ui: ChatUI
                     await asyncio.sleep(_FACESWAP_RATE_LIMIT_SEC)
                 elif deps.job_manager.is_cancelled(job):
                     cancelled = True
-    except Exception:  # noqa: BLE001 — contención del task (parity grok 3629-3645)
+    except Exception as exc:  # noqa: BLE001 — contención del task (parity grok 3629-3645)
+        _logger.error("faceswap batch falló (%s)", type(exc).__name__)
         await _edit_quietly(ui, status_id, _FACESWAP_UNEXPECTED_ERROR)
         return
     if results:
