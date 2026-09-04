@@ -201,6 +201,29 @@ class FakeVariablesRepo:
         return True
 
 
+# --- Source faces repo ----------------------------------------------------------
+class FakeSourceFacesRepo:
+    """SourceFacesRepository in-memory: dict user_id → bytes."""
+
+    def __init__(self, *, seed: dict[int, bytes] | None = None) -> None:
+        self._data = dict(seed or {})
+        self.saved: list[tuple[int, bytes]] = []
+        self.saved_paths: dict[int, str] = {}
+
+    def save(self, user_id: int, data: bytes) -> str:
+        self._data[user_id] = data
+        self.saved.append((user_id, data))
+        path = f"/sources/{user_id}.jpg"
+        self.saved_paths[user_id] = path
+        return path
+
+    def read(self, user_id: int) -> bytes | None:
+        return self._data.get(user_id)
+
+    def exists(self, user_id: int) -> bool:
+        return user_id in self._data
+
+
 # --- Refs repo ----------------------------------------------------------------
 class FakeRefsRepo:
     """GenerationRefsRepository in-memory (disponible para item 5)."""

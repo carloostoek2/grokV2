@@ -58,6 +58,10 @@ class Settings(BaseSettings):
     def packages_dir(self) -> Path:
         return self.data_dir / "variables_packages"
 
+    @property
+    def sources_dir(self) -> Path:
+        return self.data_dir / "sources"
+
     @field_validator("allowed_telegram_ids", "variables_admin_ids", mode="before")
     @classmethod
     def _parse_id_set(cls, v: object) -> object:

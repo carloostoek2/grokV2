@@ -110,6 +110,23 @@ class GenerationRefsRepository(Protocol):
     def get(self, chat_id: int, message_id: int) -> dict | None: ...
 
 
+@runtime_checkable
+class SourceFacesRepository(Protocol):
+    """Binary per-user face-swap source faces (``data/sources/{user_id}.jpg``)."""
+
+    def save(self, user_id: int, data: bytes) -> str:
+        """Persist ``data`` as this user's source face; return the file path str."""
+        ...
+
+    def read(self, user_id: int) -> bytes | None:
+        """Return the stored source bytes, or None when absent."""
+        ...
+
+    def exists(self, user_id: int) -> bool:
+        """True when a source face file exists for this user."""
+        ...
+
+
 def write_json_atomic(path: Path, data: dict, *, ensure_ascii: bool = True, indent: int = 2) -> None:
     """Atomically write ``data`` as JSON to ``path`` (parent created, tmp + os.replace)."""
     path.parent.mkdir(parents=True, exist_ok=True)

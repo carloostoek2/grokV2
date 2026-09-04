@@ -35,6 +35,7 @@ DUMMY_PROMPT = _app_conftest.DUMMY_PROMPT
 FakeSessionRepo = _app_conftest.FakeSessionRepo
 FakeVariablesRepo = _app_conftest.FakeVariablesRepo
 FakeRefsRepo = _app_conftest.FakeRefsRepo
+FakeSourceFacesRepo = _app_conftest.FakeSourceFacesRepo
 FakeImageProvider = _app_conftest.FakeImageProvider
 FakeVideoProvider = _app_conftest.FakeVideoProvider
 FakeComfyuiProvider = _app_conftest.FakeComfyuiProvider
@@ -58,6 +59,7 @@ from aiogram.types import (  # noqa: E402
     User,
 )
 
+from grokbot.application.faceswap import SourceFacesUseCase, SwapFaceUseCase  # noqa: E402
 from grokbot.application.generate_image import GenerateImageUseCase  # noqa: E402
 from grokbot.application.generate_video import GenerateVideoUseCase  # noqa: E402
 from grokbot.application.job_manager import JobManager  # noqa: E402
@@ -444,6 +446,7 @@ def make_deps(
     registry=None,
     job_manager: JobManager | None = None,
     refine_uc: ResolveRefineUseCase | None = None,
+    source_repo: FakeSourceFacesRepo | None = None,
     pending: PendingPrompts | None = None,
     allowed_telegram_ids: set[int] | None = None,
     variables_admin_ids: set[int] | None = None,
@@ -454,6 +457,9 @@ def make_deps(
     Los use cases se construyen con fakes compartidos; el ``refine_hook`` del
     ``JobManager`` queda cableado a ``refine_uc.cancel_for_job`` para que el
     cancel de un job resuelva las confirmaciones de refine pendientes (R7).
+    ``source_repo`` (un :class:`FakeSourceFacesRepo`) es compartido por
+    ``source_faces``/``swap_face``; se puede sobreescribir para pre-cargar una
+    cara fuente.
     """
     gateway = gateway or FakeTelegramGateway()
     downloader = downloader or FakeMediaDownloader()
@@ -474,6 +480,9 @@ def make_deps(
     )
     update_config = UpdateUserConfigUseCase(sessions=sessions)
     manage_lists = ManageListsUseCase(variables=variables)
+    source_repo = source_repo or FakeSourceFacesRepo()
+    source_faces = SourceFacesUseCase(sessions=sessions, sources=source_repo)
+    swap_face = SwapFaceUseCase(sessions=sessions, sources=source_repo, registry=registry)
     return BotDeps(
         gateway=gateway,
         downloader=downloader,
@@ -487,6 +496,8 @@ def make_deps(
         run_batch=run_batch,
         update_config=update_config,
         manage_lists=manage_lists,
+        source_faces=source_faces,
+        swap_face=swap_face,
         pending=pending or PendingPrompts(),
         allowed_telegram_ids=allowed_telegram_ids,
         variables_admin_ids=variables_admin_ids,

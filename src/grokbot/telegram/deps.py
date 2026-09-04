@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from grokbot.application.faceswap import SourceFacesUseCase, SwapFaceUseCase
 from grokbot.application.generate_image import GenerateImageUseCase
 from grokbot.application.generate_video import GenerateVideoUseCase
 from grokbot.application.job_manager import JobManager
@@ -160,6 +161,8 @@ class BotDeps:
     run_batch: RunVariableBatchUseCase
     update_config: UpdateUserConfigUseCase
     manage_lists: ManageListsUseCase
+    source_faces: SourceFacesUseCase
+    swap_face: SwapFaceUseCase
     pending: PendingPrompts = field(default_factory=PendingPrompts)
     long_prompt: LongPromptStore = field(default_factory=LongPromptStore)
     album: AlbumStore = field(default_factory=AlbumStore)

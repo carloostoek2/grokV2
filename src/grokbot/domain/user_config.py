@@ -68,6 +68,7 @@ VALID_COMFYUI_LORAS = (
 )
 
 IDLE_STATE = "IDLE"
+AWAITING_SOURCE = "AWAITING_SOURCE"
 
 # --- ComfyUI video-only models (D10, item 4). ---
 # Models whose ComfyUI workflow produces MP4 (video), never a still image.

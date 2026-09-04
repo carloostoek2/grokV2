@@ -31,6 +31,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from dotenv import load_dotenv
 from pydantic import ValidationError
 
+from grokbot.application.faceswap import SourceFacesUseCase, SwapFaceUseCase
 from grokbot.application.generate_image import GenerateImageUseCase
 from grokbot.application.generate_video import GenerateVideoUseCase
 from grokbot.application.job_manager import JobManager
@@ -46,6 +47,7 @@ from grokbot.providers import (
     XaiProvider,
 )
 from grokbot.repositories import (
+    DiskSourceFacesRepository,
     JsonGenerationRefsRepository,
     JsonSessionRepository,
     JsonVariablesRepository,
@@ -144,6 +146,9 @@ def build_deps(
     )
     update_config = UpdateUserConfigUseCase(sessions=sessions)
     manage_lists = ManageListsUseCase(variables=variables)
+    sources_repo = DiskSourceFacesRepository(settings.sources_dir)
+    source_faces = SourceFacesUseCase(sessions=sessions, sources=sources_repo)
+    swap_face = SwapFaceUseCase(sessions=sessions, sources=sources_repo, registry=registry)
 
     gateway = gateway if gateway is not None else AiogramGateway(settings.telegram_bot_token)
     downloader = downloader if downloader is not None else AiohttpMediaDownloader()
@@ -161,6 +166,8 @@ def build_deps(
         run_batch=run_batch,
         update_config=update_config,
         manage_lists=manage_lists,
+        source_faces=source_faces,
+        swap_face=swap_face,
         allowed_telegram_ids=settings.allowed_telegram_ids,
         variables_admin_ids=settings.variables_admin_ids,
     )
@@ -240,6 +247,7 @@ def run() -> int:
     try:
         settings = get_settings()
         settings.data_dir.mkdir(parents=True, exist_ok=True)  # D7: fail-fast permisos
+        settings.sources_dir.mkdir(parents=True, exist_ok=True)  # D7: fail-fast permisos
         deps = build_deps(settings)  # D5 puede lanzar ValueError (token vacío)
         dp = assemble_dispatcher(deps)
     except ValidationError as exc:  # subclase de ValueError → va ANTES

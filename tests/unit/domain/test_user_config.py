@@ -125,6 +125,24 @@ def test_round_trip_canonical_record():
     assert UserConfig.from_record(rec).to_record() == rec
 
 
+def test_round_trip_awaiting_source_state_and_source_path():
+    rec = {
+        "source_path": "/data/sources/111111111.jpg",
+        "integrate_ref_path": None,
+        "state": "AWAITING_SOURCE",
+        "model": "faceswap",
+        "grok_imagine_provider": "kie",
+        "grok_imagine_variant": "quality",
+    }
+    uc = UserConfig.from_record(rec)
+    assert uc.state == "AWAITING_SOURCE"
+    assert uc.source_path == "/data/sources/111111111.jpg"
+    assert uc.model == "faceswap"
+    assert UserConfig.from_record(uc.to_record()) == uc
+    assert uc.to_record()["state"] == "AWAITING_SOURCE"
+    assert uc.to_record()["source_path"] == "/data/sources/111111111.jpg"
+
+
 def test_real_grok_session_record_loads_without_loss():
     uc = UserConfig.from_record(REAL_GROK_SESSION_REC)
     assert uc.video.duration == 5
