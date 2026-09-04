@@ -16,6 +16,7 @@ from conftest import (
     CHAT_ID,
     USER_ID,
     FakeImageProvider,
+    FakeMediaDownloader,
     FakeTelegramGateway,
     callback_query,
     callback_update,
@@ -395,7 +396,10 @@ async def test_album_grok_edits_sequentially():
     deps = make_deps()
     deps.album.delay = 0.05
     deps = await _feed_album(deps, 3)
-    await asyncio.sleep(0.3)
+    await _wait_until(lambda: any(
+        c["text"] == "Completadas 3/3 imágenes."
+        for c in deps.gateway.calls_by_method("edit_message_text")
+    ))
     sends = deps.gateway.calls_by_method("send_message")
     status = sends[0]
     assert status["text"] == f"Editando 0/3 imágenes con {_ALBUM_LABEL}..."
@@ -414,7 +418,10 @@ async def test_album_no_caption_shows_hint():
     deps = make_deps()
     deps.album.delay = 0.05
     deps = await _feed_album(deps, 3, caption_on=None)
-    await asyncio.sleep(0.3)
+    await _wait_until(lambda: any(
+        s["text"].startswith("Para editar una imagen, enviala con un")
+        for s in deps.gateway.calls_by_method("send_message")
+    ))
     last = deps.gateway.calls_by_method("send_message")[-1]
     assert last["text"].startswith("Para editar una imagen, enviala con un")
     assert deps.gateway.calls_by_method("send_photo") == []
@@ -424,7 +431,10 @@ async def test_album_too_many_photos_errors():
     deps = make_deps()
     deps.album.delay = 0.05
     deps = await _feed_album(deps, 11, group="album-big")
-    await asyncio.sleep(0.3)
+    await _wait_until(lambda: any(
+        s["text"] == "El album tiene 11 fotos; el maximo es 10."
+        for s in deps.gateway.calls_by_method("send_message")
+    ))
     last = deps.gateway.calls_by_method("send_message")[-1]
     assert last["text"] == "El album tiene 11 fotos; el maximo es 10."
     assert deps.gateway.calls_by_method("send_photo") == []
@@ -435,7 +445,7 @@ async def test_album_non_grok_model_silent():
     deps.update_config.set_model(_UID, "seedream")
     deps.album.delay = 0.05
     deps = await _feed_album(deps, 3, caption_on=1)
-    await asyncio.sleep(0.3)
+    # Sin tarea de drain (handle_album no agenda nada para no-grok): asserts directos.
     assert deps.gateway.calls_by_method("send_message") == []
     assert deps.gateway.calls_by_method("send_photo") == []
 
@@ -445,7 +455,7 @@ async def test_album_faceswap_degrades():
     deps.update_config.set_model(_UID, "faceswap")
     deps.album.delay = 0.05
     deps = await _feed_album(deps, 2, caption_on=1)
-    await asyncio.sleep(0.3)
+    # Cada foto faceswap degrada en handle_album (sin drain): asserts directos.
     last = deps.gateway.calls_by_method("send_message")[-1]
     assert "El modo Face Swap no está disponible en esta versión." in last["text"]
 
@@ -460,7 +470,10 @@ async def test_album_integrate_caption_still_d8():
     await dp.feed_update(_BOT, message_update(msg))
     msg2 = make_photo_message(message_id=202, media_group_id="album-int")
     await dp.feed_update(_BOT, message_update(msg2))
-    await asyncio.sleep(0.3)
+    await _wait_until(lambda: any(
+        "La edición con referencia (/s) no está disponible en esta versión." in s["text"]
+        for s in deps.gateway.calls_by_method("send_message")
+    ))
     last = deps.gateway.calls_by_method("send_message")[-1]
     assert "La edición con referencia (/s) no está disponible en esta versión." in last["text"]
 
@@ -476,7 +489,7 @@ async def test_album_long_caption_defers_to_text():
             file_id=f"FAKE:albumlong{i}", media_group_id="album-long",
         )
         await dp.feed_update(_BOT, message_update(msg))
-    await asyncio.sleep(0.3)
+    await _wait_until(lambda: deps.long_prompt.is_awaiting(_UID))
     last = deps.gateway.calls_by_method("send_message")[-1]
     assert last["text"].startswith("El caption es demasiado largo para procesarlo directamente.")
     assert "He guardado tus 3 fotos del álbum." in last["text"]
@@ -535,7 +548,10 @@ async def test_album_cancel_mid_way():
         deps, callback_query(f"cancel_job:{job_id}", message_id=status["sent"].message_id)
     )
     provider.releases[1].set()
-    await asyncio.sleep(0.3)
+    await _wait_until(lambda: any(
+        c["text"] == "⏹ Cancelado. Completadas 1/3 imágenes."
+        for c in deps.gateway.calls_by_method("edit_message_text")
+    ))
     edits = [c["text"] for c in deps.gateway.calls_by_method("edit_message_text")]
     assert "⏹ Cancelado. Completadas 1/3 imágenes." in edits
     assert len(deps.gateway.calls_by_method("send_photo")) == 1, "solo el ítem 1 completo"
@@ -598,7 +614,10 @@ async def test_album_whitespace_caption_shows_hint():
             caption=cap, message_id=i, file_id=f"FAKE:alb_ws{i}", media_group_id="album-ws"
         )
         await dp.feed_update(_BOT, message_update(msg))
-    await asyncio.sleep(0.3)
+    await _wait_until(lambda: any(
+        s["text"].startswith("Para editar una imagen, enviala con un")
+        for s in deps.gateway.calls_by_method("send_message")
+    ))
     last = deps.gateway.calls_by_method("send_message")[-1]
     assert last["text"].startswith("Para editar una imagen, enviala con un")
     assert deps.gateway.calls_by_method("send_photo") == []
@@ -624,7 +643,7 @@ async def test_album_long_caption_text_completes_multi_edit():
     deps = make_deps()
     deps.album.delay = 0.05
     deps = await _feed_album_long_caption(deps, prefix="FAKE:alb_lp_multi")
-    await asyncio.sleep(0.3)
+    await _wait_until(lambda: deps.long_prompt.is_awaiting(_UID))
     assert deps.long_prompt.is_awaiting(_UID) is True
     deps = await _msg(deps, text_message("un prompt que edita el album", message_id=500))
     assert deps.gateway.calls_by_method("send_photo"), "edita las 3 fotos"
@@ -648,3 +667,110 @@ async def test_long_caption_video_defers_to_text_then_sends_video():
     deps = await _msg(deps, text_message("mueve la camara lentamente", message_id=6))
     assert deps.gateway.calls_by_method("send_video"), "el texto completa la i2v"
     assert deps.long_prompt.is_awaiting(_UID) is False
+
+
+# --------------------------------------------------------------------------- #
+# Fix round 2 (review 571e1bc9): opens 1, 2, 4, 5
+# --------------------------------------------------------------------------- #
+class _AlbumStatusSendFailsGateway(FakeTelegramGateway):
+    """Gateway que falla al publicar el status inicial del álbum (send_message)."""
+
+    async def send_message(self, chat_id, text, *, parse_mode="HTML", reply_markup=None, reply_to_message_id=None):
+        self._record(
+            "send_message", chat_id=chat_id, text=text, parse_mode=parse_mode,
+            reply_markup=reply_markup, reply_to_message_id=reply_to_message_id,
+        )
+        raise TelegramBadRequest("chat not found")
+
+
+async def test_long_caption_invalid_text_keeps_collection():
+    """Open 4: texto inválido tras caption largo NO pierde la colección (A3)."""
+    deps = make_deps()
+    deps.update_config.set_model(_UID, "seedream")
+    deps = await _msg(
+        deps, make_photo_message(caption="x" * 1100, file_id="FAKE:keep_cap", message_id=5)
+    )
+    assert deps.long_prompt.is_awaiting(_UID) is True
+    deps = await _msg(deps, text_message("ab", message_id=6))
+    last = deps.gateway.calls_by_method("send_message")[-1]
+    assert last["text"] == "El prompt es muy corto. Dame algo mas descriptivo."
+    assert deps.long_prompt.is_awaiting(_UID) is True, "texto inválido no consume la colección"
+    # El reintento con un texto válido completa la edición.
+    deps = await _msg(deps, text_message("un prompt válido ahora", message_id=7))
+    assert deps.gateway.calls_by_method("send_photo"), "el texto válido completa la edición"
+    assert deps.long_prompt.is_awaiting(_UID) is False
+
+
+async def test_album_delivery_failure_does_not_claim_completed():
+    """Open 1: send_image None (entrega fallida) NO cuenta como completada.
+
+    La descarga de la URL del ítem falla: send_image edita el status con el error
+    user-safe y devuelve None; el álbum NO debe afirmar "Completadas N/N".
+    """
+    downloader = FakeMediaDownloader()
+    downloader.error = Exception("transporte caido")
+    deps = make_deps(downloader=downloader)
+    deps.album.delay = 0.05
+    deps = await _feed_album(deps, 3, file_prefix="FAKE:alb_deliv", caption_on=1)
+    await _wait_until(lambda: any(
+        c["text"] == "No se pudo descargar el archivo. Intenta de nuevo más tarde."
+        for c in deps.gateway.calls_by_method("edit_message_text")
+    ))
+    edits = [c["text"] for c in deps.gateway.calls_by_method("edit_message_text")]
+    assert not any(t.startswith("Completadas ") for t in edits)
+    assert deps.gateway.calls_by_method("send_photo") == [], "el ítem 1 nunca llegó a enviarse"
+    assert deps.job_manager.active_jobs(_UID) == ()
+
+
+async def test_album_status_send_failure_closes_job():
+    """Open 2: si el status inicial lanza, el job album_edit se cierra igual.
+
+    El drain arranca el job y el status lanza; todo el tramo (start → status →
+    except → finally:finish) corre en un único burst síncrono sin suspensión que
+    un poll de active_jobs pueda observar, así que esperamos el efecto lateral
+    observable: post-fix hay DOS send_message (el status que falla + el fallback
+    best-effort del error genérico) y el job queda cerrado. Pre-fix la excepción
+    del status escapa del try (job huérfano + task muerto) y jamás llega el
+    segundo send_message → la espera se cuelga y el test falla.
+    """
+    gateway = _AlbumStatusSendFailsGateway()
+    deps = make_deps(gateway=gateway)
+    deps.album.delay = 0.05
+    deps = await _feed_album(deps, 3, file_prefix="FAKE:alb_status", caption_on=1)
+    await _wait_until(lambda: len(deps.gateway.calls_by_method("send_message")) >= 2)
+    assert deps.job_manager.active_jobs(_UID) == (), "el finally cierra el job en cualquier salida"
+
+
+async def test_album_item_failed_breaks_partial():
+    """Open 5: ItemFailed (error terminal del provider) corta el álbum en parcial."""
+    from grokbot.providers.base import ProviderInputError
+
+    err = ProviderInputError("source inválida", user_message="La imagen de origen no es válida.")
+    provider = FakeImageProvider(name="kie", outcomes=[err])
+    deps = make_deps(registry=make_registry(kie=provider))
+    deps.album.delay = 0.05
+    deps = await _feed_album(deps, 3, file_prefix="FAKE:alb_fail", caption_on=1)
+    await _wait_until(lambda: any(
+        c["text"] == "0/3 completadas; error en imagen 1: La imagen de origen no es válida."
+        for c in deps.gateway.calls_by_method("edit_message_text")
+    ))
+    assert deps.gateway.calls_by_method("send_photo") == []
+    assert deps.job_manager.active_jobs(_UID) == ()
+
+
+async def test_album_retry_scheduled_paints_intento_and_completes(monkeypatch):
+    """Open 5: RetryScheduled pinta el intento sobre el label y el loop completa."""
+    import grokbot.providers.base as prov_base
+    from grokbot.providers.base import ProviderRateLimitError
+
+    monkeypatch.setattr(prov_base, "POLL_RETRY_BACKOFF_SEC", (0.0, 0.0, 0.0))
+    err = ProviderRateLimitError("rate", user_message="Demasiadas peticiones.")
+    provider = FakeImageProvider(name="kie", outcomes=[err])
+    deps = make_deps(registry=make_registry(kie=provider))
+    deps.album.delay = 0.05
+    deps = await _feed_album(deps, 1, caption_on=1, group="album-retry")
+    await _wait_until(lambda: len(deps.gateway.calls_by_method("send_photo")) == 1)
+    edits = [c["text"] for c in deps.gateway.calls_by_method("edit_message_text")]
+    assert any("(intento 2/6)" in t for t in edits)
+    assert edits[-1] == "Completadas 1/1 imágenes."
+    assert deps.job_manager.active_jobs(_UID) == ()
