@@ -89,6 +89,40 @@ class PendingPrompts:
 
 
 @dataclass
+class LongPromptStore:
+    """Colección efímera de long-prompt: user_id → {file_ids, integrate_mode, is_video}.
+
+    Sin FSM de aiogram (paridad grok ``_set_long_prompt_collection`` bot.py
+    518-531): cuando un caption supera el tope se guardan los file_ids y el
+    siguiente texto del mismo user completa la edición. ``pop`` (consumo único)
+    tras validar el prompt evita estados colgados (A3).
+    """
+
+    _state: dict[int, dict] = field(default_factory=dict)
+
+    def is_awaiting(self, user_id: int) -> bool:
+        return user_id in self._state
+
+    def set(self, user_id: int, *, file_ids: list[str], integrate_mode: bool, is_video: bool) -> None:
+        self._state[user_id] = {
+            "file_ids": list(file_ids),
+            "integrate_mode": integrate_mode,
+            "is_video": is_video,
+        }
+
+    def get(self, user_id: int) -> dict | None:
+        entry = self._state.get(user_id)
+        return dict(entry) if entry is not None else None
+
+    def pop(self, user_id: int) -> dict | None:
+        entry = self._state.pop(user_id, None)
+        return dict(entry) if entry is not None else None
+
+    def clear(self, user_id: int) -> None:
+        self._state.pop(user_id, None)
+
+
+@dataclass
 class BotDeps:
     """Dependencias de la capa telegram (use cases + seams + gates)."""
 
@@ -105,8 +139,9 @@ class BotDeps:
     update_config: UpdateUserConfigUseCase
     manage_lists: ManageListsUseCase
     pending: PendingPrompts = field(default_factory=PendingPrompts)
+    long_prompt: LongPromptStore = field(default_factory=LongPromptStore)
     allowed_telegram_ids: set[int] | None = None
     variables_admin_ids: set[int] | None = None
 
 
-__all__ = ["BotDeps", "PendingPrompts"]
+__all__ = ["BotDeps", "PendingPrompts", "LongPromptStore"]

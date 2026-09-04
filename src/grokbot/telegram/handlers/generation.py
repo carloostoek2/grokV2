@@ -36,7 +36,6 @@ from grokbot.telegram.handlers._common import (
     D8_CMD_MSG,
     D8_FACESWAP_MSG,
     D8_INTEGRATE_MSG,
-    D8_LONG_PROMPT_MSG,
     SOURCE_MEDIA_UNAVAILABLE_MSG,
     TELEGRAM_CAPTION_COLLECT_THRESHOLD,
     answer_callback,
@@ -71,16 +70,78 @@ _EDIT_CANCEL_TEXT = "⏹ Edición cancelada."
 _REGEN_CANCEL_TEXT = "⏹ Regeneración cancelada."
 # R8: el botón Regenerar de una imagen ajena (ref con owner_uid de otro user).
 _REGEN_NOT_OWNER = "Esta regeneración pertenece a otro usuario."
+# Recordatorio cuando hay un long-prompt pendiente y llega otra foto sin caption.
+_LONG_PROMPT_REMINDER = (
+    "Tienes una edición pendiente. Envíame el prompt como <b>mensaje de texto</b> "
+    "(no hace falta responder a ningún mensaje)."
+)
 
 
 def _chat_ui(deps: BotDeps, message: types.Message) -> ChatUI:
     return ChatUI.for_message(deps.gateway, message)
 
 
+def _long_prompt_reply_text(*, is_video: bool, n_photos: int) -> str:
+    """Reply de colección long-prompt (grok ``_long_prompt_collection_reply`` bot.py 544-563)."""
+    if is_video:
+        action = "animar la imagen"
+    elif n_photos > 1:
+        action = "editar las imágenes"
+    else:
+        action = "editar la imagen"
+    album_note = f"\n\nHe guardado tus {n_photos} fotos del álbum." if n_photos > 1 else ""
+    return (
+        "El caption es demasiado largo para procesarlo directamente.\n\n"
+        f"Envíame el prompt como <b>mensaje de texto</b> para {action}.{album_note}"
+    )
+
+
+async def _complete_long_prompt_collection(deps: BotDeps, message: types.Message) -> None:
+    """Completa la edición pendiente de un long-prompt (grok bot.py 1966-2012).
+
+    Consume el store con ``pop`` tras validar el prompt (A3): un texto inválido no
+    descarta la colección (el user reintenta); un prompt válido consume la entrada
+    y despacha single/álbum/video según los file_ids guardados.
+    """
+    uid = message.from_user.id
+    ui = _chat_ui(deps, message)
+    prompt = message.text.strip()
+    prompt_err = validate_prompt(prompt)
+    if prompt_err:
+        await ui.send_text(prompt_err)
+        return
+    entry = deps.long_prompt.pop(uid)
+    if entry is None or not entry.get("file_ids"):
+        await ui.send_text("No hay fotos guardadas para editar. Vuelve a enviar la imagen con caption largo.")
+        return
+    file_ids = entry["file_ids"]
+    is_video = entry.get("is_video", False)
+    cfg = deps.sessions.get_config(uid)
+    if is_video and len(file_ids) == 1:
+        image_data = await fetch_source_bytes(deps.gateway, file_ids[0])
+        if image_data is None:
+            await ui.send_text(SOURCE_MEDIA_UNAVAILABLE_MSG)
+            return
+        await run_video_generation(
+            deps, message, uid=uid, cfg=cfg, prompt=prompt,
+            source_image=image_data, prefix="Edit",
+        )
+        return
+    if len(file_ids) == 1:
+        await _process_single_photo_edit(deps, message, prompt, file_ids[0])
+        return
+    # Multi-file (álbum grok) — _process_album_edit se define con Task 3.
+    await _process_album_edit(deps, message, prompt, file_ids, cfg)
+
+
 # --------------------------------------------------------------------------- #
 # Texto
 # --------------------------------------------------------------------------- #
 async def handle_text(message: types.Message, deps: BotDeps) -> None:
+    # Long-prompt collection pendiente → el texto completa la edición (grok 1531-1533).
+    if deps.long_prompt.is_awaiting(message.from_user.id):
+        await _complete_long_prompt_collection(deps, message)
+        return
     cfg = deps.sessions.get_config(message.from_user.id)
     ui = _chat_ui(deps, message)
     if cfg.model == "faceswap":
@@ -121,12 +182,22 @@ async def handle_photo_caption(message: types.Message, deps: BotDeps) -> None:
         await ui.send_text(D8_INTEGRATE_MSG)
         return
     if len(prompt) > TELEGRAM_CAPTION_COLLECT_THRESHOLD:
-        await ui.send_text(D8_LONG_PROMPT_MSG)
+        file_id = largest_photo(message)
+        # grok _set_long_prompt_collection clears pending_prompt (bot.py 525).
+        deps.pending.clear(message.from_user.id)
+        deps.long_prompt.set(
+            message.from_user.id,
+            file_ids=[file_id] if file_id else [],
+            integrate_mode=False,
+            is_video=is_video_cfg(cfg),
+        )
+        await ui.send_text(_long_prompt_reply_text(is_video=is_video_cfg(cfg), n_photos=1))
         return
     prompt_err = validate_prompt(prompt)
     if prompt_err:
         await ui.send_text(prompt_err)
         return
+    deps.long_prompt.clear(message.from_user.id)  # parity grok 2881
     file_id = largest_photo(message)
     if is_video_cfg(cfg):
         image_data = await fetch_source_bytes(deps.gateway, file_id)
@@ -147,6 +218,10 @@ async def handle_photo_no_caption(message: types.Message, deps: BotDeps) -> None
     if cfg.model == "faceswap":
         await ui.send_text(D8_FACESWAP_MSG)
         return
+    # Long-prompt pendiente: recordar el prompt por texto (grok 2907-2913).
+    if deps.long_prompt.is_awaiting(message.from_user.id):
+        await ui.send_text(_LONG_PROMPT_REMINDER)
+        return
     if is_video_cfg(cfg):
         await ui.send_text(_HINT_VIDEO)
         return
@@ -165,6 +240,10 @@ async def handle_album(message: types.Message, deps: BotDeps) -> None:
 # Reply texto→foto (edit sin job; video si grok_video)
 # --------------------------------------------------------------------------- #
 async def handle_reply_edit(message: types.Message, deps: BotDeps) -> None:
+    # Long-prompt collection pendiente → el texto completa la edición (grok 2953-2955).
+    if deps.long_prompt.is_awaiting(message.from_user.id):
+        await _complete_long_prompt_collection(deps, message)
+        return
     reply = message.reply_to_message
     cfg = deps.sessions.get_config(message.from_user.id)
     ui = _chat_ui(deps, message)

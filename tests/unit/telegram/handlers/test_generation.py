@@ -307,11 +307,60 @@ async def test_photo_integrate_degrades():
     assert "La edición con referencia (/s) no está disponible en esta versión." in last["text"]
 
 
-async def test_photo_long_caption_degrades():
-    deps = make_deps()
+async def test_long_caption_starts_collection_reply():
+    deps = make_deps()  # cfg default grok
     deps = await _msg(deps, make_photo_message(caption="x" * 1100, message_id=5))
+    sends = deps.gateway.calls_by_method("send_message")
+    assert sends[-1]["text"].startswith(
+        "El caption es demasiado largo para procesarlo directamente."
+    )
+    assert "para editar la imagen" in sends[-1]["text"]
+    assert deps.gateway.calls_by_method("send_photo") == [], "no edita todavía"
+    assert deps.long_prompt.is_awaiting(_UID) is True
+
+
+async def test_long_caption_then_text_completes_edit():
+    deps = make_deps()
+    deps.update_config.set_model(_UID, "seedream")
+    deps = await _msg(
+        deps,
+        make_photo_message(caption="x" * 1100, file_id="FAKE:long_cap", message_id=5),
+    )
+    assert deps.long_prompt.is_awaiting(_UID) is True
+    deps = await _msg(deps, text_message("un prompt corto", message_id=6))
+    gets = deps.gateway.calls_by_method("get_file_bytes")
+    assert gets and gets[-1]["file_id"] == "FAKE:long_cap"
+    assert deps.gateway.calls_by_method("send_photo"), "el texto completo la edición"
+    assert deps.long_prompt.is_awaiting(_UID) is False
+
+
+async def test_short_caption_does_not_collect():
+    deps = make_deps()
+    deps.update_config.set_model(_UID, "seedream")
+    deps = await _msg(deps, make_photo_message(caption="c" * 100, message_id=5))
+    sends = deps.gateway.calls_by_method("send_message")
+    assert not any("El caption es demasiado largo" in s["text"] for s in sends)
+    assert deps.gateway.calls_by_method("send_photo")
+    assert deps.long_prompt.is_awaiting(_UID) is False
+
+
+async def test_integrate_still_beats_long():
+    deps = make_deps()
+    deps = await _msg(
+        deps, make_photo_message(caption="/s " + "x" * 1100, message_id=5)
+    )
     last = deps.gateway.calls_by_method("send_message")[-1]
-    assert "El caption es demasiado largo." in last["text"]
+    assert "La edición con referencia (/s) no está disponible en esta versión." in last["text"]
+    assert deps.long_prompt.is_awaiting(_UID) is False
+
+
+async def test_photo_no_caption_while_awaiting_reminds():
+    deps = make_deps()
+    deps.long_prompt.set(_UID, file_ids=["FAKE:photo1"], integrate_mode=False, is_video=False)
+    deps = await _msg(deps, make_photo_message(message_id=7))
+    last = deps.gateway.calls_by_method("send_message")[-1]
+    assert last["text"].startswith("Tienes una edición pendiente.")
+    assert deps.long_prompt.is_awaiting(_UID) is True, "el recordatorio no consume la colección"
 
 
 async def test_album_with_caption_degrades():

@@ -25,8 +25,9 @@ from grokbot.telegram.deps import BotDeps
 from grokbot.telegram.ports import TelegramGateway
 from grokbot.telegram.sender import ResultSender
 
-# Tope de captions que disparaban long-prompt collection en grok (bot.py:74);
-# en grokV2 el flujo NO se implementa y se degrada D8.
+# Tope de captions que disparan long-prompt collection en grok (bot.py:74);
+# por encima de este largo, una foto no edita: guarda el file_id y pide el
+# prompt como mensaje de texto (ver generation._complete_long_prompt_collection).
 TELEGRAM_CAPTION_COLLECT_THRESHOLD = 1020
 
 # --- Degradaciones D8 (flujos de grok sin use case; residuales del pool) ------
@@ -39,9 +40,6 @@ D8_ALBUM_MSG = (
 D8_INTEGRATE_MSG = (
     "La edición con referencia (/s) no está disponible en esta versión. "
     "Envía el caption sin /s."
-)
-D8_LONG_PROMPT_MSG = (
-    "El caption es demasiado largo. Envía el prompt como mensaje de texto y la foto por separado."
 )
 D8_CMD_MSG = "Este comando no está disponible en esta versión todavía."
 D8_REPLY_NO_PHOTO = "Responde a una foto para editarla."
@@ -271,7 +269,6 @@ __all__ = [
     "D8_COMMANDS",
     "D8_FACESWAP_MSG",
     "D8_INTEGRATE_MSG",
-    "D8_LONG_PROMPT_MSG",
     "D8_REPLY_NO_PHOTO",
     "SOURCE_MEDIA_UNAVAILABLE_MSG",
     "TELEGRAM_CAPTION_COLLECT_THRESHOLD",
