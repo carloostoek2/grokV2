@@ -1,9 +1,12 @@
-"""Tests del ResultSender (item 5, R4/R6): fan-out y refs post-envío.
+"""Tests del ResultSender (item 5, R4/R6/R10): fan-out y refs post-envío.
 
 Verifica URL única/multi-URL (kie), local ComfyUI single/álbum, video local/
-remoto, fallback de video > tope, allowlist propagada al downloader, caption con
-prompt truncado a 1024 y errores de descarga user-safe sobre el status. 0 red y
-0 ``unittest.mock`` (fakes del conftest implementan los Protocols).
+remoto, video local rechazado degradado user-safe sin path (C9c), video remoto
+que supera el tope único (``media.MAX_MEDIA_BYTES``) o que la API rechaza →
+fallback de texto con la URL de recuperación (R10, privado), allowlist
+propagada al downloader, caption con prompt truncado a 1024 y errores de
+descarga user-safe sobre el status. 0 red y 0 ``unittest.mock`` (fakes del
+conftest implementan los Protocols).
 """
 
 from __future__ import annotations
@@ -284,7 +287,7 @@ async def test_video_local_send_rejected_degrades_user_safe(tmp_path, refs_repo)
 async def test_video_over_limit_fallback_text_no_send(
     gateway, downloader, refs_repo, monkeypatch
 ):
-    monkeypatch.setattr(sender_mod, "TELEGRAM_MAX_VIDEO_BYTES", 1000)
+    monkeypatch.setattr(sender_mod, "MAX_MEDIA_BYTES", 1000)
     downloader.payload = b"x" * 2001
     ui = ChatUI(gateway, CHAT_ID)
     sender = _make_sender(gateway, downloader, refs_repo)

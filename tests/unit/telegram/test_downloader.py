@@ -9,7 +9,12 @@ import aiohttp
 import pytest
 from aioresponses import aioresponses
 
-from grokbot.telegram.downloader import AiohttpMediaDownloader, DownloadError
+from grokbot.telegram.downloader import (
+    AiohttpMediaDownloader,
+    DownloadError,
+    DownloadTooLargeError,
+)
+from grokbot.telegram.media import MAX_MEDIA_BYTES
 
 # aioresponses 0.7.9 predata aiohttp 3.14 (el ctor de ClientResponse ahora exige
 # ``stream_writer``). Mismo shim test-only que tests/integration/providers, pero
@@ -131,12 +136,27 @@ async def test_download_rechecks_redirect_target():
 
 @pytest.mark.asyncio
 async def test_download_rejects_oversize_by_content_length():
+    """R10: supera el tope único → DownloadTooLargeError (tipado, user-safe)."""
+    mb = MAX_MEDIA_BYTES // (1024 * 1024)
     with aioresponses() as m:
         m.get(_XAI_OK, status=200, body=PAYLOAD, headers={"Content-Length": "999999999"})
         dl = AiohttpMediaDownloader()
-        with pytest.raises(DownloadError) as exc:
+        with pytest.raises(DownloadTooLargeError) as exc:
             await dl.download(_XAI_OK, allowlist="xai")
-    assert exc.value.user_message == "No se pudo descargar el archivo. Intenta de nuevo más tarde."
+    assert exc.value.user_message == (
+        f"El archivo supera el límite de {mb} MB y no se puede enviar por Telegram."
+    )
+
+
+@pytest.mark.asyncio
+async def test_download_rejects_oversize_by_stream_chunks():
+    """R10: sin Content-Length, el tope se aplica acumulando chunks."""
+    dl = AiohttpMediaDownloader(max_bytes=8)
+    with aioresponses() as m:
+        m.get(_XAI_OK, status=200, body=PAYLOAD)
+        with pytest.raises(DownloadTooLargeError) as exc:
+            await dl.download(_XAI_OK, allowlist="xai")
+    assert "supera el límite" in exc.value.user_message
 
 
 @pytest.mark.asyncio

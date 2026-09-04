@@ -105,7 +105,8 @@ COMFYUI_CONFIG_LORA_LABELS = {
     "multipose_batch": "🎲 Multi-pose ×5 (variables)",
 }
 
-# Bandeja de warning para enlaces temporales (bot.py:264-266).
+# Bandeja de warning para enlaces temporales (bot.py:264-266). Se muestra junto
+# a la URL de recuperación de un video no enviable por Telegram (R10, privado).
 SENSITIVE_DOWNLOAD_WARNING = (
     "\n\n⚠️ Enlace temporal con tu contenido generado; no lo compartas públicamente."
 )

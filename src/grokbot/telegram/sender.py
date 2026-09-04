@@ -4,7 +4,10 @@ Reimplementa el fan-out de grok ``process_image_result`` (bot.py:4973-5063),
 ``_send_comfyui_image/album/video`` (4087-4310) y ``process_video_result``
 (5373-5422): URL única → photo, multi-URL → N photos separadas con variante
 ``{i+1}/{N}``, ComfyUI local 1 → photo y N → álbum (máx 10), video local/remoto
-→ ``send_video`` con fallback de texto cuando excede el tope de Telegram.
+→ ``send_video``. R10: un video remoto que supera el tope único
+(``media.MAX_MEDIA_BYTES``) o que la Bot API rechaza se degrada ofreciendo la
+URL firmada como camino de recuperación (chat privado del dueño único; paridad
+grok bot.py 5402-5407).
 
 Reglas de la capa (SPEC §5.2 / PLAN D1):
 
@@ -14,8 +17,9 @@ Reglas de la capa (SPEC §5.2 / PLAN D1):
 * ``generation_refs`` se guarda POST-envío con el ``message_id`` real (álbum →
   ``sent[0]``; multi-URL → índice por foto). ``regen_context`` viaja opaco.
 * Errores user-safe (R6): un fallo de descarga/lectura edita el status message y
-  devuelve ``None`` (el flujo decide si reintenta/finaliza). Nunca se loguean
-  URLs de contenido.
+  devuelve ``None`` (el flujo decide si reintenta/finaliza). Las URLs de
+  contenido no se loguean; la de un video no enviable se le muestra al dueño
+  único (chat privado), nunca se publica fuera de ese chat.
 """
 
 from __future__ import annotations
@@ -27,11 +31,13 @@ from aiogram.exceptions import TelegramBadRequest
 from grokbot.application.events import ItemResult
 from grokbot.repositories.base import GenerationRefsRepository
 from grokbot.telegram.chat_ui import ChatUI
+from grokbot.telegram.downloader import DownloadTooLargeError
 from grokbot.telegram.formatters import (
     SENSITIVE_DOWNLOAD_WARNING,
     format_result_caption,
 )
 from grokbot.telegram.keyboards import image_regenerate_keyboard
+from grokbot.telegram.media import MAX_MEDIA_BYTES
 from grokbot.telegram.ports import (
     MediaDownloader,
     OutboundMedia,
@@ -39,10 +45,7 @@ from grokbot.telegram.ports import (
     TelegramGateway,
 )
 
-# Tope de video para Telegram (bot.py:74, 50 MB) — no reenviar videos mayores.
-TELEGRAM_MAX_VIDEO_BYTES = 50 * 1024 * 1024
-
-# --- Copy de errores de lectura/descarga (grok, user-safe R6) ----------------
+# --- Copy de errores de lectura/descarga (grok, user-safe R6/R10) ------------
 _ERR_NO_IMAGE = "No se pudo leer la imagen generada."
 _ERR_NO_VIDEO = "No se pudo leer el video generado."
 _ERR_NO_ALBUM = "No se pudieron leer las imágenes generadas."
@@ -232,10 +235,9 @@ class ResultSender:
                     caption=caption, reply_markup=image_regenerate_keyboard(),
                 )
             except TelegramBadRequest:
-                # C9c: Telegram rechaza el video local (códec/formato o >50MB) →
-                # degradar user-safe sobre el status, sin exponer path de contenido.
-                if status_id is not None:
-                    await ui.edit_text(status_id, _ERR_VIDEO_REJECTED, reply_markup=None)
+                # C9c/R10: Telegram rechaza el video local (códec/formato o >
+                # MAX_MEDIA_BYTES) → degradar user-safe, sin exponer path.
+                await self._degrade_video_rejected(ui, status_id)
                 return None
             if item.regen_context is not None:
                 self._refs.save(
@@ -253,35 +255,45 @@ class ResultSender:
                 await ui.edit_text(status_id, "Error: el modelo no devolvió URL de video. Intenta con otro prompt.", reply_markup=None)
             return None
 
-        data = await self._download(ui, url, allowlist=meta.get("download_allowlist"), status_id=status_id)
-        if data is None:
-            return None
-        if len(data) > TELEGRAM_MAX_VIDEO_BYTES:
-            mb = len(data) // 1024 // 1024
-            text = (
-                f"El video es demasiado grande para Telegram ({mb} MB).\n"
-                f"Descárgalo aquí:\n{url}{SENSITIVE_DOWNLOAD_WARNING}"
+        caption = format_result_caption(prefix, elapsed, model=caption_model)
+        try:
+            data = await self._downloader.download(
+                url, allowlist=meta.get("download_allowlist")
             )
+        except DownloadTooLargeError:
+            # R10: el video supera MAX_MEDIA_BYTES → Telegram no lo acepta. La
+            # URL firmada es el camino de recuperación (chat privado del dueño);
+            # no se descarga el cuerpo del archivo.
+            await self._offer_remote_video_link(
+                ui, url, status_id=status_id,
+                reason="El video es demasiado grande para Telegram.",
+            )
+            return None
+        except Exception as exc:  # noqa: BLE001 — errores de descarga user-safe
+            message = getattr(exc, "user_message", None) or _GENERIC_DOWNLOAD_ERROR
             if status_id is not None:
-                await ui.edit_text(status_id, text, reply_markup=None)
-            else:
-                await ui.send_text(text)
+                await ui.edit_text(status_id, str(message), reply_markup=None)
+            return None
+        if len(data) > MAX_MEDIA_BYTES:
+            # Invariante con AiohttpMediaDownloader (corta con la misma cota);
+            # cubre downloaders que no la apliquen. Misma URL de recuperación.
+            await self._offer_remote_video_link(
+                ui, url, status_id=status_id,
+                reason="El video es demasiado grande para Telegram.",
+            )
             return None
 
-        caption = format_result_caption(prefix, elapsed, model=caption_model)
         try:
             sent = await ui.send_video(
                 data, filename=_GENERATED_VIDEO_FILENAME, caption=caption
             )
         except TelegramBadRequest:
-            text = (
-                "No se pudo enviar el video por Telegram.\n"
-                f"Descárgalo aquí:\n{url}{SENSITIVE_DOWNLOAD_WARNING}"
+            # R10: la Bot API rechaza el envío (códec/duración) pese a estar bajo
+            # el tope → la URL firmada sigue siendo el camino de recuperación.
+            await self._offer_remote_video_link(
+                ui, url, status_id=status_id,
+                reason="No se pudo enviar el video por Telegram.",
             )
-            if status_id is not None:
-                await ui.edit_text(status_id, text, reply_markup=None)
-            else:
-                await ui.send_text(text)
             return None
         if delete_status and status_id is not None:
             await ui.delete(status_id)
@@ -363,6 +375,37 @@ class ResultSender:
         return SentItem(
             primary=sent_group[0], sent=tuple(sent_group), is_album=True, kind="album"
         )
+
+    async def _degrade_video_rejected(self, ui: ChatUI, status_id: int | None) -> None:
+        """Degrada un video LOCAL no enviable: edita status o manda texto user-safe.
+
+        Sin URL: un video local de ComfyUI no tiene link de recuperación (C9c).
+        """
+        if status_id is not None:
+            await ui.edit_text(status_id, _ERR_VIDEO_REJECTED, reply_markup=None)
+        else:
+            await ui.send_text(_ERR_VIDEO_REJECTED)
+
+    async def _offer_remote_video_link(
+        self,
+        ui: ChatUI,
+        url: str,
+        *,
+        reason: str,
+        status_id: int | None,
+    ) -> None:
+        """Degrada un video REMOTO no enviable ofreciendo la URL de recuperación.
+
+        Chat privado del dueño único (R10, paridad grok): la URL firmada es el
+        camino para descargar un video que Telegram no acepta (supera el tope o
+        la API lo rechaza). ``reason`` es el encabezado user-safe y se compone
+        con el enlace + el warning; nunca se loguea la URL.
+        """
+        text = f"{reason}\nDescárgalo aquí:\n{url}{SENSITIVE_DOWNLOAD_WARNING}"
+        if status_id is not None:
+            await ui.edit_text(status_id, text, reply_markup=None)
+        else:
+            await ui.send_text(text)
 
     @staticmethod
     def _read_local(path: str) -> bytes | None:

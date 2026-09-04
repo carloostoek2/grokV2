@@ -2,8 +2,9 @@
 
 Reimplementa las reglas de grok download (bot.py 5066-5110 y 626-661): https
 obligatorio, allowlist ``"xai"``/``"kie"`` con hosts exactos + sufijos, los
-redirects se re-chequean con la misma allowlist, tope de 50 MB y timeout 120 s.
-Nunca loguea la URL descargada (R8).
+redirects se re-chequean con la misma allowlist, tope de media único
+(``media.MAX_MEDIA_BYTES``, R10) y timeout 120 s. Nunca loguea la URL
+descargada (R8).
 
 ``MediaDownloader`` (Protocol) vive en ports.py; acá está el adaptador real con
 aiohttp. Los tests usan ``aioresponses`` (sin red).
@@ -27,7 +28,8 @@ KIE_DOWNLOAD_HOSTS = frozenset({
 _XAI_SUFFIXES = (".x.ai", ".xai.com")
 _KIE_SUFFIXES = (".aiquickdraw.com", ".redpandaai.co")
 
-_DOWNLOAD_MAX_BYTES = 50 * 1024 * 1024
+from grokbot.telegram.media import MAX_MEDIA_BYTES
+
 _DOWNLOAD_TIMEOUT_SEC = 120
 
 _NOT_ALLOWED_MSG = "No se pudo descargar el archivo (URL no permitida)."
@@ -40,6 +42,15 @@ class DownloadError(Exception):
     def __init__(self, user_message: str = _GENERIC_ERROR_MSG) -> None:
         super().__init__(user_message)
         self.user_message = user_message
+
+
+class DownloadTooLargeError(DownloadError):
+    """El contenido excede ``MAX_MEDIA_BYTES`` (no se puede enviar por Telegram).
+
+    Tipado aparte para que el sender distinga "demasiado grande" de otros
+    errores de descarga y pueda ofrecer la URL firmada de recuperación (R10) sin
+    haber descargado el cuerpo completo.
+    """
 
 
 def _is_allowed_xai_host(host: str) -> bool:
@@ -76,16 +87,22 @@ def _validate_url(url: str, allowlist: str | None) -> None:
 
 
 class AiohttpMediaDownloader:
-    """``MediaDownloader`` real con aiohttp (timeout 120s, tope 50MB)."""
+    """``MediaDownloader`` real con aiohttp (timeout 120s, tope MAX_MEDIA_BYTES)."""
 
     def __init__(
         self,
         *,
         timeout_seconds: int = _DOWNLOAD_TIMEOUT_SEC,
-        max_bytes: int = _DOWNLOAD_MAX_BYTES,
+        max_bytes: int = MAX_MEDIA_BYTES,
     ) -> None:
         self._timeout = aiohttp.ClientTimeout(total=timeout_seconds)
         self._max_bytes = max_bytes
+
+    def _too_large_error(self) -> DownloadTooLargeError:
+        mb = self._max_bytes // (1024 * 1024)
+        return DownloadTooLargeError(
+            f"El archivo supera el límite de {mb} MB y no se puede enviar por Telegram."
+        )
 
     async def download(self, url: str, *, allowlist: str | None = None) -> bytes:
         _validate_url(url, allowlist)
@@ -102,12 +119,12 @@ class AiohttpMediaDownloader:
                         raise DownloadError(_GENERIC_ERROR_MSG)
                     declared = resp.content_length
                     if declared is not None and declared > self._max_bytes:
-                        raise DownloadError(_GENERIC_ERROR_MSG)
+                        raise self._too_large_error()
                     chunks = bytearray()
                     async for chunk in resp.content.iter_chunked(64 * 1024):
                         chunks.extend(chunk)
                         if len(chunks) > self._max_bytes:
-                            raise DownloadError(_GENERIC_ERROR_MSG)
+                            raise self._too_large_error()
             if not chunks:
                 raise DownloadError(_GENERIC_ERROR_MSG)
             return bytes(chunks)
