@@ -150,15 +150,3 @@ class BatchRejected:
     """
 
     reason: str
-
-
-@dataclass(frozen=True)
-class JobsFull:
-    """El usuario ya alcanzó MAX_ACTIVE_JOBS_PER_USER (no arranca el batch).
-
-    Item 5 muestra el mensaje de "procesos en curso". Paridad: grok bot.py
-    2312-2315 (JOBS_FULL_MSG).
-    """
-
-    active: int
-    max_active: int

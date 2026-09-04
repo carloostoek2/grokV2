@@ -7,7 +7,7 @@ Verifica la traducción de un stream de eventos a UN status message por flujo:
 * ``present_video`` — ``ItemFailed`` con ``terminal=False`` finaliza igual (O3).
 * ``present_batch`` — golden variables (header ``0/N``, items, resumen), ítem
   fallido que no corta el batch, retries, ``BatchCancelled``, terminales
-  early (JobsFull/EmptyList/BatchRejected), y multipose (O4: álbum + resumen de
+  early (EmptyList/BatchRejected), y multipose (O4: álbum + resumen de
   poses desde ``combos``).
 
 Copy byte a byte contra los strings de grok; prompts/ids anonimizados (R8).
@@ -39,7 +39,6 @@ from grokbot.application.events import (
     ItemFailed,
     ItemResult,
     ItemStarted,
-    JobsFull,
     RetryScheduled,
 )
 from grokbot.application.job_manager import JobManager
@@ -47,7 +46,6 @@ from grokbot.application.refine_flow import RefineDecision, ResolveRefineUseCase
 from grokbot.domain.generation import GenerationRequest, MediaType
 from grokbot.domain.user_config import ComfyUIConfig, UserConfig
 from grokbot.telegram.chat_ui import ChatUI
-from grokbot.telegram.formatters import JOBS_FULL_MSG
 from grokbot.telegram.sender import ResultSender
 from grokbot.telegram.stream_presenter import (
     present_batch,
@@ -528,19 +526,6 @@ async def test_batch_refine_cancel_during_refine_suppresses_refined(
 # --------------------------------------------------------------------------- #
 # present_batch: terminales early (sin status todavía)
 # --------------------------------------------------------------------------- #
-@pytest.mark.asyncio
-async def test_batch_jobs_full_sends_message(gateway, downloader, refs_repo):
-    ui = _ui(gateway)
-    sender = _sender(gateway, downloader, refs_repo)
-    await present_batch(
-        ui, _stream(JobsFull(active=3, max_active=3)),
-        verb="Generando", count=2, model=MODEL, sender=sender,
-    )
-    texts = [c["text"] for c in gateway.calls_by_method("send_message")]
-    assert texts[-1] == JOBS_FULL_MSG
-    assert gateway.calls_by_method("edit_message_text") == []
-
-
 @pytest.mark.asyncio
 async def test_batch_empty_list_early_sends_message(gateway, downloader, refs_repo):
     ui = _ui(gateway)

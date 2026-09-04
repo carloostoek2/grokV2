@@ -1,9 +1,14 @@
-"""Job manager — tope de concurrencia + cancelación cooperativa por usuario (D6).
+"""Job manager — registro activo + cancelación cooperativa por usuario (D6).
 
 Reproduce la semántica de jobs de grok (bot.py 435-515) para la capa
 application: cada batch registra un job activo y consulta cancelación entre
 ítems vía :class:`asyncio.Event`. El ``Job`` (domain) es un descriptor inmutable;
 el estado vivo (activos por user, eventos de cancel, hook de refine) vive acá.
+
+R9: SIN tope de concurrencia (decisión de producto — bot privado de un solo
+dueño, sin límites de uso): ``start`` siempre registra el job. El registro
+activo se conserva para el botón Cancelar y para resolver confirmaciones de
+refine pendientes del job.
 
 El ``refine_hook`` opcional se invoca al cancelar y al finalizar con
 ``(user_id, job_id)``; en item 5/6 se wire con
@@ -20,11 +25,11 @@ import time
 import uuid
 from collections.abc import Callable
 
-from grokbot.domain.job import MAX_ACTIVE_JOBS_PER_USER, Job, JobStatus
+from grokbot.domain.job import Job, JobStatus
 
 
 class JobManager:
-    """Tope de jobs activos por usuario con cancelación cooperativa.
+    """Jobs activos por usuario con cancelación cooperativa (sin tope, R9).
 
     Métodos sync sin locks: asyncio single-thread da atomicidad por turno del
     loop. ``_active`` es ``{user_id: [Job, ...]}`` y ``_events`` mapea
@@ -34,29 +39,17 @@ class JobManager:
     def __init__(
         self,
         *,
-        max_active: int = MAX_ACTIVE_JOBS_PER_USER,
         refine_hook: Callable[[int, str | None], None] | None = None,
     ) -> None:
-        self._max_active = max_active
         self._refine_hook = refine_hook
         self._active: dict[int, list[Job]] = {}
         self._events: dict[str, asyncio.Event] = {}
 
-    @property
-    def max_active(self) -> int:
-        return self._max_active
-
     # -- lifecycle --------------------------------------------------------
 
-    def start(self, user_id: int, kind: str) -> Job | None:
-        """Registrar un job ``kind`` para el user.
-
-        Devuelve ``None`` cuando el user ya tiene ``max_active`` jobs en curso
-        (espejo grok 455-467: JOBS_FULL).
-        """
+    def start(self, user_id: int, kind: str) -> Job:
+        """Registrar un job ``kind`` para el user (siempre, sin tope; R9)."""
         jobs = self._active.setdefault(user_id, [])
-        if len(jobs) >= self._max_active:
-            return None
         job = Job(
             job_id=uuid.uuid4().hex[:8],
             user_id=user_id,
@@ -137,9 +130,6 @@ class JobManager:
 
     def active_jobs(self, user_id: int) -> tuple[Job, ...]:
         return tuple(self._active.get(user_id, ()))
-
-    def is_full(self, user_id: int) -> bool:
-        return self.active_count(user_id) >= self._max_active
 
     # -- helpers ----------------------------------------------------------
 

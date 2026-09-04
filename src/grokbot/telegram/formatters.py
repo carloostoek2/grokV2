@@ -111,10 +111,6 @@ SENSITIVE_DOWNLOAD_WARNING = (
     "\n\n⚠️ Enlace temporal con tu contenido generado; no lo compartas públicamente."
 )
 
-# Mensaje de jobs llenos (bot.py:439-441).
-JOBS_FULL_MSG = "Ya hay 3 procesos en curso. Espera a que termine uno o cancélalo."
-
-
 def escape(text: str) -> str:
     """Escape HTML (``html.escape``; espejo ``_escape_prompt`` de grok)."""
     return html.escape(text)

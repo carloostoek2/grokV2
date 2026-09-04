@@ -1,8 +1,9 @@
-"""Tests del JobManager (R4) — concurrencia + cancelación cooperativa + hook refine.
+"""Tests del JobManager (R4/R9) — registro activo + cancelación cooperativa.
 
-Cubre la API exacta de la sección QUÉ #7 del PLAN: start/None a tope,
-cancel por job_id / sin id, finish idempotente, hook filtrado por user/job,
-cancel_event para el teclado de item 5.
+Cubre la API de la sección QUÉ #7 del PLAN con la salvedad R9 (sin tope de
+concurrencia): ``start`` SIEMPRE registra el job; cancel por job_id / sin id,
+finish idempotente, hook filtrado por user/job, cancel_event para el teclado
+de item 5.
 """
 
 from __future__ import annotations
@@ -24,20 +25,19 @@ def test_start_returns_running_job_and_tracks_active():
     assert job.status is JobStatus.RUNNING
     assert jm.active_count(USER) == 1
     assert jm.active_jobs(USER) == (job,)
-    assert jm.is_full(USER) is False
 
 
-def test_start_none_at_max_and_does_not_affect_other_user():
+def test_start_unlimited_and_user_isolated():
+    """R9: sin tope — N jobs activos a la vez, aislados por user."""
     jm = JobManager()
-    for _ in range(3):
-        assert jm.start(USER, "variables") is not None
-    assert jm.start(USER, "variables") is None
-    assert jm.active_count(USER) == 3
-    assert jm.is_full(USER) is True
+    jobs = [jm.start(USER, "variables") for _ in range(5)]
+    assert all(j is not None for j in jobs)
+    assert jm.active_count(USER) == 5
     # Otro user con 0 activos no se ve afectado.
-    assert jm.start(OTHER_USER, "var") is not None
+    other = jm.start(OTHER_USER, "var")
+    assert other is not None
     assert jm.active_count(OTHER_USER) == 1
-    assert jm.is_full(OTHER_USER) is False
+    assert jm.active_count(USER) == 5
 
 
 def test_cancel_by_exact_job_id_sets_event_and_calls_hook():

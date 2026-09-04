@@ -23,7 +23,6 @@ from grokbot.application.events import (
     ItemFailed,
     ItemResult,
     ItemStarted,
-    JobsFull,
     RetryScheduled,
 )
 from grokbot.application.generate_image import GenerateImageUseCase
@@ -203,7 +202,7 @@ class RunVariableBatchUseCase:
         source_image: bytes | None = None,
         source_file_id: str | None = None,
         mode: str = "edit",
-    ) -> AsyncIterator[BatchStarted | ItemStarted | RetryScheduled | ItemResult | ItemFailed | BatchCancelled | BatchSummary | EmptyList | BatchRejected | JobsFull]:
+    ) -> AsyncIterator[BatchStarted | ItemStarted | RetryScheduled | ItemResult | ItemFailed | BatchCancelled | BatchSummary | EmptyList | BatchRejected]:
         cfg = self._sessions.get_config(user_id)
 
         # 1. Rechazo temprano de modelos que no generan imágenes.
@@ -237,14 +236,8 @@ class RunVariableBatchUseCase:
                 yield EmptyList(name=first_empty)
                 return
 
-        # 4. Registrar job (o JobsFull).
+        # 4. Registrar job activo (para Cancelar / refine). Sin tope (R9).
         job = self._job_manager.start(user_id, kind=strategy.style)
-        if job is None:
-            yield JobsFull(
-                active=self._job_manager.active_count(user_id),
-                max_active=self._job_manager.max_active,
-            )
-            return
 
         completed = 0
         failed = 0
@@ -365,7 +358,7 @@ class RunVariableBatchUseCase:
         source_image: bytes | None,
         source_file_id: str | None,
         mode: str,
-    ) -> AsyncIterator[BatchStarted | BatchCancelled | BatchSummary | ItemResult | ItemFailed | EmptyList | JobsFull]:
+    ) -> AsyncIterator[BatchStarted | BatchCancelled | BatchSummary | ItemResult | ItemFailed | EmptyList]:
         """Reproduce grok ``_run_multipose_batch`` (2145-2253) como eventos.
 
         Requiere foto de entrada y listas no vacías (paridad grok: precondiciones
@@ -388,12 +381,6 @@ class RunVariableBatchUseCase:
             return
 
         job = self._job_manager.start(user_id, "variables")
-        if job is None:
-            yield JobsFull(
-                active=self._job_manager.active_count(user_id),
-                max_active=self._job_manager.max_active,
-            )
-            return
 
         try:
             yield BatchStarted(style="multipose", total=MULTIPOSE_BATCH_SIZE, job_id=job.job_id)

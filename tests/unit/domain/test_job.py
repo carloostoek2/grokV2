@@ -6,11 +6,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from grokbot.domain.job import MAX_ACTIVE_JOBS_PER_USER, Job, JobStatus
-
-
-def test_max_active_jobs_per_user():
-    assert MAX_ACTIVE_JOBS_PER_USER == 3
+from grokbot.domain.job import Job, JobStatus
 
 
 def test_job_fields_default_frozen_and_equality():

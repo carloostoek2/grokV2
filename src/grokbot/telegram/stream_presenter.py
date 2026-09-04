@@ -42,13 +42,11 @@ from grokbot.application.events import (
     ItemFailed,
     ItemResult,
     ItemStarted,
-    JobsFull,
     RetryScheduled,
 )
 from grokbot.domain.generation import MediaType
 from grokbot.telegram.chat_ui import ChatUI
 from grokbot.telegram.formatters import (
-    JOBS_FULL_MSG,
     LIST_LABELS,
     format_failed_item_message,
     format_multipose_summary,
@@ -283,7 +281,7 @@ async def present_batch(
     el ``job_id``) y cada ``ItemStarted`` lo edita a ``i/N`` re-aplicando el
     teclado de cancelar. Los ítems se envían con ``delete_status=False``; un ítem
     fallido se notifica aparte y el batch continúa. El terminal (summary/cancel/
-    reject/jobs_full/empty_list) reemplaza o cierra el status.
+    reject/empty_list) reemplaza o cierra el status.
 
     ``job_manager`` (inyectado por los handlers) se usa SOLO para consultar el
     ``cancel_event`` del job del batch y pasarlo al refine (M1): un cancel durante
@@ -316,9 +314,6 @@ async def present_batch(
 
         # --- early terminal (no hay status todavía) ------------------------
         if status_id is None:
-            if isinstance(ev, JobsFull):
-                await ui.send_text(JOBS_FULL_MSG)
-                return
             if isinstance(ev, BatchRejected):
                 await ui.send_text(ev.reason)
                 return
@@ -447,13 +442,6 @@ async def present_batch(
                 await ui.edit_text(status_id, ev.reason, reply_markup=None)
             else:
                 await ui.send_text(ev.reason)
-            return
-
-        if isinstance(ev, JobsFull):
-            if status_id is not None:
-                await ui.edit_text(status_id, JOBS_FULL_MSG, reply_markup=None)
-            else:
-                await ui.send_text(JOBS_FULL_MSG)
             return
 
 

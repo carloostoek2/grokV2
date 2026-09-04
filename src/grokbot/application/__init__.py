@@ -18,7 +18,6 @@ from grokbot.application.events import (
     ItemFailed,
     ItemResult,
     ItemStarted,
-    JobsFull,
     RetryScheduled,
 )
 from grokbot.application.generate_image import GenerateImageUseCase
@@ -56,5 +55,4 @@ __all__ = [
     "BatchSummary",
     "EmptyList",
     "BatchRejected",
-    "JobsFull",
 ]

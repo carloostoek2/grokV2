@@ -26,7 +26,6 @@ from grokbot.domain.generation import KieTaskRef
 from grokbot.telegram.chat_ui import ChatUI
 from grokbot.telegram.deps import BotDeps
 from grokbot.telegram.formatters import (
-    JOBS_FULL_MSG,
     escape,
     model_display,
     validate_prompt,
@@ -307,10 +306,9 @@ async def handle_regenerate(callback: types.CallbackQuery, deps: BotDeps) -> Non
     await answer_callback(gateway, callback, "Regenerando...")
 
     ui = _chat_ui(deps, callback.message)
+    # R9: sin tope de procesos en curso (bot privado); el job se registra para
+    # Cancelar / refine.
     job = deps.job_manager.start(uid, "regen")
-    if job is None:
-        await answer_callback(gateway, callback, JOBS_FULL_MSG, show_alert=True)
-        return
     label = f"Regenerando imagen con {model['name']}..."
     status_id = (await ui.send_text(label, reply_markup=cancel_job_keyboard(job.job_id))).message_id
     try:
@@ -414,9 +412,6 @@ async def _process_single_photo_edit(
         source_image = None
 
     job = deps.job_manager.start(uid, "edit")
-    if job is None:
-        await ui.send_text(JOBS_FULL_MSG)
-        return
     label = f"Editando imagen con {model['name']}..."
     try:
         await _run_single_image(

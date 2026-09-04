@@ -1,9 +1,10 @@
 """Tests de RunVariableBatchUseCase — /variables (random) y /var (fixed) (R1).
 
 Escenarios del PLAN §Task 4: orden normativo, skip-on-fail, shuffle+blacklist
-solo random y solo exhausted, JobsFull, cancel entre items, lista vacía,
-BatchRejected, multipose (single round-trip / sin foto / cancel) y qwen_aio.
-Sin red ni Telegram; fakes del conftest local. IDs/prompts anonimizados (R8).
+solo random y solo exhausted, cancel entre items, lista vacía, BatchRejected,
+multipose (single round-trip / sin foto / cancel) y qwen_aio. R9: sin tope de
+concurrencia — el batch siempre arranca su job. Sin red ni Telegram; fakes del
+conftest local. IDs/prompts anonimizados (R8).
 """
 
 from __future__ import annotations
@@ -21,7 +22,6 @@ from grokbot.application.events import (
     ItemFailed,
     ItemResult,
     ItemStarted,
-    JobsFull,
     RetryScheduled,
 )
 from grokbot.application.generate_image import GenerateImageUseCase
@@ -169,21 +169,22 @@ async def test_fixed_exhausted_no_shuffle_no_blacklist(sessions, variables_repo,
     assert variables_repo.blacklist_add_calls == []
 
 
-# --- JobsFull / cancel / EmptyList / BatchRejected ----------------------------
+# --- cancel / EmptyList / BatchRejected ----------------------------------------
 
-async def test_jobs_full_when_three_active(sessions, variables_repo, fast_sleep):
-    jm = JobManager()  # max_active = 3
+async def test_batch_starts_with_active_jobs_of_same_user(sessions, variables_repo, fast_sleep):
+    """R9: sin tope — un batch arranca aunque el user ya tenga jobs en curso."""
+    jm = JobManager()
     for _ in range(3):
         assert jm.start(USER_ID, "x") is not None
     reg = make_registry(kie=FakeImageProvider(name="kie"))
     uc, _ = _uc(sessions, reg, variables_repo, jm=jm)
 
-    events = await _collect(uc, user_id=USER_ID, count=3, strategy=RandomComboStrategy(variables_repo))
+    events = await _collect(uc, user_id=USER_ID, count=1, strategy=RandomComboStrategy(variables_repo))
 
-    assert len(events) == 1
-    ev = events[0]
-    assert isinstance(ev, JobsFull)
-    assert ev.active == 3 and ev.max_active == 3
+    started = [e for e in events if isinstance(e, BatchStarted)]
+    assert len(started) == 1, "el batch arranca aunque haya 3 jobs activos"
+    assert any(isinstance(e, BatchSummary) for e in events)
+    assert jm.active_count(USER_ID) == 3, "los jobs previos siguen activos"
 
 
 class _GatedKieProvider(FakeImageProvider):

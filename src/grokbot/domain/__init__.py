@@ -26,7 +26,6 @@ from grokbot.domain.generation import (
     UrlRef,
 )
 from grokbot.domain.job import (
-    MAX_ACTIVE_JOBS_PER_USER,
     Job,
     JobStatus,
 )
@@ -72,7 +71,6 @@ __all__ = [
     "KieTaskRef",
     "Job",
     "JobStatus",
-    "MAX_ACTIVE_JOBS_PER_USER",
     "UserConfig",
     "VideoConfig",
     "ComfyUIConfig",

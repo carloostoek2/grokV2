@@ -1,8 +1,8 @@
 """Tests de /variables y /var (item 5, handlers/variables_cmd.py).
 
 Parsing de count/prompt, estrategias (RandomComboStrategy vs FixedPromptStrategy
-con ``PromptTemplate.render_inline``), JobsFull y EmptyList. 0 red / 0
-``unittest.mock``.
+con ``PromptTemplate.render_inline``) y EmptyList. R9: sin tope de concurrencia.
+0 red / 0 ``unittest.mock``.
 """
 
 from __future__ import annotations
@@ -13,7 +13,6 @@ from conftest import (
     CHAT_ID,
     USER_ID,
     FakeVariablesRepo,
-    JobManager,
     make_deps,
     make_dispatcher,
     make_photo_message,
@@ -21,7 +20,6 @@ from conftest import (
     text_message,
 )
 from grokbot.domain.variables import VARIABLES_MAX
-from grokbot.telegram.formatters import JOBS_FULL_MSG
 from grokbot.telegram.handlers._common import (
     SOURCE_MEDIA_UNAVAILABLE_MSG,
     parse_var_count_and_text,
@@ -141,11 +139,22 @@ async def test_var_short_prompt_validation():
     assert any("El prompt es muy corto." in t for t in _texts(deps))
 
 
-async def test_var_jobs_full():
-    deps = make_deps(job_manager=JobManager(max_active=0))
+async def test_var_batch_starts_with_active_jobs_of_same_user():
+    """R9: sin tope de concurrencia — /var arranca aunque ya haya jobs en curso."""
+    deps = make_deps()
     _use_seedream(deps)
+    prev = {
+        deps.job_manager.start(_UID, "edit").job_id,
+        deps.job_manager.start(_UID, "regen").job_id,
+    }
     deps = await _msg(deps, text_message("/var de pie"))
-    assert JOBS_FULL_MSG in _texts(deps)
+    texts = _texts(deps)
+    assert any(t.startswith("🎲 <b>Var</b>: generando 0/1 imágenes con Seedream 5.0...") for t in texts)
+    assert deps.gateway.calls_by_method("send_photo")
+    # El batch no canceló ni pisó los jobs previos del user (siguen activos).
+    assert prev <= {j.job_id for j in deps.job_manager.active_jobs(_UID)}
+    # El job del batch termina solo vía el finally del use case (finish en
+    # generator close); lo verifica la suite a nivel use case, no aquí.
 
 
 async def test_variables_empty_list_message():
