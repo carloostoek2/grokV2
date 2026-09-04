@@ -2,8 +2,9 @@
 
 > Fuente única de estado del producto `grokbot` (@grokV2). Arquitectura objetivo:
 > `docs/SPEC_REFACTOR.md`. Fecha de consolidación: 2026-09-04.
-> HEAD verificado: `5e9e88b` — suite completa **519 passed** · baseline `grok/**` intacto.
-> Wave de hardening R8/R9/R10 cerrada (detalle en §3).
+> HEAD verificado: `742b566` — suite completa **521 passed** · baseline `grok/**` intacto.
+> Wave de hardening R8/R9/R10 cerrada + smoke live arrancado (bug de panel `/config`
+> corregido, detalle en §3/§5).
 
 ---
 
@@ -37,7 +38,7 @@ READ-ONLY; su baseline pre-existente se mantuvo intacto en todo momento.
 - **Perímetro (R9, bot single-owner)**: SOLO chat privado (gate global en message y callback);
   sin límites de uso por decisión (sin tope de procesos activos ni cuota horaria); con la
   allowlist vacía el boot avisa y el bot queda abierto a quien te escriba en privado.
-- **Calidad**: **519 tests passed**, política **0-red / 0-mock** — el bot se prueba 100%
+- **Calidad**: **521 tests passed**, política **0-red / 0-mock** — el bot se prueba 100%
   offline contra `FakeTelegramGateway` grabador; el review de cierre del pool (3 reviewers:
   general + security + plan) fue íntegramente offline y terminó en **0 issues (Round 3)**.
 - **Errores user-safe**: los mensajes de boot/error jamás exponen tokens/IDs/payloads
@@ -82,11 +83,21 @@ resueltos. Ver commits y cierre en `.grok/agent-memory/residuals/grokv2-rearch.m
 | **R10** | Tope 50MB duplicado; URL firmada | hardening / decisión | **Resuelto** — `096dd0d` (tope único `MAX_MEDIA_BYTES`); la URL se muestra: camino de recuperación por decisión del owner. |
 | **R4** | 9 flujos degradados D8 (§2) | follow-up de producto (wave 2) | cablear use cases/datos por flujo. Degradaciones user-safe activas. |
 | **Deploy** | Fijar `ALLOWED_TELEGRAM_IDS=<tu ID numérico>` | decisión de deploy (owner) | Hoy: SOLO chat privado, pero con allowlist vacía CUALQUIER user en DM puede usar el bot (costo real). El boot avisa. |
-| **Smoke live** | Probar con infraestructura real | follow-up (owner) | Lista de credenciales y pasos en §4.3. |
+| **Smoke live** | Probar con infraestructura real | follow-up (owner) | **Arrancado 2026-09-04** con credenciales de grok v1; hallazgo corregido (bug panel `/config`, nota abajo); falta re-verificar los pasos de §4.3 en vivo. |
 | R1/R2 | Baseline sucio de `grok/**` + DeprecationWarnings pytest-asyncio (Py3.14) | out-of-scope | cosmético / no tocar |
 
 Registro detallado con origen y archivos: `.grok/agent-memory/residuals/grokv2-rearch.md`
 (proceso, no commiteado en el detalle por convención de artefactos de pool).
+
+**Smoke live — hallazgo corregido (2026-09-04):** el panel de `/config` se re-renderizaba
+con la config del PROPIO BOT en vez de la del dueño: en Telegram real el mensaje del panel
+(bot-sent) lleva `from_user` = el bot, y los showers leían `get_config(target.from_user.id)`
+→ la pantalla siempre mostraba el default (Grok Imagine / Kie / Alta calidad) sin importar el
+tap; seedream/faceswap "volvían" a Grok Imagine y video/ComfyUI parecían no cambiar (la
+generación sí usaba el modelo correcto). Los **519 tests offline NO lo veían**: los fakes de
+telegram construyen el mensaje del panel con `from_user` = el dueño. Fix `742b566` (`uid`
+explícito en los showers) + 2 regresiones que simulan el mensaje del bot (from_user = bot).
+Suite **521 passed**. Registro completo en el residual registry.
 
 ---
 
@@ -175,6 +186,10 @@ debe correr sin las credenciales de (a).
 - Progresión de suite por gate: 48→204→300→302→304→482→487→493→502→503→511→**513**.
 - Wave de hardening R8/R9/R10 (2026-09-04, decisión del owner): 513→514 (R10 `096dd0d`)→521
   (R8 `c25c1fe`)→**519** (R9 `2bbfdd3`+`5900809`+`5e9e88b`, elimina los tests de los límites).
+- Smoke live (2026-09-04, infra real con credenciales de grok v1): 519→**521** — hallazgo:
+  el panel de `/config` se re-renderizaba con la config del BOT (mensaje del bot con
+  `from_user` = el bot) en vez de la del dueño; fix `742b566` + 2 regresiones que simulan el
+  mensaje del bot. Registro: `.grok/agent-memory/residuals/grokv2-rearch.md`.
 - Artefactos de proceso (sin commit, untracked por convención del pool):
   `.planning/quick/20260903-grokv2-rearch/CLOSURE.md` (resultado + learnings),
   `.grok/agent-memory/review/grokv2-rearch-poolclose.md` (review completo),

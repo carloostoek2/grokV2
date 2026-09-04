@@ -191,4 +191,33 @@ suite **519 passed**.
 | R9 — Bot abierto + sin rate limit + sin TTL (C8) | **Cerrado por decisión** — `2bbfdd3` (sin tope de concurrencia), `5900809` (sin cuota horaria), `5e9e88b` (gate SOLO chat privado global + aviso de allowlist abierta). Sin rate limit/TTL queda POR DECISIÓN (single-owner). **Residual:** fijar `ALLOWED_TELEGRAM_IDS` con el ID del owner (config de deploy; el boot lo avisa). |
 | R10 — URL firmada cruda + rama >50MB (C9a/b) | **Resuelto** — `096dd0d` (tope único `MAX_MEDIA_BYTES`). URL conservada por decisión de producto. |
 | R4 — 9 flujos D8 degradados | **Diferido (wave 2)** — degradaciones user-safe activas; flujos completos requieren use cases/datos. |
-| Smoke live con infraestructura real | **Pendiente (owner)** — ver PRODUCT_STATUS §4.4: lista de credenciales y pasos interactivos. |
+| Smoke live con infraestructura real | **En curso (owner)** — ver PRODUCT_STATUS §4.3 (credenciales/pasos) y §4.4 (harness). Arrancado 2026-09-04 con credenciales de grok v1; hallazgo corregido (panel /config, abajo). |
+
+---
+
+## Actualización post-cierre — smoke live (2026-09-04, infraestructura real)
+
+El owner arrancó el smoke live con las credenciales REALES de grok v1 (`.env` copiado a
+grokV2, misma máquina; servicio v1 `grok-bot.service` estaba detenido → sin conflicto de
+polling). El smoke destapó un bug que **519 tests offline no podían ver**: los fakes de
+telegram fabrican el mensaje del panel con `from_user` = el dueño, pero en Telegram real un
+mensaje enviado por el bot lleva `from_user` = el BOT.
+
+- **Hallazgo:** todo el panel de `/config` (modelo/proveedor/variante/video/ComfyUI) se
+  re-renderizaba leyendo `deps.sessions.get_config(target.from_user.id)` donde `target` es el
+  mensaje del bot → la pantalla siempre mostraba la config DEFAULT del bot (Grok Imagine /
+  Kie.ai / Alta calidad) sin importar los taps: "Seedream 5.0" volvía a Grok Imagine, Face
+  Swap igual, video/ComfyUI "se quedaban fijados", y los taps parecían no-op. La generación
+  SÍ usaba el modelo elegido (los handlers de generation leen `message.from_user` del
+  mensaje del dueño, correcto); solo el panel estaba mal. Efecto colateral: `sessions.json`
+  acumulaba un registro fantasma keyed por el id del propio bot (7296782314), creado por esas
+  lecturas con `get_config(bot_id)`.
+- **Fix:** `742b566` — los showers de `/config` reciben `uid` explícito (el del user que
+  configura: `callback.from_user.id` / `message.from_user.id`) y leen `get_config(uid)`.
+  Regresión añadida (`test_config_cmd.py`): el mensaje del panel se construye con
+  `from_user` = el bot y se verifica que el cambio se guarda y refleja en la config del
+  dueño. Se purgó el registro fantasma del bot de `sessions.json` (backup local). Suite
+  **521 passed**.
+- **Falta del smoke live (pasos en PRODUCT_STATUS §4.3):** validar en vivo proveedor xAI,
+  Replicate/Seedream, edición por foto, video y enlace de recuperación (R10), refine ComfyUI
+  y `/variables N` con el panel ya corregido. R4 (9 flujos D8) sigue diferido.
