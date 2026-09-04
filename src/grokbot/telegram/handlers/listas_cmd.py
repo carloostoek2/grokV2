@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import html
 import json
+import re
 from functools import partial
 
 from aiogram import Dispatcher, F, types
@@ -68,8 +69,6 @@ def _slugify_package_name(name: str) -> str:
     Se mantiene EN la capa telegram para no tocar repositories (no-touch del
     pool); save_package re-slugifica internamente con la misma regla.
     """
-    import re
-
     return re.sub(r"\W+", "_", name.strip().lower()).strip("_")
 
 
