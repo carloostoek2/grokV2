@@ -79,6 +79,12 @@ _LONG_PROMPT_REMINDER = (
     "Tienes una edición pendiente. Envíame el prompt como <b>mensaje de texto</b> "
     "(no hace falta responder a ningún mensaje)."
 )
+# Contención user-safe del drain de álbum (parity grok 1957-1962): una excepción
+# inesperada (p. ej. TelegramBadRequest) edita el status con un error genérico,
+# sin exponer el detalle (R6). El job se cierra en el ``finally``.
+_ALBUM_UNEXPECTED_ERROR = (
+    "Ocurrió un error inesperado procesando las imágenes. Inténtalo de nuevo."
+)
 
 
 def _chat_ui(deps: BotDeps, message: types.Message) -> ChatUI:
@@ -247,9 +253,13 @@ async def handle_album(message: types.Message, deps: BotDeps) -> None:
 
 
 def _album_prompt(messages: list) -> str | None:
-    """Prompt del álbum: primer caption no vacío (sorted por message_id)."""
+    """Prompt del álbum: primer caption no vacío tras strip (sorted por message_id).
+
+    Un caption de SOLO espacios no es prompt (grok ``caption.strip()``): cae al
+    hint de edición, no a "prompt muy corto".
+    """
     for m in sorted(messages, key=lambda x: x.message_id):
-        if m.caption:
+        if m.caption and m.caption.strip():
             return m.caption
     return None
 
@@ -370,6 +380,8 @@ async def _process_album_edit(deps: BotDeps, anchor_message, prompt: str, file_i
                     completed += 1
             # El stream single termina tras su ItemResult/ItemFailed.
         await ui.edit_text(status_id, f"Completadas {n}/{n} imágenes.", reply_markup=None)
+    except Exception:  # noqa: BLE001 — contención del task (parity grok 1957-1962)
+        await ui.edit_text(status_id, _ALBUM_UNEXPECTED_ERROR, reply_markup=None)
     finally:
         deps.job_manager.finish(uid, job.job_id)
 
