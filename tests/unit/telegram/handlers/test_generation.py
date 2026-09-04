@@ -10,11 +10,13 @@ from __future__ import annotations
 import asyncio
 
 from aiogram import Bot
+from aiogram.exceptions import TelegramBadRequest
 
 from conftest import (
     CHAT_ID,
     USER_ID,
     FakeImageProvider,
+    FakeTelegramGateway,
     callback_query,
     callback_update,
     flat_callback_data,
@@ -555,3 +557,94 @@ async def test_cancel_suppresses_media():
     )
     assert not deps.gateway.calls_by_method("send_photo"), "item cancelado no se envía"
     deps.job_manager.finish(_UID, job.job_id)
+
+
+# --------------------------------------------------------------------------- #
+# Fix round: contención del drain + gaps de test-guardian
+# --------------------------------------------------------------------------- #
+class _AlbumSendFailsGateway(FakeTelegramGateway):
+    """Gateway que falla al enviar la foto del ítem (TelegramBadRequest)."""
+
+    async def send_photo(self, chat_id, photo, *, filename="generated.png", caption=None,
+                         parse_mode="HTML", reply_markup=None, reply_to_message_id=None):
+        self._record(
+            "send_photo", chat_id=chat_id, photo=photo, filename=filename, caption=caption,
+            parse_mode=parse_mode, reply_markup=reply_markup,
+            reply_to_message_id=reply_to_message_id,
+        )
+        raise TelegramBadRequest("chat not found")
+
+
+async def _feed_album_long_caption(deps, *, prefix: str = "FAKE:albumlong", group: str = "album-long"):
+    """Álbum de 3 fotos donde la primera trae caption > 1020 (→ long-prompt)."""
+    dp, deps = make_dispatcher(deps)
+    for i in (301, 302, 303):
+        cap = "x" * 1100 if i == 301 else None
+        msg = make_photo_message(
+            caption=cap, message_id=i, file_id=f"{prefix}{i}", media_group_id=group
+        )
+        await dp.feed_update(_BOT, message_update(msg))
+    return deps
+
+
+async def test_album_whitespace_caption_shows_hint():
+    """Fix round: caption de solo espacios NO es prompt → hint de edición."""
+    deps = make_deps()
+    deps.album.delay = 0.05
+    dp, deps = make_dispatcher(deps)
+    for i in (401, 402, 403):
+        cap = "   " if i == 401 else None
+        msg = make_photo_message(
+            caption=cap, message_id=i, file_id=f"FAKE:alb_ws{i}", media_group_id="album-ws"
+        )
+        await dp.feed_update(_BOT, message_update(msg))
+    await asyncio.sleep(0.3)
+    last = deps.gateway.calls_by_method("send_message")[-1]
+    assert last["text"].startswith("Para editar una imagen, enviala con un")
+    assert deps.gateway.calls_by_method("send_photo") == []
+    assert deps.job_manager.active_jobs(_UID) == ()
+
+
+async def test_album_unexpected_send_error_degrades_status():
+    """Fix round: excepción inesperada en el drain edita el status user-safe."""
+    gateway = _AlbumSendFailsGateway()
+    deps = make_deps(gateway=gateway)
+    deps.album.delay = 0.05
+    deps = await _feed_album(deps, 3, file_prefix="FAKE:alb_err", caption_on=1)
+    await _wait_until(lambda: any(
+        c["text"] == "Ocurrió un error inesperado procesando las imágenes. Inténtalo de nuevo."
+        for c in deps.gateway.calls_by_method("edit_message_text")
+    ))
+    assert deps.job_manager.active_jobs(_UID) == (), "el job se cierra en finally"
+    assert len(deps.gateway.calls_by_method("send_photo")) == 1, "el primer ítem intentó enviar"
+
+
+async def test_album_long_caption_text_completes_multi_edit():
+    """Fix round (GAP-1): texto pendiente completa la edición del álbum (multi-foto)."""
+    deps = make_deps()
+    deps.album.delay = 0.05
+    deps = await _feed_album_long_caption(deps, prefix="FAKE:alb_lp_multi")
+    await asyncio.sleep(0.3)
+    assert deps.long_prompt.is_awaiting(_UID) is True
+    deps = await _msg(deps, text_message("un prompt que edita el album", message_id=500))
+    assert deps.gateway.calls_by_method("send_photo"), "edita las 3 fotos"
+    edits = [c["text"] for c in deps.gateway.calls_by_method("edit_message_text")]
+    assert edits[-1] == "Completadas 3/3 imágenes."
+    assert deps.long_prompt.is_awaiting(_UID) is False, "consumo único (A3)"
+    assert deps.job_manager.active_jobs(_UID) == ()
+
+
+async def test_long_caption_video_defers_to_text_then_sends_video():
+    """Fix round (GAP-2): long-prompt con modelo video → texto completa i2v."""
+    deps = make_deps()
+    deps.update_config.set_model(_UID, "grok_video")
+    deps = await _msg(
+        deps, make_photo_message(caption="x" * 1100, file_id="FAKE:video_src", message_id=5)
+    )
+    last = deps.gateway.calls_by_method("send_message")[-1]
+    assert "para animar la imagen" in last["text"]
+    assert deps.long_prompt.is_awaiting(_UID) is True
+    assert deps.gateway.calls_by_method("send_video") == [], "todavía no genera"
+    deps = await _msg(deps, text_message("mueve la camara lentamente", message_id=6))
+    assert deps.gateway.calls_by_method("send_video"), "el texto completa la i2v"
+    assert deps.long_prompt.is_awaiting(_UID) is False
