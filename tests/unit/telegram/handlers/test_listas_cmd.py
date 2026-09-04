@@ -22,6 +22,7 @@ from conftest import (
     message_update,
     text_message,
 )
+from grokbot.telegram.fsm_states import VarStates
 
 _UID = USER_ID
 _CHAT = CHAT_ID
@@ -323,11 +324,123 @@ async def test_package_delete_inactive_succeeds():
     assert "segundo" not in deps.variables.list_packages()
 
 
-async def test_package_new_is_d8_degraded():
-    dp, deps = await _open_listas(make_deps(variables=_packed_variables()))
+# --------------------------------------------------------------------------- #
+# Crear paquete pegando JSON (FSM pack_name → pack_json)
+# --------------------------------------------------------------------------- #
+def _state_key():
+    from aiogram.fsm.storage.base import StorageKey
+
+    return StorageKey(bot_id=_BOT.id, chat_id=_CHAT, user_id=_UID)
+
+
+async def _fsm_state(dp) -> str | None:
+    return await dp.storage.get_state(_state_key())
+
+
+async def _enter_pack_new(deps=None):
+    """/listas → paquetes → ➕ Crear paquete (queda en state pack_name)."""
+    deps = deps if deps is not None else make_deps(variables=_packed_variables())
+    dp, deps = await _open_listas(deps)
     mid = _panel_id(deps)
     await _cb(dp, "var:packs", mid)
     await _cb(dp, "var:pack:new", mid)
-    ans = _last_answer(deps)
-    assert "no está disponible en esta versión" in ans["text"]
-    assert ans["show_alert"] is True
+    return dp, deps
+
+
+async def _submit_name(dp, name: str, *, message_id: int = 40) -> None:
+    await dp.feed_update(_BOT, message_update(text_message(name, message_id=message_id)))
+
+
+async def test_pack_new_edits_panel_to_name_prompt():
+    dp, deps = await _enter_pack_new()
+    edit = _last_edit_text(deps)
+    assert edit["text"] == (
+        "➕ <b>Crear paquete</b>\n\nEnvía el <b>nombre</b> del paquete (ej. <i>2b_outfits</i>):"
+    )
+    data = flat_callback_data(edit["reply_markup"])
+    assert data == ["var:cancel"]
+    assert await _fsm_state(dp) == VarStates.pack_name.state
+
+
+async def test_pack_name_invalid_stays_in_pack_name():
+    dp, deps = await _enter_pack_new()
+    await _submit_name(dp, "!!!")
+    texts = [c["text"] for c in deps.gateway.calls_by_method("send_message")]
+    assert texts[-1] == "El nombre no es válido. Usa letras, números o espacios."
+    assert await _fsm_state(dp) == VarStates.pack_name.state
+    # Un segundo texto válido (mismo estado) avanza a pack_json.
+    await _submit_name(dp, "2b_outfits", message_id=41)
+    texts = [c["text"] for c in deps.gateway.calls_by_method("send_message")]
+    assert texts[-1].startswith("Ahora envía el <b>JSON</b> del paquete:")
+    assert await _fsm_state(dp) == VarStates.pack_json.state
+
+
+async def test_pack_json_valid_lists_creates_and_activates():
+    deps = make_deps(variables=_packed_variables())
+    dp, deps = await _enter_pack_new(deps)
+    await _submit_name(dp, "2b outfits")
+    payload = (
+        '{ "lists": { "poses": ["de pie", "saltando"], "actions": ["celebrar"] }, '
+        '"template": "{pose} en la {action}" }'
+    )
+    await dp.feed_update(_BOT, message_update(text_message(payload, message_id=50)))
+    assert deps.variables.active_package_name() == "2b_outfits"
+    assert "2b_outfits" in deps.variables.list_packages()
+    # El payload activo reemplazó las listas activas y refrescó el menú + ✅.
+    assert deps.variables.get_list("poses") == ["de pie", "saltando"]
+    sends = deps.gateway.calls_by_method("send_message")
+    assert sends[-1]["text"] == "✅ Paquete <b>2b_outfits</b> creado y activado."
+    assert sends[-2]["text"].startswith("<b>🎛 Listas de variables</b>")
+    assert await _fsm_state(dp) == VarStates.menu.state
+
+
+async def test_pack_json_valid_fields_creates():
+    deps = make_deps(variables=_packed_variables())
+    dp, deps = await _enter_pack_new(deps)
+    await _submit_name(dp, "Mi Paquete")
+    payload = (
+        '{ "fields": { "poses": ["de pie"], "actions": ["sonriendo"] }, '
+        '"template": "{pose} {action}" }'
+    )
+    await dp.feed_update(_BOT, message_update(text_message(payload, message_id=51)))
+    assert deps.variables.active_package_name() == "mi_paquete"
+    assert "mi_paquete" in deps.variables.list_packages()
+    sends = deps.gateway.calls_by_method("send_message")
+    assert sends[-1]["text"] == "✅ Paquete <b>mi_paquete</b> creado y activado."
+
+
+async def test_pack_json_invalid_json_stays():
+    deps = make_deps(variables=_packed_variables())
+    dp, deps = await _enter_pack_new(deps)
+    await _submit_name(dp, "2b_outfits")
+    await dp.feed_update(_BOT, message_update(text_message("{no es json", message_id=60)))
+    texts = [c["text"] for c in deps.gateway.calls_by_method("send_message")]
+    assert texts[-1] == "JSON inválido. Revisa el formato e inténtalo de nuevo."
+    assert await _fsm_state(dp) == VarStates.pack_json.state
+    # Un JSON válido posterior (mismo estado) completa la creación.
+    ok_json = '{"lists": {"poses": ["de pie"]}, "template": "{pose}"}'
+    await dp.feed_update(_BOT, message_update(text_message(ok_json, message_id=61)))
+    assert deps.variables.active_package_name() == "2b_outfits"
+
+
+async def test_pack_cancel_from_name_returns_menu():
+    dp, deps = await _enter_pack_new()
+    mid = _panel_id(deps)
+    await _cb(dp, "var:cancel", mid)
+    edit = _last_edit_text(deps)
+    assert edit["text"].startswith("<b>🎛 Listas de variables</b>")
+    assert await _fsm_state(dp) == VarStates.menu.state
+
+
+async def test_pack_cancel_from_json_returns_menu():
+    dp, deps = await _enter_pack_new()
+    await _submit_name(dp, "2b_outfits")
+    # El prompt JSON es el último mensaje enviado y lleva el botón var:cancel.
+    json_prompt = deps.gateway.calls_by_method("send_message")[-1]
+    json_prompt_id = json_prompt["sent"].message_id
+    data = flat_callback_data(json_prompt["reply_markup"])
+    assert data == ["var:cancel"]
+    await _cb(dp, "var:cancel", json_prompt_id)
+    edit = _last_edit_text(deps)
+    assert edit["text"].startswith("<b>🎛 Listas de variables</b>")
+    assert await _fsm_state(dp) == VarStates.menu.state

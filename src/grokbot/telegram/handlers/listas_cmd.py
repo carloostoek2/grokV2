@@ -11,15 +11,18 @@ Autorización del panel (parity variables_flow 145-156): lista explícita
 ``variables_admin_ids`` → si no, allowlist ``allowed_telegram_ids`` → si no,
 cualquier usuario es admin.
 
-DEGRADACIÓN D8 por layering (SPEC §5.2: handlers sin parseo de JSON): el botón
-"➕ Crear paquete" (en grok pega el JSON del paquete) responde un mensaje
-disponible-en-esta-versión en vez de leer ``json.loads``. El resto del flujo de
-paquetes (ver/activar/eliminar) sí opera sobre payloads ya persistidos.
+Creación de paquetes pegando JSON (parity variables_flow 822-910): FSM de 2
+pasos (``pack_name`` → ``pack_json``) que valida el nombre, pide el JSON y
+persiste+activa con el repo (``save_package``/``activate_package``). El slug se
+valida ANTES de pedir el JSON con un helper local espejo del repo (A1), así el
+nombre mostrado y el guardado coinciden. El resto del flujo de paquetes
+(ver/activar/eliminar) opera sobre payloads ya persistidos.
 """
 
 from __future__ import annotations
 
 import html
+import json
 from functools import partial
 
 from aiogram import Dispatcher, F, types
@@ -51,17 +54,23 @@ LIST_DISPLAY_MAX = 30
 # Ítems renderizados en el picker (límite de 100 botones inline, con back).
 PICKER_MAX_ITEMS = 90
 
-_PACK_NEW_D8 = (
-    "La creación de paquetes pegando JSON no está disponible en esta versión. "
-    "Edita las listas activas desde el menú de /listas."
-)
-
 
 # --------------------------------------------------------------------------- #
 # Helpers de texto (puros)
 # --------------------------------------------------------------------------- #
 def _esc(text: str) -> str:
     return html.escape(text, quote=False)
+
+
+def _slugify_package_name(name: str) -> str:
+    """Slugify para el FSM de paquetes (espejo de json_variables_repo._slugify).
+
+    Se mantiene EN la capa telegram para no tocar repositories (no-touch del
+    pool); save_package re-slugifica internamente con la misma regla.
+    """
+    import re
+
+    return re.sub(r"\W+", "_", name.strip().lower()).strip("_")
 
 
 def _truncate(text: str, limit: int) -> str:
@@ -367,16 +376,20 @@ async def handle_var_close(callback: types.CallbackQuery, state: FSMContext, dep
 
 
 async def handle_var_cancel(callback: types.CallbackQuery, state: FSMContext, deps: BotDeps) -> None:
-    """Cancela una entrada add/edit/template en curso y vuelve a la pantalla previa."""
+    """Cancela una entrada add/edit/template/paquete en curso y vuelve al menú."""
     if await _reject_non_private_callback(callback, deps):
         return
     if await _reject_non_admin_callback(callback, deps):
         return
     current = await state.get_state()
+    # pack_name/pack_json incluidos (paridad variables_flow 374-380): el cancel
+    # desde la creación de paquete vuelve al menú (sin vars_list cae a _show_menu).
     allowed = {
         VarStates.add_item.state,
         VarStates.edit_text.state,
         VarStates.template.state,
+        VarStates.pack_name.state,
+        VarStates.pack_json.state,
     }
     if current not in allowed:
         await answer_callback(deps.gateway, callback)
@@ -662,7 +675,7 @@ async def handle_template_text(message: types.Message, state: FSMContext, deps: 
 
 
 # --------------------------------------------------------------------------- #
-# Paquetes (ver / activar / eliminar / D8 crear)
+# Paquetes (ver / activar / eliminar / crear con JSON)
 # --------------------------------------------------------------------------- #
 async def handle_var_packs(callback: types.CallbackQuery, state: FSMContext, deps: BotDeps) -> None:
     if await _reject_non_private_callback(callback, deps):
@@ -736,14 +749,102 @@ async def handle_pack_del(callback: types.CallbackQuery, state: FSMContext, deps
 
 
 async def handle_pack_new(callback: types.CallbackQuery, state: FSMContext, deps: BotDeps) -> None:
-    """Degradación D8: crear paquete pegando JSON no se implementa (layering)."""
+    """Arranca el FSM de creación de paquete (parity variables_flow 822-840)."""
     if await _reject_non_private_callback(callback, deps):
         return
     if await _reject_non_admin_callback(callback, deps):
         return
     if await _reject_stale_callback(callback, state, deps, allowed_states=(VarStates.menu,)):
         return
-    await answer_callback(deps.gateway, callback, _PACK_NEW_D8, show_alert=True)
+    ui = ChatUI.for_message(deps.gateway, callback.message)
+    await ui.edit_text(
+        callback.message.message_id,
+        "➕ <b>Crear paquete</b>\n\nEnvía el <b>nombre</b> del paquete (ej. <i>2b_outfits</i>):",
+        reply_markup=variables_cancel_keyboard(),
+    )
+    await state.set_state(VarStates.pack_name)
+    await state.update_data(
+        vars_message_id=callback.message.message_id,
+        vars_chat_id=callback.message.chat.id,
+    )
+    await answer_callback(deps.gateway, callback)
+
+
+async def handle_pack_name_text(message: types.Message, state: FSMContext, deps: BotDeps) -> None:
+    """Valida el nombre del paquete y pasa a pedir el JSON (variables_flow 843-880)."""
+    if await _reject_non_private_message(message, deps):
+        return
+    if await _reject_non_admin_message(message, deps):
+        return
+    name = message.text.strip()
+    slug = _slugify_package_name(name)
+    if not slug:
+        ui = ChatUI.for_message(deps.gateway, message)
+        await ui.send_text("El nombre no es válido. Usa letras, números o espacios.")
+        return  # sigue en pack_name: un nombre inválido no avanza el FSM
+    data = await state.get_data()
+    old_chat_id = data.get("vars_chat_id")
+    old_message_id = data.get("vars_message_id")
+    await state.set_state(VarStates.pack_json)
+    await state.update_data(
+        pack_name=name,
+        pack_slug=slug,
+        vars_message_id=message.message_id,
+        vars_chat_id=message.chat.id,
+    )
+    ui = ChatUI.for_message(deps.gateway, message)
+    prompt_msg = await ui.send_text(
+        "Ahora envía el <b>JSON</b> del paquete:\n\n"
+        "<code>{ \"lists\": { \"poses\": [...], \"angles\": [...], \"actions\": [...] }, "
+        "\"template\": \"...\" }</code>\n\n"
+        "También acepta <code>fields</code> en lugar de <code>lists</code>.",
+        reply_markup=variables_cancel_keyboard(),
+    )
+    await state.update_data(
+        vars_message_id=prompt_msg.message_id,
+        vars_chat_id=prompt_msg.chat_id,
+    )
+    if old_chat_id and old_message_id:
+        try:
+            await ChatUI(deps.gateway, old_chat_id).delete(old_message_id)
+        except Exception:
+            pass  # best-effort; el stale guard vuelve inertes los botones viejos.
+
+
+async def handle_pack_json_text(message: types.Message, state: FSMContext, deps: BotDeps) -> None:
+    """Parsea el JSON, persiste el paquete y lo activa (variables_flow 883-910)."""
+    if await _reject_non_private_message(message, deps):
+        return
+    if await _reject_non_admin_message(message, deps):
+        return
+    data = await state.get_data()
+    name = data.get("pack_name")
+    slug = data.get("pack_slug")
+    if not name or not slug:
+        await state.clear()
+        await _session_outdated(message, deps)
+        return
+    try:
+        payload = json.loads(message.text)
+    except json.JSONDecodeError:
+        ui = ChatUI.for_message(deps.gateway, message)
+        await ui.send_text("JSON inválido. Revisa el formato e inténtalo de nuevo.")
+        return  # sigue en pack_json: reintenta con un JSON válido
+    ok, err = deps.variables.save_package(name, payload)
+    if not ok:
+        ui = ChatUI.for_message(deps.gateway, message)
+        await ui.send_text(f"No se pudo guardar el paquete: {err}")
+        return
+    deps.variables.activate_package(name)  # el repo slugifica internamente (A1)
+    lists = deps.variables.get_lists()
+    template = deps.variables.get_template()
+    await _show_new_panel(
+        message, state, deps,
+        _menu_text(lists, template),
+        variables_menu_keyboard(lists, LIST_LABELS),
+    )
+    ui = ChatUI.for_message(deps.gateway, message)
+    await ui.send_text(f"✅ Paquete <b>{_esc(slug)}</b> creado y activado.")
 
 
 # --------------------------------------------------------------------------- #
@@ -754,6 +855,8 @@ def register_listas(dp: Dispatcher, deps: BotDeps) -> None:
     dp.message.register(partial(handle_add_text, deps=deps), StateFilter(VarStates.add_item), F.text)
     dp.message.register(partial(handle_edit_text, deps=deps), StateFilter(VarStates.edit_text), F.text)
     dp.message.register(partial(handle_template_text, deps=deps), StateFilter(VarStates.template), F.text)
+    dp.message.register(partial(handle_pack_name_text, deps=deps), StateFilter(VarStates.pack_name), F.text)
+    dp.message.register(partial(handle_pack_json_text, deps=deps), StateFilter(VarStates.pack_json), F.text)
     dp.callback_query.register(partial(handle_var_open, deps=deps), lambda c: c.data and c.data.startswith("var:open:"))
     dp.callback_query.register(partial(handle_var_add, deps=deps), lambda c: c.data and c.data.startswith("var:add:"))
     dp.callback_query.register(partial(handle_var_edit_list, deps=deps), lambda c: c.data and c.data.startswith("var:edit:"))
