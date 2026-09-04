@@ -319,3 +319,57 @@ def format_multipose_summary(combos: tuple[str, ...]) -> str:
     lines = ["<b>🎲 Multi-pose ×5</b> — poses usadas:"]
     lines += [f"  {i + 1}. {escape(label)}" for i, label in enumerate(combos)]
     return "\n".join(lines)
+
+
+# --- /estado (grok cmd_estado bot.py:1467-1513) ------------------------------
+def kie_map_duration(duration: int) -> int:
+    """Clamp de duración efectiva de video en Kie.ai (bot.py 1455-1457)."""
+    return max(6, min(duration, 30))
+
+
+def video_duration_display(configured: int, provider: str | None) -> str:
+    """Duración configurada → display (Kie.ai muestra el clamp efectivo)."""
+    if provider == "kie":
+        effective = kie_map_duration(configured)
+        if effective != configured:
+            return f"{configured}s → {effective}s (Kie.ai)"
+        return f"{configured}s"
+    return f"{configured}s"
+
+
+_ESTADO_PROV_LABELS = {"xai": "xAI (oficial)", "replicate": "Replicate", "kie": "Kie.ai"}
+
+
+def estado_card(cfg: UserConfig, *, integrate_ref: bool = False) -> str:
+    """Tarjeta de configuración de /estado (transcripción de grok, sin jobs).
+
+    A5: la rama faceswap muestra Source/Estado desde ``cfg.source_path``/
+    ``cfg.state`` (en grokV2 no hay flujo face swap; en la práctica No
+    configurado/IDLE). A6: texto plano, se envía con ``parse_mode=None``.
+    """
+    model = model_display(cfg)
+    lines = ["Estado\n", f"Modelo: {model['name']}\n"]
+    if cfg.model == "faceswap":
+        has_source = bool(cfg.source_path)
+        lines.append(f"Source: {'Configurado' if has_source else 'No configurado'}\n")
+        lines.append(f"Estado: {cfg.state}")
+    elif model.get("key") == "grok":
+        prov = model.get("imagine_provider") or model.get("provider", "?")
+        var = model.get("imagine_variant", "?")
+        var_label = GROK_IMAGINE_VARIANTS.get(var, {}).get("label", var)
+        lines.append(f"API / Backend: {_ESTADO_PROV_LABELS.get(prov, prov)} • {var_label}\n")
+        lines.append(f"Referencia integrate (/s): {'Configurada' if integrate_ref else 'No configurada'}\n")
+        lines.append("Listo para generar/editar imagenes.")
+    elif model.get("key") == "grok_video":
+        prov = video_provider_for_config(cfg)
+        lines.append(f"API / Backend: {_ESTADO_PROV_LABELS.get(prov, prov)}\n")
+        if model.get("imagine_provider") == "replicate":
+            lines.append("(Imágenes: Replicate; video vía xAI)\n")
+        model_label = VIDEO_MODEL_LABELS.get(cfg.video.model, cfg.video.model)
+        dur = video_duration_display(cfg.video.duration, prov)
+        lines.append(f"Video: {model_label}, {dur}, {cfg.video.aspect_ratio}, {cfg.video.resolution}\n")
+        lines.append("Listo para generar videos (texto o imagen a video).")
+        lines.append("Usa /config (o /video) para configurar modelo, duración, aspecto y resolución.")
+    else:
+        lines.append("Listo para generar/editar imagenes.")
+    return "\n".join(lines)

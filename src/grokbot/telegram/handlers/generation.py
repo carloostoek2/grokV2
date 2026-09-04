@@ -29,6 +29,7 @@ from grokbot.telegram.chat_ui import ChatUI
 from grokbot.telegram.deps import BotDeps
 from grokbot.telegram.formatters import (
     escape,
+    estado_card,
     model_display,
     retry_status_text,
     validate_prompt,
@@ -647,12 +648,24 @@ async def _cmd_unavailable(message: types.Message, deps: BotDeps) -> None:
     await ui.send_text(D8_CMD_MSG)
 
 
-def register_generation(dp: Dispatcher, deps: BotDeps) -> None:
-    # Comandos residuales D8 (flujos de grok sin use case).
-    for command in ("cambiar_source", "cambiar_referencia", "estado"):
-        from aiogram.filters import Command
+async def handle_estado(message: types.Message, deps: BotDeps) -> None:
+    """``/estado`` → tarjeta de configuración (grok cmd_estado, sin jobs activos)."""
+    cfg = deps.sessions.get_config(message.from_user.id)
+    ui = _chat_ui(deps, message)
+    await ui.send_text(
+        estado_card(cfg, integrate_ref=cfg.integrate_ref_path is not None),
+        parse_mode=None,
+    )
 
+
+def register_generation(dp: Dispatcher, deps: BotDeps) -> None:
+    from aiogram.filters import Command
+
+    # Comandos residuales D8 (flujos de grok sin use case).
+    for command in ("cambiar_source", "cambiar_referencia"):
         dp.message.register(partial(_cmd_unavailable, deps=deps), Command(command))
+    # /estado sale del bucle D8: responde la tarjeta de configuración.
+    dp.message.register(partial(handle_estado, deps=deps), Command("estado"))
     # Texto plano de generación (no comando, no reply).
     dp.message.register(partial(handle_text, deps=deps), is_plain_prompt)
     # Foto: caption / sin caption / álbum.

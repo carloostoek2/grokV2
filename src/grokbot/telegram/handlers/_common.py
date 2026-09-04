@@ -53,7 +53,7 @@ SOURCE_MEDIA_UNAVAILABLE_MSG = (
 )
 
 # Comandos residuales que se degradan (D8) sin implementar su flujo.
-D8_COMMANDS = ("cambiar_source", "cambiar_referencia", "estado")
+D8_COMMANDS = ("cambiar_source", "cambiar_referencia")
 
 
 def is_d8_command(command: str | None) -> bool:
