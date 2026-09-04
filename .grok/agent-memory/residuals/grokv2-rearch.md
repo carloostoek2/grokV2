@@ -191,7 +191,7 @@ suite **519 passed**.
 | R9 — Bot abierto + sin rate limit + sin TTL (C8) | **Cerrado por decisión** — `2bbfdd3` (sin tope de concurrencia), `5900809` (sin cuota horaria), `5e9e88b` (gate SOLO chat privado global + aviso de allowlist abierta). Sin rate limit/TTL queda POR DECISIÓN (single-owner). **Residual:** fijar `ALLOWED_TELEGRAM_IDS` con el ID del owner (config de deploy; el boot lo avisa). |
 | R10 — URL firmada cruda + rama >50MB (C9a/b) | **Resuelto** — `096dd0d` (tope único `MAX_MEDIA_BYTES`). URL conservada por decisión de producto. |
 | R4 — 9 flujos D8 degradados | **Diferido (wave 2)** — degradaciones user-safe activas; flujos completos requieren use cases/datos. |
-| Smoke live con infraestructura real | **Completado** — 2026-09-04 con credenciales de grok v1; hallazgo corregido (panel /config, abajo) y validación final del owner **todo ok** (sesión 36 updates, 0 errores). Falta solo decidir el deploy (abajo). |
+| Smoke live con infraestructura real | **Completado** — 2026-09-04 con credenciales de grok v1; hallazgo corregido (panel /config, abajo) y validación final del owner **todo ok** (sesión 36 updates, 0 errores). **Deploy decidido**: grokV2 queda como bot permanente vía `grok-bot.service` (abajo). |
 
 ---
 
@@ -222,6 +222,12 @@ mensaje enviado por el bot lleva `from_user` = el BOT.
   del smoke (§4.3: proveedor xAI, Replicate/Seedream, edición por foto, video, refine ComfyUI,
   `/variables N`, etc.) y reportó **"todo ok"**. Sesión de 36 updates manejados (18:06→18:13
   UTC) con **0 errores/avisos** en el log. R4 (9 flujos D8) sigue diferido a wave 2.
-- **Pendiente de deploy (no del smoke):** decidir si grokV2 queda como bot permanente (hoy
-  corre a mano desde la consola; el servicio systemd v1 sigue detenido). Si es así, fijar
-  `ALLOWED_TELEGRAM_IDS=<id del owner>` y `GROK_DATA_DIR` absoluto (ver PRODUCT_STATUS §3/§4.2).
+- **Deploy permanente (decisión del owner, 2026-09-04):** grokV2 queda como bot permanente,
+  administrado por el shell interactivo `grokbot` (`/home/ubuntu/bin/grokbot`) sobre la unidad
+  systemd `grok-bot.service`. La unidad se repunteó a grokV2 (`WorkingDirectory` + `ExecStart`
+  = `.venv/bin/grokbot`; backup de la v1 en `grok-bot.service.bak-v1`), `PID_PATTERN` del
+  wrapper apunta a grokV2, servicio `enable`+`start` con lingering ya activo (arranca al boot
+  sin login). `ALLOWED_TELEGRAM_IDS` ya viene del `.env` de v1 (allowlist activa en el boot);
+  `data_dir=/home/ubuntu/repos/grokV2/data` (WorkingDirectory del unit; sin `GROK_DATA_DIR` en
+  `.env`, el default `./data` relativo al repo es el correcto). v1 `grok/bot.py` queda
+  decommissioned (unidad original respaldada).
