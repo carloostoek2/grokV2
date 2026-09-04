@@ -38,7 +38,6 @@ class FakeSessionRepo:
     def __init__(self, *, seed: dict[int, UserConfig] | None = None) -> None:
         self._configs: dict[int, UserConfig] = dict(seed) if seed else {}
         self.saved: list[tuple[int, UserConfig]] = []
-        self.record_calls = 0
 
     def get_config(self, user_id: int) -> UserConfig:
         cfg = self._configs.get(user_id)
@@ -50,15 +49,6 @@ class FakeSessionRepo:
     def save_config(self, user_id: int, config: UserConfig) -> None:
         self._configs[user_id] = config
         self.saved.append((user_id, config))
-
-    def record_video_hourly_usage(self, user_id: int, *, now: float | None = None) -> None:
-        self.record_calls += 1
-
-    def count_video_hourly_usage(self, user_id: int, *, now: float | None = None) -> int:
-        return 0
-
-    def count_global_video_hourly_usage(self, *, now: float | None = None) -> int:
-        return 0
 
 
 # --- Variables repo ----------------------------------------------------------

@@ -23,19 +23,14 @@ class SessionRepository(Protocol):
     """Per-user persisted session config (``sessions.json``).
 
     ``get_config`` persists the default record for a brand-new user (parity
-    grok ``get_session``/``_get_or_create_full``). ``video_hourly_timestamps``
-    is repo-owned quota data and never appears in ``UserConfig.to_record``.
+    grok ``get_session``/``_get_or_create_full``). Extra keys the domain does
+    not model are tolerated on read (R4) and never appear in
+    ``UserConfig.to_record``.
     """
 
     def get_config(self, user_id: int) -> UserConfig: ...
 
     def save_config(self, user_id: int, config: UserConfig) -> None: ...
-
-    def record_video_hourly_usage(self, user_id: int, *, now: float | None = None) -> None: ...
-
-    def count_video_hourly_usage(self, user_id: int, *, now: float | None = None) -> int: ...
-
-    def count_global_video_hourly_usage(self, *, now: float | None = None) -> int: ...
 
 
 @runtime_checkable

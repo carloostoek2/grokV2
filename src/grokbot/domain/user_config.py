@@ -3,9 +3,8 @@
 Models ONLY the portion of a session record that grok persists to
 ``sessions.json`` (mirror of ``_default_session_record``). Ephemeral FSM state
 (pending prompts, collected edit file ids, ...) is owned by the
-application/telegram layers (items 4-5), and ``video_hourly_timestamps`` (usage
-quota data) belongs to the session repository (item 3) — tolerated but ignored
-here.
+application/telegram layers (items 4-5). Extra keys a real record may carry
+(legacy/repo-owned) are tolerated but ignored here (R4).
 """
 
 from __future__ import annotations
@@ -129,15 +128,15 @@ def kie_aspect_ratio_fallback(cfg: "UserConfig", *, video_model: str | None = No
     return DEFAULT_VIDEO_ASPECT_RATIO if DEFAULT_VIDEO_ASPECT_RATIO in allowed else allowed[0]
 
 
-def _prefix_group(rec: Mapping, prefix: str, *, skip: frozenset[str] = frozenset()) -> dict:
+def _prefix_group(rec: Mapping, prefix: str) -> dict:
     """Extract the ``prefix*`` keys of a flat record into a plain-key dict.
 
-    ``video_duration`` -> ``{"duration": ...}``; ``video_hourly_timestamps`` is
-    skipped (repo-owned usage data, A5)."""
+    ``video_duration`` -> ``{"duration": ...}``. Keys without a matching field
+    in the target config (legacy/unknown) are simply never read downstream."""
     return {
         key[len(prefix):]: value
         for key, value in rec.items()
-        if key.startswith(prefix) and key not in skip
+        if key.startswith(prefix)
     }
 
 
@@ -268,9 +267,7 @@ class UserConfig:
         if variant not in VALID_GROK_IMAGINE_VARIANTS:
             variant = DEFAULT_GROK_IMAGINE_VARIANT
 
-        video = VideoConfig.from_record(
-            _prefix_group(rec, "video_", skip=frozenset({"video_hourly_timestamps"}))
-        )
+        video = VideoConfig.from_record(_prefix_group(rec, "video_"))
         comfyui = ComfyUIConfig.from_record(_prefix_group(rec, "comfyui_"))
 
         source_path = rec.get("source_path")
@@ -295,7 +292,7 @@ class UserConfig:
         )
 
     def to_record(self) -> dict:
-        """Flat session record (no ``grok_provider`` legacy key, no ``video_hourly_timestamps``)."""
+        """Flat session record (no ``grok_provider`` legacy key)."""
         return {
             "source_path": self.source_path,
             "integrate_ref_path": self.integrate_ref_path,

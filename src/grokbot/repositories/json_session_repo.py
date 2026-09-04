@@ -1,17 +1,18 @@
-"""JSON session repository — per-user config + hourly video usage quota.
+"""JSON session repository — per-user config.
 
 Behavior parity with grok ``sessions.py`` (HEAD 81832a5). ``get_config``
 persists the default record for a brand-new user; ``save_config`` merges the
-``UserConfig`` into the raw record WITHOUT rebuilding the document, so keys the
-domain does not model (``video_hourly_timestamps``, extra keys) are preserved.
-Legacy ``grok_provider`` migrates to ``grok_imagine_provider`` only when the
-canonical key is absent (hardened A4 — grok overwrites the canonical key).
+``UserConfig`` into the raw record WITHOUT rebuilding the document, so extra
+keys the domain does not model are preserved (R4). R9: la cuota horaria de
+video se eliminó — el key legacy ``video_hourly_timestamps`` se purga en
+``_ensure_full`` al primer load. Legacy ``grok_provider`` migrates to
+``grok_imagine_provider`` only when the canonical key is absent (hardened A4 —
+grok overwrites the canonical key).
 """
 
 from __future__ import annotations
 
 import json
-import time
 from pathlib import Path
 
 from grokbot.domain.catalog import (
@@ -32,8 +33,6 @@ from grokbot.domain.user_config import (
 )
 
 from grokbot.repositories.base import write_json_atomic
-
-VIDEO_HOURLY_WINDOW_SEC = 3600
 
 
 class JsonSessionRepository:
@@ -71,59 +70,12 @@ class JsonSessionRepository:
         data[uid] = rec
         self._save(data)
 
-    def record_video_hourly_usage(self, user_id: int, *, now: float | None = None) -> None:
-        """Prune + append ``now`` to the user's hourly video usage timestamps."""
-        now = now if now is not None else time.time()
-        uid = str(user_id)
-        data = self._load()
-        rec = data.get(uid)
-        if not isinstance(rec, dict):
-            rec = self._default_record()
-        self._ensure_full(rec)
-        pruned = self._prune_hourly_timestamps(rec.get("video_hourly_timestamps", []), now)
-        pruned.append(now)
-        rec["video_hourly_timestamps"] = pruned
-        data[uid] = rec
-        self._save(data)
-
-    def count_video_hourly_usage(self, user_id: int, *, now: float | None = None) -> int:
-        """Return the user's recent hourly usage, pruning (and persisting) expired entries."""
-        now = now if now is not None else time.time()
-        uid = str(user_id)
-        data = self._load()
-        rec = data.get(uid)
-        if rec is None:
-            self.get_config(user_id)  # persist default record (parity _get_or_create_full)
-            return 0
-        if not isinstance(rec, dict):
-            raise ValueError(f"{self._path} record for user {uid!r} must be a JSON object")
-        self._ensure_full(rec)
-        current = rec.get("video_hourly_timestamps", [])
-        pruned = self._prune_hourly_timestamps(current, now)
-        if pruned != current:
-            rec["video_hourly_timestamps"] = pruned
-            data[uid] = rec
-            self._save(data)
-        return len(pruned)
-
-    def count_global_video_hourly_usage(self, *, now: float | None = None) -> int:
-        """Return total recent hourly usage across all users (read-only prune)."""
-        now = now if now is not None else time.time()
-        data = self._load()
-        total = 0
-        for rec in data.values():
-            if not isinstance(rec, dict):
-                continue
-            total += len(self._prune_hourly_timestamps(rec.get("video_hourly_timestamps", []), now))
-        return total
-
     # -- private helpers ----------------------------------------------------
 
     @staticmethod
     def _default_record(**overrides) -> dict:
-        """Full session record: domain defaults + repo-owned quota list."""
+        """Full session record: domain defaults (+ optional overrides)."""
         rec = UserConfig.defaults().to_record()
-        rec["video_hourly_timestamps"] = []
         rec.update(overrides)
         return rec
 
@@ -173,8 +125,10 @@ class JsonSessionRepository:
         if "video_resolution" not in rec:
             rec["video_resolution"] = DEFAULT_VIDEO_RESOLUTION
             changed = True
-        if "video_hourly_timestamps" not in rec:
-            rec["video_hourly_timestamps"] = []
+        # R9: cuota horaria de video eliminada — purga el key legacy de archivos
+        # viejos en el primer load (una sola vez; los records nuevos nunca lo traen).
+        if "video_hourly_timestamps" in rec:
+            rec.pop("video_hourly_timestamps", None)
             changed = True
         if "video_model" not in rec:
             rec["video_model"] = DEFAULT_VIDEO_MODEL
@@ -195,9 +149,3 @@ class JsonSessionRepository:
             rec["integrate_ref_path"] = None
             changed = True
         return changed
-
-    @staticmethod
-    def _prune_hourly_timestamps(timestamps: list, now: float | None = None) -> list[float]:
-        """Keep only timestamps inside the rolling hourly window."""
-        now = now if now is not None else time.time()
-        return [float(t) for t in timestamps if now - float(t) < VIDEO_HOURLY_WINDOW_SEC]

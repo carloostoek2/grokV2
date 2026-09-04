@@ -32,7 +32,6 @@ def canonical_record() -> dict:
         "video_resolution": "720p",
         "video_model": "grok-imagine-video",
         "video_mode": "normal",
-        "video_hourly_timestamps": [1710000000.0, 1710003600.0],
         "comfyui_model": "krea2",
         "comfyui_lora": "none",
         "comfyui_refine": "1",
@@ -66,7 +65,7 @@ def test_get_config_new_user_creates_full_record(tmp_path):
     assert config == UserConfig.defaults()
     assert path.exists()
     raw = json.loads(path.read_text(encoding="utf-8"))[str(UID)]
-    assert raw["video_hourly_timestamps"] == []
+    assert "video_hourly_timestamps" not in raw  # R9: la cuota ya no existe
     assert raw["source_path"] is None
     assert raw["model"] == "grok"
     assert raw["grok_imagine_provider"] == "kie"
@@ -90,7 +89,7 @@ def test_get_config_loads_real_shape(tmp_path):
     assert config.source_path == "/tmp/anon/sources/111.jpg"
 
 
-def test_save_config_preserves_repo_owned_and_extra_keys(tmp_path):
+def test_save_config_preserves_extra_keys(tmp_path):
     path = tmp_path / "sessions.json"
     write(path, {str(UID): canonical_record()})
     repo = JsonSessionRepository(path)
@@ -99,9 +98,24 @@ def test_save_config_preserves_repo_owned_and_extra_keys(tmp_path):
     repo.save_config(UID, config)
     raw = json.loads(path.read_text(encoding="utf-8"))[str(UID)]
     assert raw["model"] == "seedream"
-    assert raw["_extra_user_key"] == "keep"
-    assert raw["video_hourly_timestamps"] == [1710000000.0, 1710003600.0]
+    assert raw["_extra_user_key"] == "keep"  # merge no destructivo (extra keys)
     assert raw["comfyui_model"] == "krea2"
+
+
+def test_legacy_video_hourly_timestamps_purged_on_first_load(tmp_path):
+    """R9: un sessions.json viejo con la cuota horaria de video la purga en el 1er load."""
+    path = tmp_path / "sessions.json"
+    rec = canonical_record()
+    rec["video_hourly_timestamps"] = [1710000000.0, 1710003600.0]
+    write(path, {str(UID): rec})
+    config = JsonSessionRepository(path).get_config(UID)
+    assert config == UserConfig.from_record(canonical_record())
+    raw = json.loads(path.read_text(encoding="utf-8"))[str(UID)]
+    assert "video_hourly_timestamps" not in raw
+    # Los timestamps no tocan la config: el record queda limpio y estable.
+    repo = JsonSessionRepository(path)
+    repo.save_config(UID, config)
+    assert json.loads(path.read_text(encoding="utf-8"))[str(UID)] == canonical_record()
 
 
 def test_legacy_grok_provider_migrates_and_is_dropped_on_save(tmp_path):
@@ -127,38 +141,6 @@ def test_canonical_wins_over_legacy_when_both_present(tmp_path):
     assert raw["grok_imagine_provider"] == "kie"
 
 
-def test_record_video_hourly_usage_prunes_old_timestamps(tmp_path):
-    path = tmp_path / "sessions.json"
-    repo = JsonSessionRepository(path)
-    repo.record_video_hourly_usage(UID, now=1000.0)
-    repo.record_video_hourly_usage(UID, now=5000.0)
-    raw = json.loads(path.read_text(encoding="utf-8"))[str(UID)]
-    assert raw["video_hourly_timestamps"] == [5000.0]
-
-
-def test_count_video_hourly_usage_persists_prune(tmp_path):
-    path = tmp_path / "sessions.json"
-    rec = canonical_record()
-    rec["video_hourly_timestamps"] = [1000.0]
-    write(path, {str(UID): rec})
-    repo = JsonSessionRepository(path)
-    assert repo.count_video_hourly_usage(UID, now=5000.0) == 0
-    raw = json.loads(path.read_text(encoding="utf-8"))[str(UID)]
-    assert raw["video_hourly_timestamps"] == []
-
-
-def test_count_global_video_hourly_usage_sums_without_writing(tmp_path):
-    path = tmp_path / "sessions.json"
-    data = {
-        str(UID): {"video_hourly_timestamps": [1000.0]},  # expired at now=5000
-        str(UID2): {"video_hourly_timestamps": [4500.0, 4600.0]},  # fresh
-    }
-    write(path, data)
-    repo = JsonSessionRepository(path)
-    assert repo.count_global_video_hourly_usage(now=5000.0) == 2
-    assert json.loads(path.read_text(encoding="utf-8")) == data
-
-
 def test_missing_file_get_config_defaults_and_creates(tmp_path):
     path = tmp_path / "sub" / "sessions.json"
     repo = JsonSessionRepository(path)
@@ -167,7 +149,7 @@ def test_missing_file_get_config_defaults_and_creates(tmp_path):
     assert path.exists()
     raw = json.loads(path.read_text(encoding="utf-8"))[str(UID)]
     assert raw["source_path"] is None
-    assert raw["video_hourly_timestamps"] == []
+    assert "video_hourly_timestamps" not in raw
 
 
 def test_corrupt_file_propagates_and_non_dict_top_level_raises(tmp_path):
@@ -188,17 +170,6 @@ def test_round_trip_parity(tmp_path):
     config = repo.get_config(UID)
     repo.save_config(UID, config)
     assert json.loads(path.read_text(encoding="utf-8"))[str(UID)] == canonical_record()
-
-
-def test_count_video_hourly_usage_missing_user_creates_default(tmp_path):
-    """Parity _get_or_create_full: counting a brand-new user persists a default record and returns 0."""
-    path = tmp_path / "sessions.json"
-    repo = JsonSessionRepository(path)
-    assert repo.count_video_hourly_usage(UID, now=5000.0) == 0
-    raw = json.loads(path.read_text(encoding="utf-8"))[str(UID)]
-    assert raw["model"] == "grok"
-    assert raw["video_hourly_timestamps"] == []
-    assert raw["source_path"] is None
 
 
 def test_write_json_atomic_ensure_ascii_default_true(tmp_path):
