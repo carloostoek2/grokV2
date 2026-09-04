@@ -393,15 +393,21 @@ async def _run_batch(deps: BotDeps, uid: int, file_ids: list[str], *, ui: ChatUI
         # Rescue: se envían las imágenes ya swapeadas y el fallo va al terminal
         # con conteos (parity grok bot.py 3629-3645), nunca al genérico.
         if results:
-            failures.extend(await _send_faceswap_results(ui, results))
+            delivered, send_failures = await _send_faceswap_results(ui, results)
+            failures.extend(send_failures)
+        else:
+            delivered = 0
         failures.append(f"procesamiento: {type(exc).__name__}")
     else:
         if results:
-            failures.extend(await _send_faceswap_results(ui, results))
+            delivered, send_failures = await _send_faceswap_results(ui, results)
+            failures.extend(send_failures)
+        else:
+            delivered = 0
     await _edit_quietly(
         ui,
         status_id,
-        format_faceswap_batch_status(len(results), count, failures, cancelled=cancelled),
+        format_faceswap_batch_status(delivered, count, failures, cancelled=cancelled),
     )
 
 
@@ -411,24 +417,28 @@ def _faceswap_send_failure(exc: Exception) -> str:
     return f"envio a Telegram: {detail}"
 
 
-async def _send_faceswap_results(ui: ChatUI, results: list[bytes]) -> list[str]:
-    """Envía resultados: 1 → send_photo; N → media groups de a 10.
+async def _send_faceswap_results(ui: ChatUI, results: list[bytes]) -> tuple[int, list[str]]:
+    """Envía resultados → (entregadas, fallos de envío).
 
-    Si un media group falla, reintenta el chunk foto a foto (parity grok
-    bot.py 3604-3632) y reporta el fallo de envío en el terminal. Devuelve la
+    1 → ``send_photo``; N → media groups de a 10; si un media group falla,
+    reintenta el chunk foto a foto (parity grok bot.py 3604-3632). Devuelve
+    cuántas imágenes se ENTREGARON (una foto cuyo envío falló NO cuenta) y la
     lista de fallos de envío (user-safe, sin bytes/file_ids/paths). Nunca
-    lanza: todo error de envío se traduce a un fallo del terminal.
+    lanza: todo error de envío, incluida una foto individual del fallback, se
+    traduce a un fallo del terminal.
     """
     if not results:
-        return []
+        return 0, []
     failures: list[str] = []
+    delivered = 0
     if len(results) == 1:
         try:
             await ui.send_photo(results[0], filename="faceswap.jpg")
+            delivered = 1
         except Exception as exc:  # noqa: BLE001 — detalle user-safe A8
             _logger.error("faceswap send_photo falló (%s)", type(exc).__name__)
             failures.append(_faceswap_send_failure(exc))
-        return failures
+        return delivered, failures
     for offset in range(0, len(results), _MEDIA_GROUP_MAX):
         chunk = results[offset : offset + _MEDIA_GROUP_MAX]
         media = [
@@ -437,15 +447,18 @@ async def _send_faceswap_results(ui: ChatUI, results: list[bytes]) -> list[str]:
         ]
         try:
             await ui.send_media_group(media)
+            delivered += len(chunk)
         except Exception as exc:  # noqa: BLE001 — detalle user-safe A8
             _logger.error("faceswap media group falló (%s), fallback foto a foto", type(exc).__name__)
             failures.append(_faceswap_send_failure(exc))
             for i, data in enumerate(chunk):
                 try:
                     await ui.send_photo(data, filename=f"faceswap_{offset + i + 1}.jpg")
+                    delivered += 1
                 except Exception as photo_exc:  # noqa: BLE001 — detalle user-safe A8
                     _logger.error("faceswap fallback send falló (%s)", type(photo_exc).__name__)
-    return failures
+                    failures.append(_faceswap_send_failure(photo_exc))
+    return delivered, failures
 
 
 # --------------------------------------------------------------------------- #

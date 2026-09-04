@@ -446,6 +446,58 @@ class _FailingMediaGroupGateway(FakeTelegramGateway):
         )
 
 
+class _FailingFallbackPhotoGateway(FakeTelegramGateway):
+    """Falla el media group Y la 2ª send_photo del fallback foto a foto.
+
+    Review R2: un send_photo individual del fallback que falla debe entrar a
+    ``failures`` y NO contar como entregada (docstring de _send_faceswap_results).
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._photo_sends = 0
+
+    async def send_media_group(self, chat_id, media, *, reply_to_message_id=None):
+        self._record(
+            "send_media_group_failed",
+            chat_id=chat_id,
+            media=media,
+            reply_to_message_id=reply_to_message_id,
+        )
+        raise _FaceswapSendError(
+            "group too large", user_message="Fallo al enviar el grupo de fotos."
+        )
+
+    async def send_photo(
+        self, chat_id, photo, *, filename="generated.png", caption=None,
+        parse_mode="HTML", reply_markup=None, reply_to_message_id=None,
+    ):
+        self._photo_sends += 1
+        if self._photo_sends == 2:
+            self._record("send_photo_failed", chat_id=chat_id, filename=filename, caption=caption)
+            raise _FaceswapSendError(
+                "photo too large", user_message="Fallo al enviar la foto."
+            )
+        return await super().send_photo(
+            chat_id, photo, filename=filename, caption=caption,
+            parse_mode=parse_mode, reply_markup=reply_markup,
+            reply_to_message_id=reply_to_message_id,
+        )
+
+
+class _FailingSendPhotoGateway(FakeTelegramGateway):
+    """Gateway que falla cualquier send_photo (subrama single-result de resultados)."""
+
+    async def send_photo(
+        self, chat_id, photo, *, filename="generated.png", caption=None,
+        parse_mode="HTML", reply_markup=None, reply_to_message_id=None,
+    ):
+        self._record("send_photo_failed", chat_id=chat_id, filename=filename, caption=caption)
+        raise _FaceswapSendError(
+            "photo too large", user_message="Fallo al enviar la foto."
+        )
+
+
 async def test_confirm_yes_batch_media_group_fallback_sends_photos(monkeypatch):
     """review R1 #1: si el media group falla, fallback foto a foto + terminal con conteos."""
     real_sleep = asyncio.sleep
@@ -476,6 +528,80 @@ async def test_confirm_yes_batch_media_group_fallback_sends_photos(monkeypatch):
         "Completadas 3/3 imagenes.\n"
         "Fallos: envio a Telegram: Fallo al enviar el grupo de fotos."
     )
+    assert last["reply_markup"] is None
+    assert deps.faceswap_pending.get(_UID) is None
+    assert deps.job_manager.active_jobs(_UID) == ()
+
+
+async def test_confirm_yes_batch_media_group_and_fallback_photo_fail(monkeypatch):
+    """review R2: foto del fallback que falla → entra a failures y no cuenta como entregada."""
+    real_sleep = asyncio.sleep
+
+    async def _short_sleep(delay):
+        if delay and delay >= 1.0:  # neutraliza el rate-limit real (10s) del batch
+            await real_sleep(0)
+        else:
+            await real_sleep(delay)
+
+    monkeypatch.setattr(asyncio, "sleep", _short_sleep)
+    gateway = _FailingFallbackPhotoGateway()
+    deps = _set_faceswap(make_deps(gateway=gateway), source=True)
+    deps.faceswap_pending.set(
+        _UID, ["FAKE:dp1", "FAKE:dp2", "FAKE:dp3"], chat_id=_CHAT, message_id=899
+    )
+    deps = await _cb(deps, callback_query("faceswap:confirm:yes", message_id=899))
+
+    assert len(gateway.calls_by_method("send_media_group_failed")) == 1
+    delivered = gateway.calls_by_method("send_photo")
+    assert [p["filename"] for p in delivered] == ["faceswap_1.jpg", "faceswap_3.jpg"]
+    failed_photos = gateway.calls_by_method("send_photo_failed")
+    assert len(failed_photos) == 1 and failed_photos[0]["filename"] == "faceswap_2.jpg"
+    last = gateway.calls_by_method("edit_message_text")[-1]
+    assert last["text"].endswith(
+        "Completadas 2/3 imagenes.\n"
+        "Fallos: envio a Telegram: Fallo al enviar el grupo de fotos.; "
+        "envio a Telegram: Fallo al enviar la foto."
+    ), "la foto caída del fallback aparece en el terminal (A8 user-safe)"
+    assert last["reply_markup"] is None
+    assert "FAKE" not in last["text"], "A8: sin file_ids"
+    assert deps.faceswap_pending.get(_UID) is None
+    assert deps.job_manager.active_jobs(_UID) == ()
+
+
+async def test_confirm_yes_batch_single_result_send_photo_fails(monkeypatch):
+    """review R2: subrama single-result — send_photo falla → terminal 'No se pudo...'."""
+    real_sleep = asyncio.sleep
+
+    async def _short_sleep(delay):
+        if delay and delay >= 1.0:
+            await real_sleep(0)
+        else:
+            await real_sleep(delay)
+
+    monkeypatch.setattr(asyncio, "sleep", _short_sleep)
+    gateway = _FailingSendPhotoGateway()
+    provider = FakeImageProvider(
+        name="replicate",
+        outcomes=[
+            make_result(provider="replicate", model_id="fake-faceswap"),
+            ProviderUnavailableError(
+                "http 503", user_message="El proveedor no está disponible temporalmente."
+            ),
+        ],
+    )
+    deps = _set_faceswap(
+        make_deps(gateway=gateway, registry=make_registry(replicate=provider)), source=True
+    )
+    deps.faceswap_pending.set(_UID, ["FAKE:sr1", "FAKE:sr2"], chat_id=_CHAT, message_id=900)
+    deps = await _cb(deps, callback_query("faceswap:confirm:yes", message_id=900))
+
+    assert len(gateway.calls_by_method("send_photo_failed")) == 1, "el único resultado falló al enviar"
+    assert gateway.calls_by_method("send_photo") == []
+    assert gateway.calls_by_method("send_media_group") == []
+    last = gateway.calls_by_method("edit_message_text")[-1]
+    assert "No se pudo procesar ninguna de las 2 imagenes." in last["text"]
+    assert "envio a Telegram: Fallo al enviar la foto." in last["text"]
+    assert "FAKE" not in last["text"] and "http 503" not in last["text"], "A8: sin file_ids ni detalle técnico"
     assert last["reply_markup"] is None
     assert deps.faceswap_pending.get(_UID) is None
     assert deps.job_manager.active_jobs(_UID) == ()
