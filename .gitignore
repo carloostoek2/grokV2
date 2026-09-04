@@ -13,3 +13,6 @@ build/
 # Coverage
 .coverage
 htmlcov/
+
+# Runtime data (GROK_DATA_DIR default ./data)
+/data/

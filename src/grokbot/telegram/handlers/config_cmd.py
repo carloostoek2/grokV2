@@ -220,23 +220,29 @@ async def _reject_stale_callback(
 
 # --------------------------------------------------------------------------- #
 # Showers (editan el mensaje del panel y guardan id en el FSM)
+#
+# El panel lo edita el BOT: en Telegram real un mensaje del bot lleva
+# ``from_user`` = el propio bot, NO el usuario que config. Por eso estas
+# funciones reciben el ``uid`` del usuario que está configurando (message/
+# callback ``from_user.id``) y NUNCA derivan la config de ``target.from_user``
+# (sería la config default del bot; hallazgo del smoke live 2026-09-04).
 # --------------------------------------------------------------------------- #
-async def _show_model_screen(target: types.Message, state: FSMContext, deps: BotDeps) -> None:
+async def _show_model_screen(target: types.Message, state: FSMContext, deps: BotDeps, *, uid: int) -> None:
     await state.set_state(ConfigStates.select_model)
     await state.update_data(config_model=None, config_message_id=target.message_id)
     ui = ChatUI.for_message(deps.gateway, target)
     await ui.edit_text(
         target.message_id,
         "Selecciona el modelo:",
-        reply_markup=config_model_keyboard(deps.sessions.get_config(target.from_user.id)),
+        reply_markup=config_model_keyboard(deps.sessions.get_config(uid)),
     )
 
 
-async def _show_provider_screen(target: types.Message, state: FSMContext, deps: BotDeps, model_key: str) -> None:
+async def _show_provider_screen(target: types.Message, state: FSMContext, deps: BotDeps, model_key: str, *, uid: int) -> None:
     await state.set_state(ConfigStates.select_provider)
     await state.update_data(config_model=model_key, config_message_id=target.message_id)
     ui = ChatUI.for_message(deps.gateway, target)
-    cfg = deps.sessions.get_config(target.from_user.id)
+    cfg = deps.sessions.get_config(uid)
     await ui.edit_text(
         target.message_id,
         _provider_screen_text(cfg, model_key),
@@ -250,13 +256,14 @@ async def _show_configure_screen(
     deps: BotDeps,
     model_key: str,
     *,
+    uid: int,
     updated: bool = False,
     aspect_reset_msg: str | None = None,
 ) -> None:
     await state.set_state(ConfigStates.configure)
     await state.update_data(config_model=model_key, config_message_id=target.message_id)
     ui = ChatUI.for_message(deps.gateway, target)
-    cfg = deps.sessions.get_config(target.from_user.id)
+    cfg = deps.sessions.get_config(uid)
 
     if model_key == "grok":
         await ui.edit_text(
@@ -357,10 +364,10 @@ async def handle_cfg_model(callback: types.CallbackQuery, state: FSMContext, dep
     if not same_model:
         deps.update_config.set_model(uid, model_key)
     if model_key in ("grok", "grok_video"):
-        await _show_provider_screen(callback.message, state, deps, model_key)
+        await _show_provider_screen(callback.message, state, deps, model_key, uid=uid)
         await answer_callback(deps.gateway, callback, f"Modelo: {MODELS[model_key]['name']}")
         return
-    await _show_configure_screen(callback.message, state, deps, model_key)
+    await _show_configure_screen(callback.message, state, deps, model_key, uid=uid)
     if same_model:
         await answer_callback(deps.gateway, callback, "Ya estás usando ese modelo.")
         return
@@ -386,7 +393,7 @@ async def handle_cfg_provider(callback: types.CallbackQuery, state: FSMContext, 
     cfg = deps.sessions.get_config(uid)
     prior = resolve_grok_config(cfg.grok_imagine_provider, cfg.grok_imagine_variant)["provider"]
     if prov == prior:
-        await _show_configure_screen(callback.message, state, deps, model_key)
+        await _show_configure_screen(callback.message, state, deps, model_key, uid=uid)
         await answer_callback(deps.gateway, callback, "Ya está activo ese proveedor.")
         return
     result = deps.update_config.set_grok_imagine_provider(uid, prov)
@@ -400,7 +407,7 @@ async def handle_cfg_provider(callback: types.CallbackQuery, state: FSMContext, 
     else:
         deps.update_config.set_model(uid, "grok_video")
     await _show_configure_screen(
-        callback.message, state, deps, model_key, aspect_reset_msg=aspect_reset_msg,
+        callback.message, state, deps, model_key, uid=uid, aspect_reset_msg=aspect_reset_msg,
     )
     new_cfg = deps.sessions.get_config(uid)
     resolved = resolve_grok_config(new_cfg.grok_imagine_provider, new_cfg.grok_imagine_variant)
@@ -428,7 +435,7 @@ async def handle_cfg_variant(callback: types.CallbackQuery, state: FSMContext, d
         return
     deps.update_config.set_grok_imagine_variant(uid, var)
     deps.update_config.set_model(uid, "grok")
-    await _show_configure_screen(callback.message, state, deps, "grok", updated=True)
+    await _show_configure_screen(callback.message, state, deps, "grok", uid=uid, updated=True)
     new_cfg = deps.sessions.get_config(uid)
     resolved = resolve_grok_config(new_cfg.grok_imagine_provider, new_cfg.grok_imagine_variant)
     await answer_callback(
@@ -532,7 +539,7 @@ async def handle_cfg_video(callback: types.CallbackQuery, state: FSMContext, dep
         return
 
     await _show_configure_screen(
-        callback.message, state, deps, "grok_video", updated=True, aspect_reset_msg=aspect_reset_msg,
+        callback.message, state, deps, "grok_video", uid=uid, updated=True, aspect_reset_msg=aspect_reset_msg,
     )
     new_cfg = deps.sessions.get_config(uid)
     dur_label = _video_duration_display(new_cfg.video.duration, video_provider_for_config(new_cfg))
@@ -575,7 +582,7 @@ async def handle_cfg_comfyui(callback: types.CallbackQuery, state: FSMContext, d
         await answer_callback(gateway, callback, msg, show_alert=True)
         return
     deps.update_config.set_model(uid, "comfyui")
-    await _show_configure_screen(callback.message, state, deps, "comfyui", updated=True)
+    await _show_configure_screen(callback.message, state, deps, "comfyui", uid=uid, updated=True)
     new_cfg = deps.sessions.get_config(uid)
     if kind == "refine":
         label = "ON ✨" if value == "1" else "OFF"
@@ -594,7 +601,8 @@ async def handle_cfg_back_model(callback: types.CallbackQuery, state: FSMContext
         allowed_states=(ConfigStates.select_provider, ConfigStates.configure),
     ):
         return
-    await _show_model_screen(callback.message, state, deps)
+    uid = callback.from_user.id
+    await _show_model_screen(callback.message, state, deps, uid=uid)
     await answer_callback(deps.gateway, callback)
 
 
@@ -611,7 +619,7 @@ async def handle_cfg_back_provider(callback: types.CallbackQuery, state: FSMCont
     if model_key not in ("grok", "grok_video"):
         await answer_callback(deps.gateway, callback, _DESYNC_TEXT, show_alert=True)
         return
-    await _show_provider_screen(callback.message, state, deps, model_key)
+    await _show_provider_screen(callback.message, state, deps, model_key, uid=uid)
     await answer_callback(deps.gateway, callback)
 
 

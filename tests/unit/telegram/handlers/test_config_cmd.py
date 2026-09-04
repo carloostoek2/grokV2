@@ -7,7 +7,10 @@ callback (config_message_id + estado). Copy transcrito de grok config_flow;
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from aiogram import Bot
+from aiogram.types import CallbackQuery, Message
 
 from conftest import (
     CHAT_ID,
@@ -15,8 +18,10 @@ from conftest import (
     callback_query,
     callback_update,
     flat_callback_data,
+    make_chat,
     make_deps,
     make_dispatcher,
+    make_user,
     message_update,
     text_message,
 )
@@ -24,6 +29,9 @@ from conftest import (
 _UID = USER_ID
 _CHAT = CHAT_ID
 _BOT = Bot("42:TEST")
+# Id del propio bot: en Telegram real el mensaje del panel (bot-sent) lleva
+# from_user = el bot, NO el usuario que configura (regresión del smoke live).
+_PANEL_BOT_ID = 999999999
 
 _STALE = "Esta pantalla ya no está activa. Usa /config para empezar de nuevo."
 
@@ -33,6 +41,31 @@ async def _open_config(deps=None):
     dp, deps = make_dispatcher(deps)
     await dp.feed_update(_BOT, message_update(text_message("/config")))
     return dp, deps
+
+
+def _bot_panel_message(message_id: int) -> Message:
+    """Mensaje del PANEL tal como llega en vivo: enviado por el bot (from_user =
+    el bot) en el chat privado del dueño (chat.id = el dueño)."""
+    return Message(
+        message_id=message_id,
+        date=datetime.now(timezone.utc),
+        chat=make_chat(_CHAT, type="private"),
+        from_user=make_user(_PANEL_BOT_ID, is_bot=True),
+        text="base",
+    )
+
+
+def _bot_panel_callback(
+    data: str, message_id: int, *, user_id: int = _UID
+) -> CallbackQuery:
+    """Tap del DUEÑO sobre un botón del panel del bot (callback.message = bot)."""
+    return CallbackQuery(
+        id="cb-botpanel",
+        from_user=make_user(user_id),
+        chat_instance="chat-instance",
+        message=_bot_panel_message(message_id),
+        data=data,
+    )
 
 
 def _panel_id(deps) -> int:
@@ -156,6 +189,37 @@ async def test_same_seedream_model_says_already_using():
     mid = _panel_id(deps)
     await dp.feed_update(_BOT, callback_update(callback_query("cfg:model:seedream", message_id=mid)))
     assert _last_answer(deps)["text"] == "Ya estás usando ese modelo."
+
+
+# --------------------------------------------------------------------------- #
+# Regresión (smoke live 2026-09-04): el panel es mensaje del BOT
+#
+# En Telegram real callback.message.from_user es el BOT, no el dueño. Los
+# showers de /config NO deben leer la config del dueño desde target.from_user
+# (devuelve la config default del bot: Grok Imagine / Kie / Alta calidad). Todo
+# cambio de un tap debe guardarse y reflejarse en la config del dueño (uid).
+# --------------------------------------------------------------------------- #
+async def test_panel_bot_cambio_seedream_guarda_y_muestra_config_del_dueño():
+    dp, deps = await _open_config()
+    mid = _panel_id(deps)
+    await dp.feed_update(_BOT, callback_update(_bot_panel_callback("cfg:model:seedream", mid)))
+    edit = _last_edit_text(deps)
+    assert "Modelo cambiado a <b>Seedream 5.0</b>." in edit["text"]
+    assert "Grok Imagine" not in edit["text"], "la pantalla no debe mostrar el modelo default del bot"
+    assert deps.sessions.get_config(_UID).model == "seedream", "el cambio se guarda en la config del dueño"
+    assert _last_answer(deps)["text"] == "Modelo: Seedream 5.0"
+
+
+async def test_panel_bot_provider_xai_refleja_config_del_dueño():
+    dp, deps = await _open_config()
+    mid = _panel_id(deps)
+    await dp.feed_update(_BOT, callback_update(_bot_panel_callback("cfg:model:grok", mid)))
+    await dp.feed_update(_BOT, callback_update(_bot_panel_callback("cfg:provider:xai", mid)))
+    edit = _last_edit_text(deps)
+    assert "Actual: <b>xAI • Alta calidad</b>" in edit["text"]
+    assert "Actual: <b>Kie" not in edit["text"], "no debe quedar el proveedor default del bot"
+    assert deps.sessions.get_config(_UID).grok_imagine_provider == "xai"
+    assert _last_answer(deps)["text"] == "Proveedor: xAI"
 
 
 # --------------------------------------------------------------------------- #
