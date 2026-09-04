@@ -123,6 +123,28 @@ class LongPromptStore:
 
 
 @dataclass
+class AlbumStore:
+    """Colección efímera de álbumes: (chat_id, media_group_id) → mensajes.
+
+    ``delay`` es inyectable para tests (producción ALBUM_COLLECT_DELAY=1.0).
+    Sin locks: asyncio single-thread da atomicidad al append síncrono dentro de
+    ``handle_album``; el drenado corre en un task aparte con ``asyncio.sleep``.
+    """
+
+    delay: float = 1.0
+    _pending: dict[tuple[int, str], list] = field(default_factory=dict)
+
+    def add(self, key: tuple[int, str], message) -> bool:
+        """Acumular el mensaje del media group; True cuando es el primero."""
+        first = key not in self._pending
+        self._pending.setdefault(key, []).append(message)
+        return first
+
+    def pop(self, key: tuple[int, str]) -> list:
+        return self._pending.pop(key, [])
+
+
+@dataclass
 class BotDeps:
     """Dependencias de la capa telegram (use cases + seams + gates)."""
 
@@ -140,8 +162,9 @@ class BotDeps:
     manage_lists: ManageListsUseCase
     pending: PendingPrompts = field(default_factory=PendingPrompts)
     long_prompt: LongPromptStore = field(default_factory=LongPromptStore)
+    album: AlbumStore = field(default_factory=AlbumStore)
     allowed_telegram_ids: set[int] | None = None
     variables_admin_ids: set[int] | None = None
 
 
-__all__ = ["BotDeps", "PendingPrompts", "LongPromptStore"]
+__all__ = ["AlbumStore", "BotDeps", "LongPromptStore", "PendingPrompts"]

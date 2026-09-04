@@ -34,15 +34,16 @@ TELEGRAM_CAPTION_COLLECT_THRESHOLD = 1020
 D8_FACESWAP_MSG = (
     "El modo Face Swap no está disponible en esta versión. Usa /config para cambiar de modelo."
 )
-D8_ALBUM_MSG = (
-    "Los álbumes todavía no están disponibles en esta versión. Envía una foto con caption."
-)
 D8_INTEGRATE_MSG = (
     "La edición con referencia (/s) no está disponible en esta versión. "
     "Envía el caption sin /s."
 )
 D8_CMD_MSG = "Este comando no está disponible en esta versión todavía."
 D8_REPLY_NO_PHOTO = "Responde a una foto para editarla."
+
+# Máximo de fotos de un media group que grok edita (paridad bot.py). Por encima
+# el álbum degrada con el copy exacto de grok (generation._drain_grok_album).
+INTEGRATE_MAX_ALBUM = 10
 
 # Degradación user-safe de media de origen no recuperable (M2): file_id
 # expirado/roto → este mensaje, nunca el error crudo del gateway.
@@ -98,7 +99,7 @@ def is_photo_no_caption(message: types.Message) -> bool:
 
 
 def is_album(message: types.Message) -> bool:
-    """Foto perteneciente a un media group (álbum) → degradación D8."""
+    """Foto perteneciente a un media group (álbum) → colección/edición secuencial."""
     return bool(message.photo) and bool(message.media_group_id)
 
 
@@ -264,12 +265,12 @@ async def fetch_source_bytes(gateway: TelegramGateway, file_id: str | None) -> b
 
 
 __all__ = [
-    "D8_ALBUM_MSG",
     "D8_CMD_MSG",
     "D8_COMMANDS",
     "D8_FACESWAP_MSG",
     "D8_INTEGRATE_MSG",
     "D8_REPLY_NO_PHOTO",
+    "INTEGRATE_MAX_ALBUM",
     "SOURCE_MEDIA_UNAVAILABLE_MSG",
     "TELEGRAM_CAPTION_COLLECT_THRESHOLD",
     "answer_callback",

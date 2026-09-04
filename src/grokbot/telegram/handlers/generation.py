@@ -18,24 +18,27 @@ Nunca ``message.answer`` directo: TODO outbound por :class:`ChatUI` y callbacks 
 
 from __future__ import annotations
 
+import asyncio
 from functools import partial
 
 from aiogram import Dispatcher, types
 
+from grokbot.application.events import ItemFailed, ItemResult, RetryScheduled
 from grokbot.domain.generation import KieTaskRef
 from grokbot.telegram.chat_ui import ChatUI
 from grokbot.telegram.deps import BotDeps
 from grokbot.telegram.formatters import (
     escape,
     model_display,
+    retry_status_text,
     validate_prompt,
     video_start_message,
 )
 from grokbot.telegram.handlers._common import (
-    D8_ALBUM_MSG,
     D8_CMD_MSG,
     D8_FACESWAP_MSG,
     D8_INTEGRATE_MSG,
+    INTEGRATE_MAX_ALBUM,
     SOURCE_MEDIA_UNAVAILABLE_MSG,
     TELEGRAM_CAPTION_COLLECT_THRESHOLD,
     answer_callback,
@@ -229,11 +232,145 @@ async def handle_photo_no_caption(message: types.Message, deps: BotDeps) -> None
 
 
 async def handle_album(message: types.Message, deps: BotDeps) -> None:
-    """Álbum/media group entrante → degradación D8 (no silencio cuando trae caption)."""
-    if not message.caption:
-        return
+    """Media group → colección efímera y edición secuencial (modelo grok)."""
+    cfg = deps.sessions.get_config(message.from_user.id)
     ui = _chat_ui(deps, message)
-    await ui.send_text(D8_ALBUM_MSG)
+    if cfg.model == "faceswap":
+        await ui.send_text(D8_FACESWAP_MSG)
+        return
+    if cfg.model != "grok":
+        return  # paridad grok 3088-3089: seedream/comfyui/grok_video en silencio
+    key = (message.chat.id, message.media_group_id)
+    if deps.album.add(key, message):
+        asyncio.create_task(_drain_grok_album(deps, key))
+
+
+def _album_prompt(messages: list) -> str | None:
+    """Prompt del álbum: primer caption no vacío (sorted por message_id)."""
+    for m in sorted(messages, key=lambda x: x.message_id):
+        if m.caption:
+            return m.caption
+    return None
+
+
+async def _drain_grok_album(deps: BotDeps, key: tuple[int, str]) -> None:
+    """Espera el delay de colección y procesa el álbum (parity grok 3067-3180)."""
+    await asyncio.sleep(deps.album.delay)
+    messages = deps.album.pop(key)
+    if not messages:
+        return
+    messages = sorted(messages, key=lambda m: m.message_id)
+    first = messages[0]
+    ui = _chat_ui(deps, first)
+    n = len(messages)
+    if n > INTEGRATE_MAX_ALBUM:
+        await ui.send_text(f"El album tiene {n} fotos; el maximo es {INTEGRATE_MAX_ALBUM}.")
+        return
+    raw_caption = _album_prompt(messages)
+    if not raw_caption:
+        await ui.send_text(_HINT_EDIT)  # copy grok 3139-3143
+        return
+    integrate_mode, prompt = parse_integrate_caption(raw_caption)
+    if integrate_mode:
+        await ui.send_text(D8_INTEGRATE_MSG)  # grokV2 no implementa integrate en álbum
+        return
+    if len(prompt) > TELEGRAM_CAPTION_COLLECT_THRESHOLD:
+        file_ids = [largest_photo(m) for m in messages if m.photo]
+        file_ids = [f for f in file_ids if f]
+        uid = first.from_user.id
+        deps.pending.clear(uid)
+        deps.long_prompt.set(uid, file_ids=file_ids, integrate_mode=False, is_video=False)
+        await ui.send_text(_long_prompt_reply_text(is_video=False, n_photos=len(file_ids)))
+        return
+    prompt_err = validate_prompt(prompt)
+    if prompt_err:
+        await ui.send_text(prompt_err)
+        return
+    cfg = deps.sessions.get_config(first.from_user.id)
+    deps.long_prompt.clear(first.from_user.id)
+    file_ids = [largest_photo(m) for m in messages if m.photo]
+    file_ids = [f for f in file_ids if f]
+    await _process_album_edit(deps, first, prompt, file_ids, cfg)
+
+
+async def _process_album_edit(deps: BotDeps, anchor_message, prompt: str, file_ids: list[str], cfg) -> None:
+    """Edición secuencial del álbum con UN job ``album_edit`` (parity 1815-1963).
+
+    NO reutiliza ``present_single_image``: necesita continuar por foto editando un
+    UNICO status "Editando i/N" con cancel cooperativo y terminales byte-parity.
+    Álbum solo llega con ``cfg.model == "grok"`` (sin refine). A2: label de status
+    sin sufijo ``({backend})`` (consistente con el single-edit de grokV2).
+    """
+    uid = anchor_message.from_user.id
+    ui = _chat_ui(deps, anchor_message)
+    model = model_display(cfg)
+    n = len(file_ids)
+    job = deps.job_manager.start(uid, "album_edit")
+    if job is None:  # defensivo; R9 no tiene tope de concurrencia
+        return
+    status = await ui.send_text(
+        f"Editando 0/{n} imágenes con {model['name']}...",
+        reply_markup=cancel_job_keyboard(job.job_id),
+    )
+    status_id = status.message_id
+    completed = 0
+    try:
+        for i, file_id in enumerate(file_ids, 1):
+            if deps.job_manager.is_cancelled(job):
+                await ui.edit_text(
+                    status_id, f"⏹ Cancelado. Completadas {completed}/{n} imágenes.", reply_markup=None
+                )
+                return
+            label = f"Editando {i}/{n} imágenes con {model['name']}..."
+            await ui.edit_text(status_id, label, reply_markup=cancel_job_keyboard(job.job_id))
+            image_data = await fetch_source_bytes(deps.gateway, file_id)
+            if image_data is None:
+                await ui.edit_text(status_id, SOURCE_MEDIA_UNAVAILABLE_MSG, reply_markup=None)
+                return
+            if deps.job_manager.is_cancelled(job):
+                await ui.edit_text(
+                    status_id, f"⏹ Cancelado. Completadas {completed}/{n} imágenes.", reply_markup=None
+                )
+                return
+            events = deps.generate_image.run(
+                user_id=uid,
+                prompt=prompt,
+                source_image=image_data,
+                source_file_id=file_id,
+                cfg_override=cfg,
+            )
+            async for ev in events:
+                if isinstance(ev, RetryScheduled):
+                    await ui.edit_text(
+                        status_id,
+                        retry_status_text(label, ev.attempt, ev.max_attempts),
+                        reply_markup=cancel_job_keyboard(job.job_id),
+                    )
+                    continue
+                if isinstance(ev, ItemFailed):
+                    await ui.edit_text(
+                        status_id,
+                        f"{completed}/{n} completadas; error en imagen {i}: {ev.reason}",
+                        reply_markup=None,
+                    )
+                    return
+                if isinstance(ev, ItemResult):
+                    if deps.job_manager.is_cancelled(job):
+                        await ui.edit_text(
+                            status_id,
+                            f"⏹ Cancelado. Completadas {completed}/{n} imágenes.",
+                            reply_markup=None,
+                        )
+                        return
+                    await make_sender(deps).send_image(
+                        ui, ev, "Edit", status_id=status_id,
+                        delete_status=False, owner_uid=uid,
+                    )
+                    completed += 1
+            # El stream single termina tras su ItemResult/ItemFailed.
+        await ui.edit_text(status_id, f"Completadas {n}/{n} imágenes.", reply_markup=None)
+    finally:
+        deps.job_manager.finish(uid, job.job_id)
 
 
 # --------------------------------------------------------------------------- #

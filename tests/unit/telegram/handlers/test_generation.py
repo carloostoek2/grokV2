@@ -7,17 +7,22 @@ cancelada." etc.). Fixtures anonimizados.
 
 from __future__ import annotations
 
+import asyncio
+
 from aiogram import Bot
 
 from conftest import (
     CHAT_ID,
     USER_ID,
+    FakeImageProvider,
     callback_query,
     callback_update,
     flat_callback_data,
     make_deps,
     make_dispatcher,
     make_photo_message,
+    make_registry,
+    make_result,
     message_update,
     text_message,
 )
@@ -363,12 +368,176 @@ async def test_photo_no_caption_while_awaiting_reminds():
     assert deps.long_prompt.is_awaiting(_UID) is True, "el recordatorio no consume la colección"
 
 
-async def test_album_with_caption_degrades():
+# --------------------------------------------------------------------------- #
+# Álbumes / media groups → colección + edición secuencial (Task 3)
+# --------------------------------------------------------------------------- #
+_ALBUM_LABEL = "Grok Imagine (Kie.ai • Alta calidad)"
+
+
+async def _feed_album(deps, n: int, *, group: str = "album-1", caption_on: int | None = 1,
+                      file_prefix: str = "FAKE:album"):
+    """Alimentar un media group de ``n`` fotos (una sola dispatcher)."""
+    dp, deps = make_dispatcher(deps)
+    for i in range(1, n + 1):
+        msg = make_photo_message(
+            caption=("un cambio" if caption_on == i else None),
+            message_id=100 + i,
+            file_id=f"{file_prefix}{i}",
+            media_group_id=group,
+        )
+        await dp.feed_update(_BOT, message_update(msg))
+    return deps
+
+
+async def test_album_grok_edits_sequentially():
     deps = make_deps()
-    photo = make_photo_message(caption="un cambio", message_id=5, media_group_id="album-1")
-    deps = await _msg(deps, photo)
+    deps.album.delay = 0.05
+    deps = await _feed_album(deps, 3)
+    await asyncio.sleep(0.3)
+    sends = deps.gateway.calls_by_method("send_message")
+    status = sends[0]
+    assert status["text"] == f"Editando 0/3 imágenes con {_ALBUM_LABEL}..."
+    data = flat_callback_data(status["reply_markup"])
+    assert data and data[0].startswith("cancel_job:"), "status de álbum lleva cancel_job:<id>"
+    edits = [c["text"] for c in deps.gateway.calls_by_method("edit_message_text")]
+    assert f"Editando 1/3 imágenes con {_ALBUM_LABEL}..." in edits
+    assert f"Editando 2/3 imágenes con {_ALBUM_LABEL}..." in edits
+    assert f"Editando 3/3 imágenes con {_ALBUM_LABEL}..." in edits
+    assert edits[-1] == "Completadas 3/3 imágenes."
+    assert len(deps.gateway.calls_by_method("send_photo")) == 3
+    assert deps.job_manager.active_jobs(_UID) == ()
+
+
+async def test_album_no_caption_shows_hint():
+    deps = make_deps()
+    deps.album.delay = 0.05
+    deps = await _feed_album(deps, 3, caption_on=None)
+    await asyncio.sleep(0.3)
     last = deps.gateway.calls_by_method("send_message")[-1]
-    assert "Los álbumes todavía no están disponibles en esta versión." in last["text"]
+    assert last["text"].startswith("Para editar una imagen, enviala con un")
+    assert deps.gateway.calls_by_method("send_photo") == []
+
+
+async def test_album_too_many_photos_errors():
+    deps = make_deps()
+    deps.album.delay = 0.05
+    deps = await _feed_album(deps, 11, group="album-big")
+    await asyncio.sleep(0.3)
+    last = deps.gateway.calls_by_method("send_message")[-1]
+    assert last["text"] == "El album tiene 11 fotos; el maximo es 10."
+    assert deps.gateway.calls_by_method("send_photo") == []
+
+
+async def test_album_non_grok_model_silent():
+    deps = make_deps()
+    deps.update_config.set_model(_UID, "seedream")
+    deps.album.delay = 0.05
+    deps = await _feed_album(deps, 3, caption_on=1)
+    await asyncio.sleep(0.3)
+    assert deps.gateway.calls_by_method("send_message") == []
+    assert deps.gateway.calls_by_method("send_photo") == []
+
+
+async def test_album_faceswap_degrades():
+    deps = make_deps()
+    deps.update_config.set_model(_UID, "faceswap")
+    deps.album.delay = 0.05
+    deps = await _feed_album(deps, 2, caption_on=1)
+    await asyncio.sleep(0.3)
+    last = deps.gateway.calls_by_method("send_message")[-1]
+    assert "El modo Face Swap no está disponible en esta versión." in last["text"]
+
+
+async def test_album_integrate_caption_still_d8():
+    deps = make_deps()
+    deps.album.delay = 0.05
+    dp, deps = make_dispatcher(deps)
+    msg = make_photo_message(
+        caption="/s referencia extra", message_id=201, media_group_id="album-int"
+    )
+    await dp.feed_update(_BOT, message_update(msg))
+    msg2 = make_photo_message(message_id=202, media_group_id="album-int")
+    await dp.feed_update(_BOT, message_update(msg2))
+    await asyncio.sleep(0.3)
+    last = deps.gateway.calls_by_method("send_message")[-1]
+    assert "La edición con referencia (/s) no está disponible en esta versión." in last["text"]
+
+
+async def test_album_long_caption_defers_to_text():
+    deps = make_deps()
+    deps.album.delay = 0.05
+    dp, deps = make_dispatcher(deps)
+    for i in (301, 302, 303):
+        cap = "x" * 1100 if i == 301 else None
+        msg = make_photo_message(
+            caption=cap, message_id=i,
+            file_id=f"FAKE:albumlong{i}", media_group_id="album-long",
+        )
+        await dp.feed_update(_BOT, message_update(msg))
+    await asyncio.sleep(0.3)
+    last = deps.gateway.calls_by_method("send_message")[-1]
+    assert last["text"].startswith("El caption es demasiado largo para procesarlo directamente.")
+    assert "He guardado tus 3 fotos del álbum." in last["text"]
+    assert deps.long_prompt.is_awaiting(_UID) is True
+    assert deps.gateway.calls_by_method("send_photo") == []
+
+
+class _StagedAlbumProvider(FakeImageProvider):
+    """Fake kie provider que pausa en CADA generate hasta que el test lo suelta.
+
+    Expone ``started`` (un evento por llamada, seteado al entrar a generate) y
+    ``releases`` (un evento por llamada, para abrir la compuerta). Permite el
+    cancel-mid deterministico: item 1 completa, item 2 queda bloqueado en la
+    compuerta, el test cancela y recién ahí suelta la compuerta.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(name="kie")
+        self.started: list[asyncio.Event] = []
+        self.releases: list[asyncio.Event] = []
+
+    async def generate(self, request, *, source_image=None):
+        started = asyncio.Event()
+        release = asyncio.Event()
+        self.started.append(started)
+        self.releases.append(release)
+        started.set()
+        await release.wait()
+        return make_result(provider="kie", model_id=request.model_id)
+
+
+async def _wait_event(event: asyncio.Event, timeout: float = 2.0) -> None:
+    await asyncio.wait_for(event.wait(), timeout=timeout)
+
+
+async def _wait_until(pred, timeout: float = 2.0) -> None:
+    """Polling corto hasta que ``pred()`` sea verdadero (evita race del drain)."""
+    async with asyncio.timeout(timeout):
+        while not pred():
+            await asyncio.sleep(0.005)
+
+
+async def test_album_cancel_mid_way():
+    provider = _StagedAlbumProvider()
+    deps = make_deps(registry=make_registry(kie=provider))
+    deps.album.delay = 0.05
+    deps = await _feed_album(deps, 3, file_prefix="FAKE:alb_cancel")
+    # El ítem 1 queda bloqueado en su compuerta: soltarlo para que complete.
+    await _wait_until(lambda: len(provider.started) >= 1)
+    provider.releases[0].set()
+    # El ítem 2 arranca y se bloquea en su compuerta → cancelar ahí.
+    await _wait_until(lambda: len(provider.started) >= 2)
+    status = deps.gateway.calls_by_method("send_message")[0]
+    job_id = flat_callback_data(status["reply_markup"])[0].split(":", 1)[1]
+    deps = await _cb(
+        deps, callback_query(f"cancel_job:{job_id}", message_id=status["sent"].message_id)
+    )
+    provider.releases[1].set()
+    await asyncio.sleep(0.3)
+    edits = [c["text"] for c in deps.gateway.calls_by_method("edit_message_text")]
+    assert "⏹ Cancelado. Completadas 1/3 imágenes." in edits
+    assert len(deps.gateway.calls_by_method("send_photo")) == 1, "solo el ítem 1 completo"
+    assert deps.job_manager.active_jobs(_UID) == ()
 
 
 async def test_cancel_suppresses_media():
