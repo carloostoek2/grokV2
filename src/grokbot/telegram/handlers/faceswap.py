@@ -261,8 +261,10 @@ async def handle_faceswap_confirm_yes(callback: types.CallbackQuery, deps: BotDe
         return
     if not deps.source_faces.source_available(uid):
         # A4: source configurado en la config pero sin archivo → clear + missing.
+        # Parity grok: el copy distingue single/batch según len(file_ids).
         deps.source_faces.clear_source(uid)
-        await _edit_quietly(ui, message_id, _SOURCE_MISSING_SINGLE)
+        missing = _SOURCE_MISSING_BATCH if len(file_ids) > 1 else _SOURCE_MISSING_SINGLE
+        await _edit_quietly(ui, message_id, missing)
         await answer_callback(deps.gateway, callback)
         return
     total = len(file_ids)
@@ -388,10 +390,14 @@ async def _run_batch(deps: BotDeps, uid: int, file_ids: list[str], *, ui: ChatUI
                     cancelled = True
     except Exception as exc:  # noqa: BLE001 — contención del task (parity grok 3629-3645)
         _logger.error("faceswap batch falló (%s)", type(exc).__name__)
-        await _edit_quietly(ui, status_id, _FACESWAP_UNEXPECTED_ERROR)
-        return
-    if results:
-        await _send_faceswap_results(ui, results)
+        # Rescue: se envían las imágenes ya swapeadas y el fallo va al terminal
+        # con conteos (parity grok bot.py 3629-3645), nunca al genérico.
+        if results:
+            failures.extend(await _send_faceswap_results(ui, results))
+        failures.append(f"procesamiento: {type(exc).__name__}")
+    else:
+        if results:
+            failures.extend(await _send_faceswap_results(ui, results))
     await _edit_quietly(
         ui,
         status_id,
@@ -399,20 +405,47 @@ async def _run_batch(deps: BotDeps, uid: int, file_ids: list[str], *, ui: ChatUI
     )
 
 
-async def _send_faceswap_results(ui: ChatUI, results: list[bytes]) -> None:
-    """Envía los resultados: 1 → send_photo; N → media groups de a 10."""
+def _faceswap_send_failure(exc: Exception) -> str:
+    """Detalle user-safe de un fallo de envío (A8/C3): user_message o type name."""
+    detail = getattr(exc, "user_message", None) or type(exc).__name__
+    return f"envio a Telegram: {detail}"
+
+
+async def _send_faceswap_results(ui: ChatUI, results: list[bytes]) -> list[str]:
+    """Envía resultados: 1 → send_photo; N → media groups de a 10.
+
+    Si un media group falla, reintenta el chunk foto a foto (parity grok
+    bot.py 3604-3632) y reporta el fallo de envío en el terminal. Devuelve la
+    lista de fallos de envío (user-safe, sin bytes/file_ids/paths). Nunca
+    lanza: todo error de envío se traduce a un fallo del terminal.
+    """
     if not results:
-        return
+        return []
+    failures: list[str] = []
     if len(results) == 1:
-        await ui.send_photo(results[0], filename="faceswap.jpg")
-        return
+        try:
+            await ui.send_photo(results[0], filename="faceswap.jpg")
+        except Exception as exc:  # noqa: BLE001 — detalle user-safe A8
+            _logger.error("faceswap send_photo falló (%s)", type(exc).__name__)
+            failures.append(_faceswap_send_failure(exc))
+        return failures
     for offset in range(0, len(results), _MEDIA_GROUP_MAX):
         chunk = results[offset : offset + _MEDIA_GROUP_MAX]
         media = [
             OutboundMedia(media=data, filename=f"faceswap_{offset + i + 1}.jpg")
             for i, data in enumerate(chunk)
         ]
-        await ui.send_media_group(media)
+        try:
+            await ui.send_media_group(media)
+        except Exception as exc:  # noqa: BLE001 — detalle user-safe A8
+            _logger.error("faceswap media group falló (%s), fallback foto a foto", type(exc).__name__)
+            failures.append(_faceswap_send_failure(exc))
+            for i, data in enumerate(chunk):
+                try:
+                    await ui.send_photo(data, filename=f"faceswap_{offset + i + 1}.jpg")
+                except Exception as photo_exc:  # noqa: BLE001 — detalle user-safe A8
+                    _logger.error("faceswap fallback send falló (%s)", type(photo_exc).__name__)
+    return failures
 
 
 # --------------------------------------------------------------------------- #

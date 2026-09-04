@@ -20,6 +20,7 @@ from conftest import (
     CHAT_ID,
     USER_ID,
     FakeImageProvider,
+    FakeTelegramGateway,
     callback_query,
     callback_update,
     flat_callback_data,
@@ -271,7 +272,9 @@ async def test_confirm_yes_single_success():
     assert edits[0]["text"].startswith("Face swap\n")
     assert edits[0]["text"].endswith("Imagen 1/1 en Replicate...")
     assert flat_callback_data(edits[0]["reply_markup"])[0].startswith("cancel_job:")
-    assert edits[-1]["text"].endswith("Procesada 1 imagen.")
+    # Terminal single byte-exacto y sin keyboard de cancel (review Round 1 nit).
+    assert edits[-1]["text"] == "[██████████] 1/1 (100%)\nProcesada 1 imagen."
+    assert edits[-1]["reply_markup"] is None
     photos = deps.gateway.calls_by_method("send_photo")
     assert len(photos) == 1 and photos[0]["filename"] == "faceswap.jpg"
     assert len(provider.swap_face_calls) == 1
@@ -305,6 +308,57 @@ async def test_confirm_yes_batch_sends_media_group(monkeypatch):
     assert any("Imagen 2/3 en Replicate..." in t for t in edits)
     assert len(provider.swap_face_calls) == 3
     assert deps.faceswap_pending.get(_UID) is None
+    assert deps.job_manager.active_jobs(_UID) == ()
+
+
+async def test_confirm_yes_batch_chunks_over_ten(monkeypatch):
+    """review R1: `_send_faceswap_results` chunk de 12 → media groups 10+2 con offsets."""
+    real_sleep = asyncio.sleep
+
+    async def _short_sleep(delay):
+        if delay and delay >= 1.0:  # neutraliza el rate-limit real (10s) del batch
+            await real_sleep(0)
+        else:
+            await real_sleep(delay)
+
+    monkeypatch.setattr(asyncio, "sleep", _short_sleep)
+    provider = FakeImageProvider(name="replicate")
+    deps = _set_faceswap(make_deps(registry=make_registry(replicate=provider)), source=True)
+    deps.faceswap_pending.set(
+        _UID, [f"FAKE:chunk{i}" for i in range(1, 13)], chat_id=_CHAT, message_id=896
+    )
+    deps = await _cb(deps, callback_query("faceswap:confirm:yes", message_id=896))
+
+    groups = deps.gateway.calls_by_method("send_media_group")
+    assert len(groups) == 2, "12 fotos → 2 media groups (10 + 2)"
+    assert len(groups[0]["media"]) == 10
+    assert len(groups[1]["media"]) == 2
+    filenames0 = [m.filename for m in groups[0]["media"]]
+    assert filenames0 == [f"faceswap_{i}.jpg" for i in range(1, 11)]
+    filenames1 = [m.filename for m in groups[1]["media"]]
+    assert filenames1 == ["faceswap_11.jpg", "faceswap_12.jpg"]
+    assert deps.gateway.calls_by_method("send_photo") == [], "todo va en media groups"
+    edits = [c["text"] for c in deps.gateway.calls_by_method("edit_message_text")]
+    assert edits[-1].endswith("Procesadas 12/12 imagenes.")
+    assert deps.faceswap_pending.get(_UID) is None
+    assert deps.job_manager.active_jobs(_UID) == ()
+
+
+async def test_confirm_yes_batch_source_missing_clears_batch_copy():
+    """review R1 nit: confirm-yes batch con source stale usa el copy BATCH."""
+    deps = make_deps()
+    cfg = deps.sessions.get_config(_UID)
+    deps.sessions.save_config(
+        _UID, dataclasses.replace(cfg, model="faceswap", source_path="/stale/source.jpg")
+    )
+    deps.faceswap_pending.set(_UID, ["FAKE:x1", "FAKE:x2"], chat_id=_CHAT, message_id=898)
+    deps = await _cb(deps, callback_query("faceswap:confirm:yes", message_id=898))
+    edits = deps.gateway.calls_by_method("edit_message_text")
+    assert edits[-1]["text"] == "Source no encontrado. Usa /cambiar_source."
+    assert edits[-1]["reply_markup"] is None
+    assert deps.sessions.get_config(_UID).source_path is None, "A4: clear del path stale"
+    assert deps.gateway.calls_by_method("send_photo") == []
+    assert deps.gateway.calls_by_method("send_media_group") == []
     assert deps.job_manager.active_jobs(_UID) == ()
 
 
@@ -366,6 +420,64 @@ async def test_confirm_yes_source_missing_clears_and_edits():
     assert edits[-1]["text"] == "Source no encontrado. Usa /cambiar_source para configurar de nuevo."
     assert deps.sessions.get_config(_UID).source_path is None
     assert provider.swap_face_calls == []
+    assert deps.job_manager.active_jobs(_UID) == ()
+
+
+class _FaceswapSendError(Exception):
+    """Error de envío fake con user_message (C3: el terminal muestra el safe text)."""
+
+    def __init__(self, message: str, *, user_message: str | None = None):
+        super().__init__(message)
+        self.user_message = user_message if user_message is not None else message
+
+
+class _FailingMediaGroupGateway(FakeTelegramGateway):
+    """Gateway que falla SOLO al enviar media groups (para el fallback foto a foto)."""
+
+    async def send_media_group(self, chat_id, media, *, reply_to_message_id=None):
+        self._record(
+            "send_media_group_failed",
+            chat_id=chat_id,
+            media=media,
+            reply_to_message_id=reply_to_message_id,
+        )
+        raise _FaceswapSendError(
+            "group too large", user_message="Fallo al enviar el grupo de fotos."
+        )
+
+
+async def test_confirm_yes_batch_media_group_fallback_sends_photos(monkeypatch):
+    """review R1 #1: si el media group falla, fallback foto a foto + terminal con conteos."""
+    real_sleep = asyncio.sleep
+
+    async def _short_sleep(delay):
+        if delay and delay >= 1.0:  # neutraliza el rate-limit real (10s) del batch
+            await real_sleep(0)
+        else:
+            await real_sleep(delay)
+
+    monkeypatch.setattr(asyncio, "sleep", _short_sleep)
+    gateway = _FailingMediaGroupGateway()
+    deps = _set_faceswap(make_deps(gateway=gateway), source=True)
+    deps.faceswap_pending.set(
+        _UID, ["FAKE:m1", "FAKE:m2", "FAKE:m3"], chat_id=_CHAT, message_id=897
+    )
+    deps = await _cb(deps, callback_query("faceswap:confirm:yes", message_id=897))
+
+    failed = gateway.calls_by_method("send_media_group_failed")
+    assert len(failed) == 1, "el media group se intentó una vez y falló"
+    photos = gateway.calls_by_method("send_photo")
+    assert len(photos) == 3, "fallback foto a foto entrega todas las imágenes"
+    assert [p["filename"] for p in photos] == [
+        "faceswap_1.jpg", "faceswap_2.jpg", "faceswap_3.jpg",
+    ]
+    last = gateway.calls_by_method("edit_message_text")[-1]
+    assert last["text"].endswith(
+        "Completadas 3/3 imagenes.\n"
+        "Fallos: envio a Telegram: Fallo al enviar el grupo de fotos."
+    )
+    assert last["reply_markup"] is None
+    assert deps.faceswap_pending.get(_UID) is None
     assert deps.job_manager.active_jobs(_UID) == ()
 
 
@@ -462,6 +574,37 @@ async def test_group_other_user_cannot_confirm_faceswap():
     assert deps.faceswap_pending.get(_UID) is not None, "el pendiente de A sigue intacto"
     assert deps.gateway.calls_by_method("send_photo") == []
     assert deps.gateway.calls_by_method("edit_message_text") == [], "no se toca el mensaje ajeno"
+    assert deps.job_manager.active_jobs(_UID) == ()
+
+
+async def test_group_other_user_cannot_cancel_faceswap_confirm():
+    """review R1 #4: C4 en confirm-`no` — B no cancela la confirmación ajena."""
+    deps = _set_faceswap(make_deps(), source=True)
+    msg = make_photo_message(
+        user_id=_UID, chat_id=_GROUP, chat_type="group",
+        message_id=11, file_id="FAKE:group_photo2",
+    )
+    deps = await _msg(deps, msg)
+    confirm = deps.gateway.calls_by_method("send_message")[-1]
+    mid = confirm["sent"].message_id
+    assert deps.faceswap_pending.get(_UID) is not None
+
+    deps = await _cb(
+        deps,
+        callback_query(
+            "faceswap:confirm:no", user_id=_OTHER, chat_id=_GROUP,
+            chat_type="group", message_id=mid,
+        ),
+    )
+    ans = deps.gateway.calls_by_method("answer_callback")[-1]
+    assert ans["text"] == "Esta confirmación pertenece a otro usuario."
+    assert ans["show_alert"] is True
+    assert deps.faceswap_pending.get(_UID) is not None, "el pendiente de A sigue intacto"
+    assert deps.gateway.calls_by_method("send_photo") == []
+    assert not any(
+        c["text"] == "Generacion cancelada."
+        for c in deps.gateway.calls_by_method("edit_message_text")
+    ), "no se toca el mensaje ajeno"
     assert deps.job_manager.active_jobs(_UID) == ()
 
 
