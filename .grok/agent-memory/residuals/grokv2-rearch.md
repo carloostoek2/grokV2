@@ -191,7 +191,7 @@ suite **519 passed**.
 | R9 — Bot abierto + sin rate limit + sin TTL (C8) | **Cerrado por decisión** — `2bbfdd3` (sin tope de concurrencia), `5900809` (sin cuota horaria), `5e9e88b` (gate SOLO chat privado global + aviso de allowlist abierta). Sin rate limit/TTL queda POR DECISIÓN (single-owner). **Residual:** fijar `ALLOWED_TELEGRAM_IDS` con el ID del owner (config de deploy; el boot lo avisa). |
 | R10 — URL firmada cruda + rama >50MB (C9a/b) | **Resuelto** — `096dd0d` (tope único `MAX_MEDIA_BYTES`). URL conservada por decisión de producto. |
 | R4 — 9 flujos D8 degradados | **Diferido (wave 2)** — degradaciones user-safe activas; flujos completos requieren use cases/datos. |
-| Smoke live con infraestructura real | **En curso (owner)** — ver PRODUCT_STATUS §4.3 (credenciales/pasos) y §4.4 (harness). Arrancado 2026-09-04 con credenciales de grok v1; hallazgo corregido (panel /config, abajo). |
+| Smoke live con infraestructura real | **Completado** — 2026-09-04 con credenciales de grok v1; hallazgo corregido (panel /config, abajo) y validación final del owner **todo ok** (sesión 36 updates, 0 errores). Falta solo decidir el deploy (abajo). |
 
 ---
 
@@ -218,6 +218,10 @@ mensaje enviado por el bot lleva `from_user` = el BOT.
   `from_user` = el bot y se verifica que el cambio se guarda y refleja en la config del
   dueño. Se purgó el registro fantasma del bot de `sessions.json` (backup local). Suite
   **521 passed**.
-- **Falta del smoke live (pasos en PRODUCT_STATUS §4.3):** validar en vivo proveedor xAI,
-  Replicate/Seedream, edición por foto, video y enlace de recuperación (R10), refine ComfyUI
-  y `/variables N` con el panel ya corregido. R4 (9 flujos D8) sigue diferido.
+- **Validación final (misma sesión, panel ya corregido):** el owner probó TODO el recorrido
+  del smoke (§4.3: proveedor xAI, Replicate/Seedream, edición por foto, video, refine ComfyUI,
+  `/variables N`, etc.) y reportó **"todo ok"**. Sesión de 36 updates manejados (18:06→18:13
+  UTC) con **0 errores/avisos** en el log. R4 (9 flujos D8) sigue diferido a wave 2.
+- **Pendiente de deploy (no del smoke):** decidir si grokV2 queda como bot permanente (hoy
+  corre a mano desde la consola; el servicio systemd v1 sigue detenido). Si es así, fijar
+  `ALLOWED_TELEGRAM_IDS=<id del owner>` y `GROK_DATA_DIR` absoluto (ver PRODUCT_STATUS §3/§4.2).

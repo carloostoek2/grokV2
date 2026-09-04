@@ -3,8 +3,8 @@
 > Fuente única de estado del producto `grokbot` (@grokV2). Arquitectura objetivo:
 > `docs/SPEC_REFACTOR.md`. Fecha de consolidación: 2026-09-04.
 > HEAD verificado: `742b566` — suite completa **521 passed** · baseline `grok/**` intacto.
-> Wave de hardening R8/R9/R10 cerrada + smoke live arrancado (bug de panel `/config`
-> corregido, detalle en §3/§5).
+> Wave de hardening R8/R9/R10 cerrada + smoke live con infra real **completado y validado**
+> por el owner (bug de panel `/config` corregido, detalle en §3/§5).
 
 ---
 
@@ -83,21 +83,23 @@ resueltos. Ver commits y cierre en `.grok/agent-memory/residuals/grokv2-rearch.m
 | **R10** | Tope 50MB duplicado; URL firmada | hardening / decisión | **Resuelto** — `096dd0d` (tope único `MAX_MEDIA_BYTES`); la URL se muestra: camino de recuperación por decisión del owner. |
 | **R4** | 9 flujos degradados D8 (§2) | follow-up de producto (wave 2) | cablear use cases/datos por flujo. Degradaciones user-safe activas. |
 | **Deploy** | Fijar `ALLOWED_TELEGRAM_IDS=<tu ID numérico>` | decisión de deploy (owner) | Hoy: SOLO chat privado, pero con allowlist vacía CUALQUIER user en DM puede usar el bot (costo real). El boot avisa. |
-| **Smoke live** | Probar con infraestructura real | follow-up (owner) | **Arrancado 2026-09-04** con credenciales de grok v1; hallazgo corregido (bug panel `/config`, nota abajo); falta re-verificar los pasos de §4.3 en vivo. |
+| **Smoke live** | Probar con infraestructura real | follow-up (owner) | **Completado 2026-09-04** con credenciales reales de grok v1: bug del panel `/config` corregido (nota abajo) y recorrido §4.3 validado por el owner — **todo ok** (sesión 36 updates, 0 errores). Pendiente: decidir el deploy (abajo). |
 | R1/R2 | Baseline sucio de `grok/**` + DeprecationWarnings pytest-asyncio (Py3.14) | out-of-scope | cosmético / no tocar |
 
 Registro detallado con origen y archivos: `.grok/agent-memory/residuals/grokv2-rearch.md`
 (proceso, no commiteado en el detalle por convención de artefactos de pool).
 
-**Smoke live — hallazgo corregido (2026-09-04):** el panel de `/config` se re-renderizaba
-con la config del PROPIO BOT en vez de la del dueño: en Telegram real el mensaje del panel
-(bot-sent) lleva `from_user` = el bot, y los showers leían `get_config(target.from_user.id)`
-→ la pantalla siempre mostraba el default (Grok Imagine / Kie / Alta calidad) sin importar el
-tap; seedream/faceswap "volvían" a Grok Imagine y video/ComfyUI parecían no cambiar (la
-generación sí usaba el modelo correcto). Los **519 tests offline NO lo veían**: los fakes de
-telegram construyen el mensaje del panel con `from_user` = el dueño. Fix `742b566` (`uid`
-explícito en los showers) + 2 regresiones que simulan el mensaje del bot (from_user = bot).
-Suite **521 passed**. Registro completo en el residual registry.
+**Smoke live — hallazgo corregido y validación completa (2026-09-04):** el panel de
+`/config` se re-renderizaba con la config del PROPIO BOT en vez de la del dueño: en Telegram
+real el mensaje del panel (bot-sent) lleva `from_user` = el bot, y los showers leían
+`get_config(target.from_user.id)` → la pantalla siempre mostraba el default (Grok Imagine /
+Kie / Alta calidad) sin importar el tap; seedream/faceswap "volvían" a Grok Imagine y
+video/ComfyUI parecían no cambiar (la generación sí usaba el modelo correcto). Los **519
+tests offline NO lo veían**: los fakes de telegram construyen el mensaje del panel con
+`from_user` = el dueño. Fix `742b566` (`uid` explícito en los showers) + 2 regresiones que
+simulan el mensaje del bot (from_user = bot). Suite **521 passed**. Tras el fix el owner
+validó en vivo el recorrido completo de §4.3 y reportó **todo ok** (36 updates manejados,
+0 errores). Registro completo en el residual registry.
 
 ---
 
@@ -129,12 +131,13 @@ cp .env.example .env   # y completar los valores
 - Sin webhook (D9): solo polling. Sin límites de uso (por decisión): sin tope de procesos
   activos ni cuota horaria.
 
-### 3. Smoke live pendiente — qué se necesita exactamente (el pool no lo hizo)
+### 3. Smoke live — EJECUTADO y validado (2026-09-04)
 
 Los tests son **0-red por política**: ningún endpoint real ni el envío real a Telegram se
-tocó en vivo. La suite offline NO reemplaza este smoke; para probar con la infraestructura
-real hacen falta **tus credenciales y pasos interactivos** (no se pueden hacer con fakes ni
-mocks). Lo que se necesita, pieza por pieza:
+tocó en la suite. El smoke con infraestructura REAL sí se hizo (credenciales de grok v1
+copiadas a `.env`, servicio v1 detenido → sin conflicto de polling) y el owner **validó todo
+el recorrido: todo ok** (36 updates manejados, 0 errores). Lo que se usó, pieza por pieza
+(queda como registro del recorrido validado):
 
 **a) Credenciales / entorno (las mismas que ya usa el bot en `.env`):**
 1. `TELEGRAM_BOT_TOKEN` — token real del bot (BotFather). **Mueve el bot real al arrancar.**
@@ -148,8 +151,7 @@ mocks). Lo que se necesita, pieza por pieza:
    quieres probar multipose / refine 2-stage / modelos comfyui.
 7. `GROK_DATA_DIR` — ruta absoluta del data dir (no dejar el `./data` relativo).
 
-**b) Pasos interactivos en Telegram (los hace el humano; no son automatizables de forma
-fiable porque hay botones y media de ida y vuelta):**
+**b) Pasos interactivos en Telegram (recorrido ejecutado y validado por el owner):**
 1. Arrancar con `ALLOWED_TELEGRAM_IDS=<tu id>` y el entorno de (a): `.venv/bin/grokbot`.
 2. En privado: `/start` → debe responder con el estado actual.
 3. Prompt de texto → confirmar (botón) → esperar la imagen real → debe llegar como foto.
@@ -163,7 +165,8 @@ fiable porque hay botones y media de ida y vuelta):**
 9. `/listas` y `/variables 3` → batch de 3 (con cancel en medio, opcional).
 
 Cada proveedor se valida con un job real; si un provider falla, el mensaje degrada user-safe
-(eso también es parte del smoke: ver que el error llega limpio).
+(eso también es parte del smoke: ver que el error llega limpio). En esta corrida no hubo
+ningún error ni degradación inesperada.
 
 ### 4. (Opcional) Harness live automatizable
 
@@ -189,7 +192,8 @@ debe correr sin las credenciales de (a).
 - Smoke live (2026-09-04, infra real con credenciales de grok v1): 519→**521** — hallazgo:
   el panel de `/config` se re-renderizaba con la config del BOT (mensaje del bot con
   `from_user` = el bot) en vez de la del dueño; fix `742b566` + 2 regresiones que simulan el
-  mensaje del bot. Registro: `.grok/agent-memory/residuals/grokv2-rearch.md`.
+  mensaje del bot. **Validación final del owner: todo ok** — recorrido §4.3 completo con
+  36 updates manejados y 0 errores. Registro: `.grok/agent-memory/residuals/grokv2-rearch.md`.
 - Artefactos de proceso (sin commit, untracked por convención del pool):
   `.planning/quick/20260903-grokv2-rearch/CLOSURE.md` (resultado + learnings),
   `.grok/agent-memory/review/grokv2-rearch-poolclose.md` (review completo),
