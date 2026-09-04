@@ -106,7 +106,7 @@ def test_private_only_deny_group_message():
     assert result is None
     assert calls == []
     sent = gateway.calls_by_method("send_message")
-    assert sent[0]["text"] == "La configuración solo está disponible en chats privados."
+    assert sent[0]["text"] == "Este bot solo funciona en chats privados."
 
 
 def test_private_only_allow_private_message():
@@ -128,7 +128,7 @@ def test_private_only_deny_group_callback():
     assert result is None
     assert calls == []
     answered = gateway.calls_by_method("answer_callback")
-    assert answered[0]["text"] == "La configuración solo está disponible en chats privados."
+    assert answered[0]["text"] == "Este bot solo funciona en chats privados."
     assert answered[0]["show_alert"] is True
 
 

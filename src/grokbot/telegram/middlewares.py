@@ -1,14 +1,18 @@
 """Middlewares de gate de la capa telegram (item 5).
 
-Reimplementan el gate de allowlist de grok (bot.py:954-977) y el gate de chat
-privado de /config (config_flow.py:22-50) con el gateway inyectado: al denegar,
-NO llaman al handler y emiten el mensaje por el seam (0 ``message.answer``).
+Reimplementan el gate de allowlist de grok (bot.py:954-977). R9: el bot es de
+un solo owner en SOLO chat privado (decisión de producto) → el gate de chat
+privado es GLOBAL y se adjunta en ``main.assemble_dispatcher`` a ``dp.message``
+y ``dp.callback_query``; el gate de allowlist (identidad) sigue siendo
+configurable. Al denegar NO llaman al handler y emiten el mensaje por el seam
+(0 ``message.answer``).
 
 * :class:`AllowlistMiddleware` — ``allowed_ids=None`` deja pasar a todos
   (default abierto de grok). Deny por texto en messages y ``show_alert`` en
   callbacks.
-* :class:`PrivateChatOnlyMiddleware` — para routers de flujos privados
-  (/config, /listas); deny con el copy de config_flow.
+* :class:`PrivateChatOnlyMiddleware` — deny cuando el chat no es privado
+  (group/supergroup/channel); gate global del bot. /config y /listas conservan
+  su chequeo inline (copy específico) como defensa en profundidad.
 
 El gate de admin del panel /listas vive en el handler (chequea deps), como en
 variables_flow.py:145-156.
@@ -27,7 +31,7 @@ from grokbot.telegram.ports import TelegramGateway
 _NON_PRIVATE_CHAT_TYPES = frozenset({"group", "supergroup", "channel"})
 
 _DENY_TEXT = "No tienes permiso para usar este bot."
-_DENY_PRIVATE_TEXT = "La configuración solo está disponible en chats privados."
+_DENY_PRIVATE_TEXT = "Este bot solo funciona en chats privados."
 
 
 def chat_is_private(chat: types.Chat) -> bool:
@@ -83,7 +87,7 @@ class AllowlistMiddleware(BaseMiddleware):
 
 
 class PrivateChatOnlyMiddleware(BaseMiddleware):
-    """Deny cuando el chat del evento no es privado (flujos de panel)."""
+    """Deny global cuando el chat del evento no es privado (R9: bot single-owner)."""
 
     def __init__(self, gateway: TelegramGateway) -> None:
         self._gateway = gateway

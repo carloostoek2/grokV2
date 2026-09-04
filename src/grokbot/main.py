@@ -4,9 +4,11 @@ Cablea las capas 1–5 en un bot arrancable con paridad de arranque de
 ``grok/bot.py``: ``load_dotenv`` al boot (39-46) → ``Settings`` fail-fast →
 4 providers siempre instanciados (D6) → ``ProviderRegistry`` → repos JSON
 (paths derivados) → use cases + ``JobManager(refine_hook=…)`` (D4) → ``BotDeps``
-→ ``Dispatcher(MemoryStorage)`` con allowlist attachada a message y
-callback_query (paridad grok 976-977) → ``register_all`` → polling
-(``dp.start_polling``, paridad 5492-5494). Sin webhook (D9).
+→ ``Dispatcher(MemoryStorage)`` con el gate de SOLO chat privado (R9) y la
+allowlist attachada a message y callback_query (paridad grok 976-977) →
+``register_all`` → polling (``dp.start_polling``, paridad 5492-5494). Sin
+webhook (D9). Con allowlist vacía, ``run()`` avisa en el boot (postura abierta
+de un solo owner; ver ``_warn`` en ``run``).
 
 Invariante C1: importar este módulo NO construye nada (0 side-effects): no crea
 ``data/``, no instancia ``Settings``/``Bot``/providers ni lee el entorno. Todo
@@ -55,7 +57,7 @@ from grokbot.telegram.adapters.aiogram_gateway import AiogramGateway
 from grokbot.telegram.deps import BotDeps
 from grokbot.telegram.downloader import AiohttpMediaDownloader
 from grokbot.telegram.handlers import register_all
-from grokbot.telegram.middlewares import AllowlistMiddleware
+from grokbot.telegram.middlewares import AllowlistMiddleware, PrivateChatOnlyMiddleware
 from grokbot.telegram.ports import MediaDownloader, TelegramGateway
 
 __all__ = [
@@ -165,16 +167,27 @@ def build_deps(
 
 
 def assemble_dispatcher(deps: BotDeps) -> Dispatcher:
-    """Armar el :class:`Dispatcher` con allowlist attachada y todos los handlers.
+    """Armar el :class:`Dispatcher` con los gates y todos los handlers.
 
-    Attacha :class:`AllowlistMiddleware` a ``dp.message`` y ``dp.callback_query``
-    SIEMPRE (paridad grok 976-977), aunque ``allowed_ids is None`` (el middleware
-    con ``None`` deja pasar a todos — bot abierto por defecto). Registra el
-    error-handler global que loguea SOLO el tipo de la excepción (C3, sin update
-    ni ``str(exception)``, que podría filtrar payloads).
+    Attacha los dos gates a ``dp.message`` y ``dp.callback_query``:
+
+    * :class:`PrivateChatOnlyMiddleware` (R9, bot single-owner en SOLO chat
+      privado): grupos/supergrupos/canales reciben deny sin correr handlers.
+    * :class:`AllowlistMiddleware` SIEMPRE (paridad grok 976-977), aunque
+      ``allowed_ids is None`` (el middleware con ``None`` deja pasar a todos —
+      bot abierto por defecto; ``run()`` avisa en el boot).
+
+    Registra el error-handler global que loguea SOLO el tipo de la excepción
+    (C3, sin update ni ``str(exception)``, que podría filtrar payloads).
     """
     dp = Dispatcher(storage=MemoryStorage())
 
+    dp.message.middleware(  # R9: gate de chat privado global
+        PrivateChatOnlyMiddleware(deps.gateway)
+    )
+    dp.callback_query.middleware(  # R9: idem para callbacks
+        PrivateChatOnlyMiddleware(deps.gateway)
+    )
     dp.message.middleware(AllowlistMiddleware(deps.gateway, deps.allowed_telegram_ids))  # grok 976
     dp.callback_query.middleware(  # grok 977
         AllowlistMiddleware(deps.gateway, deps.allowed_telegram_ids)
@@ -249,6 +262,20 @@ def run() -> int:
         settings.data_dir.resolve(),
         "activa" if settings.allowed_telegram_ids else "abierta",
     )
+    if not settings.allowed_telegram_ids:
+        # R9: bot single-owner en SOLO chat privado y SIN límites de uso. Con la
+        # allowlist vacía, CUALQUIER usuario que encuentre el bot en un chat
+        # privado puede generarle imágenes/videos (costo real). Se avisa fuerte
+        # en el boot; no es un error: es la postura abierta por decisión, y el
+        # owner la cierra con ALLOWED_TELEGRAM_IDS=<su ID numérico>.
+        _warn = (
+            "Bot en SOLO chat privado pero con ALLOWED_TELEGRAM_IDS vacía: cualquier "
+            "usuario que te escriba en privado podrá usar el bot (sin límites de uso). "
+            "Para dejarlo solo para tu cuenta, define ALLOWED_TELEGRAM_IDS con tu ID "
+            "numérico de Telegram."
+        )
+        logger.warning("%s", _warn)
+        print(f"AVISO: {_warn}", file=sys.stderr)
     try:
         asyncio.run(run_polling(dp, deps))
     except KeyboardInterrupt:

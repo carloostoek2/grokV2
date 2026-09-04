@@ -255,3 +255,63 @@ def test_run_polling_error_fatal_loguea_tipo_y_sale_1(tmp_path, monkeypatch, cap
         for r in caplog.records
     ), f"no se logueó el tipo: {caplog.text}"
     assert "SECRET-POLL-O1" not in caplog.text, "C3: no filtra el payload del error"
+
+
+# -- 10. Gate global de SOLO chat privado (R9) -------------------------------------
+async def test_assembly_private_only_denies_group_message(tmp_path, monkeypatch):
+    """R9: assemble_dispatcher adjunta el gate de chat privado; un grupo no corre handlers."""
+    _set_base_env(monkeypatch, tmp_path)
+    monkeypatch.setenv("ALLOWED_TELEGRAM_IDS", "111111111")  # el dueño pasaría la allowlist
+    settings = get_settings()
+    gateway = FakeTelegramGateway()
+    deps = main.build_deps(settings, gateway=gateway, downloader=FakeMediaDownloader())
+    dp = main.assemble_dispatcher(deps)
+
+    # El dueño (allowlist OK) en un GRUPO → el gate de chat privado lo bloquea.
+    await dp.feed_update(
+        _BOT,
+        message_update(text_message("/start", user_id=111111111, chat_id=222222222,
+                                    chat_type="group")),
+    )
+    texts = _sent_texts(gateway)
+    assert any(t == "Este bot solo funciona en chats privados." for t in texts)
+    assert not any("Modelo actual:" in t for t in texts), "handler no debe correr en grupo"
+
+
+# -- 11. run(): aviso de allowlist abierta en el boot (R9) --------------------------
+def test_run_avisa_allowlist_abierta_en_boot(tmp_path, monkeypatch, caplog):
+    """Sin ALLOWED_TELEGRAM_IDS el boot avisa (postura abierta de un solo owner)."""
+    _set_base_env(monkeypatch, tmp_path)  # sin ALLOWED_TELEGRAM_IDS → abierta
+    monkeypatch.setattr(main, "load_dotenv", lambda **_: None)
+    monkeypatch.setattr(main, "configure_logging", lambda **_: None)
+
+    async def _ok_polling(dp, deps) -> None:
+        return None
+
+    monkeypatch.setattr(main, "run_polling", _ok_polling)
+
+    with caplog.at_level(logging.WARNING, logger="grokbot.main"):
+        code = main.run()
+
+    assert code == 0
+    warns = [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING]
+    assert any("ALLOWED_TELEGRAM_IDS" in w for w in warns), f"no se avisó: {warns}"
+
+
+def test_run_no_avisa_con_allowlist_definida(tmp_path, monkeypatch, caplog):
+    """Con la allowlist del owner definida, el boot no avisa."""
+    _set_base_env(monkeypatch, tmp_path)
+    monkeypatch.setenv("ALLOWED_TELEGRAM_IDS", "111111111")
+    monkeypatch.setattr(main, "load_dotenv", lambda **_: None)
+    monkeypatch.setattr(main, "configure_logging", lambda **_: None)
+
+    async def _ok_polling(dp, deps) -> None:
+        return None
+
+    monkeypatch.setattr(main, "run_polling", _ok_polling)
+
+    with caplog.at_level(logging.WARNING, logger="grokbot.main"):
+        code = main.run()
+
+    assert code == 0
+    assert all("ALLOWED_TELEGRAM_IDS" not in r.getMessage() for r in caplog.records)
