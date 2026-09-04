@@ -436,6 +436,39 @@ async def test_multipose_requires_photo(sessions, variables_repo):
     assert jm.active_count(USER_ID) == 0
 
 
+async def test_multipose_empty_list_precheck_carries_multipose_style(sessions, fast_sleep):
+    """C15: el precheck de lista vacía multipose emite ``EmptyList(style="multipose")``.
+
+    El precheck corre ANTES del ``BatchStarted`` (sin job aún); el evento
+    transporta el estilo para que el presenter diga "modo Multi-pose" y no
+    "/variables" (el handler de /variables pasa su propio style por default).
+    """
+    sessions.save_config(USER_ID, _multipose_cfg())
+    variables = FakeVariablesRepo(
+        lists={"poses": [], "angles": ["frontal"], "actions": ["mirando a cámara"]}
+    )
+    prov = FakeComfyuiProvider()
+    reg = make_registry(comfyui=prov)
+    jm = JobManager()
+    uc, _ = _uc(sessions, reg, variables, jm=jm)
+
+    events = await _collect(
+        uc,
+        user_id=USER_ID,
+        count=5,
+        strategy=RandomComboStrategy(variables),
+        source_image=b"jpg-bytes",
+    )
+
+    assert len(events) == 1
+    ev = events[0]
+    assert isinstance(ev, EmptyList)
+    assert ev.name == "poses"
+    assert ev.style == "multipose"
+    assert jm.active_count(USER_ID) == 0
+    assert prov.generate_count == 0
+
+
 class _GateComfyuiProvider(FakeComfyuiProvider):
     def __init__(self, gate: asyncio.Event, entered: asyncio.Event, *, outcomes=None) -> None:
         super().__init__(outcomes=outcomes)

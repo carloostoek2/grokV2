@@ -68,6 +68,10 @@ _EMPTY_LIST_VAR = (
     "La lista de <b>Poses</b> está vacía.\n"
     "Usa <b>/listas</b> para añadir opciones antes de usar /variables."
 )
+_EMPTY_LIST_MULTIPOSE = (
+    "La lista de <b>Poses</b> está vacía.\n"
+    "Usa <b>/listas</b> para añadir opciones antes de usar el modo Multi-pose."
+)
 
 
 async def _stream(*events: object):
@@ -547,6 +551,28 @@ async def test_batch_empty_list_early_sends_message(gateway, downloader, refs_re
     )
     texts = [c["text"] for c in gateway.calls_by_method("send_message")]
     assert texts[-1] == _EMPTY_LIST_VAR
+
+
+@pytest.mark.asyncio
+async def test_batch_multipose_empty_list_precheck_says_multipose(
+    gateway, downloader, refs_repo
+):
+    """C15: el EmptyList del precheck multipose (sin BatchStarted) dice "Multi-pose".
+
+    Un handler /variables pasa ``style="variables"`` por default pero el precheck
+    de lista vacía del multipose se emite antes del BatchStarted; el evento trae
+    ``style="multipose"`` y el copy del target debe ser el de multipose (grok
+    bot.py 2168-2172), no "/variables".
+    """
+    ui = _ui(gateway)
+    sender = _sender(gateway, downloader, refs_repo)
+    await present_batch(
+        ui, _stream(EmptyList(name="poses", style="multipose")),
+        verb="Generando", count=5, model=MODEL, sender=sender,
+    )
+    texts = [c["text"] for c in gateway.calls_by_method("send_message")]
+    assert texts[-1] == _EMPTY_LIST_MULTIPOSE
+    assert "/variables" not in texts[-1]
 
 
 @pytest.mark.asyncio

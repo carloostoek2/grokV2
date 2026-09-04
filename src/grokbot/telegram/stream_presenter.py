@@ -20,7 +20,9 @@ cada flujo con paridad de copy de grok:
   header multipose, no "Variables"); en multipose un ``ItemFailed`` es terminal
   del batch (C2: el status se edita al error, sin notify aparte ni header
   colgado). Multipose resume el resumen de poses desde ``combos`` (O4), nunca
-  desde ``total``.
+  desde ``total``. El ``EmptyList`` del precheck multipose transporta su propio
+  ``style`` (C15: se emite antes del ``BatchStarted``, así el target del copy es
+  "el modo Multi-pose", no "/variables").
 
 Nunca se loguean IDs/prompts/payloads/file_ids/URLs de contenido (R6/R8). El
 ``try/finally`` de jobs lo hace el propio use case; acá solo se refleja el evento.
@@ -316,7 +318,10 @@ async def present_batch(
                 await ui.send_text(ev.reason)
                 return
             if isinstance(ev, EmptyList):
-                await ui.send_text(_empty_list_text(ev.name, style))
+                # C15: el precheck multipose llega ANTES del BatchStarted y trae su
+                # propio style; el param del handler aún es el default (p. ej.
+                # "variables") así que el evento manda.
+                await ui.send_text(_empty_list_text(ev.name, ev.style or style))
                 return
             if isinstance(ev, ItemFailed):
                 await ui.send_text(ev.reason)
@@ -423,10 +428,11 @@ async def present_batch(
             return
 
         if isinstance(ev, EmptyList):
+            text = _empty_list_text(ev.name, ev.style or style)
             if status_id is not None:
-                await ui.edit_text(status_id, _empty_list_text(ev.name, style), reply_markup=None)
+                await ui.edit_text(status_id, text, reply_markup=None)
             else:
-                await ui.send_text(_empty_list_text(ev.name, style))
+                await ui.send_text(text)
             return
 
         if isinstance(ev, BatchRejected):

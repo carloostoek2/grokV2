@@ -382,7 +382,9 @@ class RunVariableBatchUseCase:
             None,
         )
         if first_empty is not None:
-            yield EmptyList(name=first_empty)
+            # C15: el precheck corre ANTES del BatchStarted; el EmptyList transporta
+            # el estilo para que el presenter diga "modo Multi-pose" y no "/variables".
+            yield EmptyList(name=first_empty, style="multipose")
             return
 
         job = self._job_manager.start(user_id, "variables")
@@ -401,7 +403,7 @@ class RunVariableBatchUseCase:
             for _ in range(MULTIPOSE_BATCH_SIZE):
                 draw = strategy.draw(exclude=used)
                 if draw is None:
-                    yield EmptyList(name="")
+                    yield EmptyList(name="", style="multipose")
                     return
                 used.add(draw.key)
                 combos.append(draw)

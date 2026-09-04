@@ -129,11 +129,16 @@ class BatchSummary:
 class EmptyList:
     """Una lista necesaria está vacía y no se pudo construir el prompt.
 
-    Item 5 mapea ``name`` → ``LIST_LABELS`` para el label HTML. Paridad: grok
-    bot.py 2301-2310 / 2341-2347.
+    Item 5 mapea ``name`` → ``LIST_LABELS`` para el label HTML. ``style`` es
+    aditivo (C15): el precheck de lista vacía de multipose se emite ANTES del
+    ``BatchStarted``, así el evento transporta el estilo efectivo para que el
+    presenter elija el target del copy ("el modo Multi-pose" vs "/variables")
+    sin depender del parámetro del handler. Paridad: grok bot.py 2301-2310 /
+    2341-2347 (variables) y 2168-2172 (multipose).
     """
 
     name: str
+    style: str | None = None
 
 
 @dataclass(frozen=True)
