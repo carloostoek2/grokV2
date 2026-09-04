@@ -1,6 +1,8 @@
 # Residuales — pool grokv2-rearch
 
 Pool: grokv2-rearch · Fuente: ítems del pipeline. Clasificación §5b.
+**Pool cerrado: 2026-09-04** (review-loop 0-issues Round 3, HEAD 2f7ab39, suite 513 passed).
+Estado final por residual en el bloque "Estado al cierre del pool" al pie.
 
 ## R1 — grok: cambios pre-existentes sin commitear
 - Origen: gsd-executor item1 (baseline detectado al arrancar y en cada gate).
@@ -44,6 +46,10 @@ Pool: grokv2-rearch · Fuente: ítems del pipeline. Clasificación §5b.
 - **Nota ítem 6:** El entrypoint (ítem 6) registra estos comandos como degradados vía
   `register_all`; NO los habilita (fuera de scope). `/estado` tiene backing parcial
   (`JobManager.active_jobs`) pero requiere handler nuevo → queda para el review-loop de cierre.
+- **Estado al cierre (2026-09-04):** diferido — el review-loop NO implementó los flujos
+  (cerró solo la consistencia del help, C10). Las degradaciones D8 quedaron verificadas
+  user-safe en el review ("Verificados sin hallazgo: R4 degradación user-safe"). Los 9 flujos
+  completos siguen como follow-up del pool (requieren use case o dato de providers antes de cablearse).
 
 ## R5 — Item 5 M1 (arch): cancel en refine de batch no suprime la refinada en vuelo
 - Origen: arch-enforcer item5 (M1). `stream_presenter.present_batch` llama `run_refine_flow(... cancel_event=None)` (:336) aun con job real; un cancel del job durante el refine en batch (post-yes) no suprime la refinada en vuelo, a diferencia del single-image (:167).
@@ -121,3 +127,28 @@ Pool: grokv2-rearch · Fuente: ítems del pipeline. Clasificación §5b.
 - Acción sugerida: follow-up — mover el tope de 50MB a configuración única compartida o evaluar
   ocultar la URL tras un comando de descarga autenticado.
 - Archivos: `src/grokbot/telegram/sender.py`, `src/grokbot/telegram/downloader.py`.
+
+---
+
+## Estado al cierre del pool (2026-09-04)
+
+Reconciliación final contra el merged review `/tmp/grok-hardener-review-3e662ee1.md`
+(Round 3 = 0 open) y verificación en disco (HEAD `2f7ab39`, suite 513 passed). Sin inventar resoluciones.
+
+| Residual | Clase | Estado final al cierre |
+|---|---|---|
+| R1 — grok cambios pre-existentes sin commitear | out-of-scope | Documentado. Baseline grok verificado intacto en disco (solo `sources/6181290784.jpg` M + `variables_packages/{hot,sexy}.json` untracked, pre-existentes). |
+| R2 — DeprecationWarnings pytest-asyncio 0.26 / Py 3.14 | out-of-scope | Documentado (cosmético; 2188 warnings en la corrida de cierre). Deferred tooling. |
+| R3 — anonimizar test_user_config | in-scope-followup | **Resuelto** — d6f55fe (C3). |
+| R4 — Item 5 D8: 9 flujos grok degradados (capa telegram) | in-scope-followup | **Diferido** con acción sugerida (follow-up del pool). Degradaciones user-safe verificadas en review (sin hallazgo). |
+| R5 — cancel en refine de batch no suprime la refinada en vuelo | in-scope-followup | **Resuelto** — d79edde. |
+| R6 — get_file_bytes sin try/except user-safe | in-scope-followup | **Resuelto** — d79edde. |
+| R7 — import transitivo de transport (lazy re-exports) | deferred | **Resuelto** — e74dd59 (item 6). |
+| O1–O4 (O-series ítem 6) | observaciones arch | **Resueltos** — O1→3fd3167, O2→test guardian ítem 6, O3→691c1e1, O4→438004e. |
+| R8 — Botón "Regenerar" no scopeado al owner (C5) | in-scope-followup (diferido) | **Diferido** con acción sugerida (persistir `owner_uid` en `generation_refs` + validar en `regen`). |
+| R9 — Bot abierto + sin rate limiting + estado sin TTL (C8) | out-of-scope (diferido) | **Diferido** con acción sugerida (hardening de deploy real). |
+| R10 — URL firmada cruda + rama >50MB muerta (C9a/b) | in-scope-followup (diferido) | **Diferido** con acción sugerida (config única del tope / comando de descarga autenticado). |
+| Quirk pytest 8.4.2 — rutas anidadas | out-of-scope (tooling) | Documentado con workaround (no invocar args anidados juntos). |
+
+Nota: el cierre del pool no abre residuales nuevos (Round 3 plan: "sin residual sin registrar").
+El review-loop quedó en 0 open; los diferidos R4/R8/R9/R10 son follow-ups deliberados con paridad grok.
