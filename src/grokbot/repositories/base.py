@@ -92,7 +92,9 @@ class GenerationRefsRepository(Protocol):
 
     ``regen`` is stored opaquely (never re-modeled); the TTL prune runs on every
     save and get. ``save`` is a no-op when neither ``kie_task_id`` nor ``regen``
-    is supplied (parity grok ``save_generation_ref``).
+    is supplied (parity grok ``save_generation_ref``). ``owner_uid`` (R8) se
+    persiste como campo top-level del record (nunca dentro de ``regen``) para
+    scopear el botón Regenerar al dueño de la generación.
     """
 
     def save(
@@ -106,6 +108,7 @@ class GenerationRefsRepository(Protocol):
         kind: str = "image",
         prompt: str = "",
         regen: dict | None = None,
+        owner_uid: int | None = None,
         now: float | None = None,
     ) -> None: ...
 

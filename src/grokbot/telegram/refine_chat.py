@@ -61,6 +61,7 @@ async def run_refine_flow(
     caption_model: dict | None = None,
     caption_prompt: bool = False,
     user_id: int,
+    owner_uid: int | None = None,
     token: str | None = None,
     job_id: str | None = None,
     cancel_event: asyncio.Event | None = None,
@@ -81,6 +82,7 @@ async def run_refine_flow(
             ui, item, prefix,
             delete_status=False, save_ref=True,
             caption_model=caption_model, caption_prompt=caption_prompt,
+            owner_uid=owner_uid,
         )
         if base is None:
             refine_uc.drop(token)
@@ -91,6 +93,7 @@ async def run_refine_flow(
             ui, item, prefix,
             reply_markup=kb, delete_status=False, save_ref=True,
             caption_model=caption_model, caption_prompt=caption_prompt,
+            owner_uid=owner_uid,
         )
         if base is None:
             refine_uc.drop(token)
@@ -172,6 +175,7 @@ async def run_refine_flow(
         ui, refined_item, prefix,
         delete_status=delete_status, save_ref=True,
         caption_model=caption_model, caption_prompt=caption_prompt,
+        owner_uid=owner_uid,
     )
     if refined_sent is None:
         # La refinada no se pudo enviar: reportar, restaurar la base a su estado final.

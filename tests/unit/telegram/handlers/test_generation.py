@@ -24,6 +24,7 @@ from conftest import (
 from grokbot.telegram.handlers._common import SOURCE_MEDIA_UNAVAILABLE_MSG
 
 _UID = USER_ID
+_OTHER = 222222222  # segundo user anonimizado (R8: owner ajeno al ref)
 _CHAT = CHAT_ID
 _BOT = Bot("42:TEST")
 
@@ -189,6 +190,7 @@ async def test_regen_edit_source_fetch_failure_degrades():
             "model_key": "seedream", "mode": "edit",
             "prompt": "retrato de pie", "source_file_id": "EXPIRED:regen_src",
         },
+        owner_uid=_UID,
     )
     deps = await _cb(deps, callback_query("regen", message_id=7002, message=ref_photo))
     edits = deps.gateway.calls_by_method("edit_message_text")
@@ -219,12 +221,55 @@ async def test_regen_valid_context():
         _CHAT, 7000,
         provider="replicate", kind="image", prompt="retrato de pie",
         regen={"model_key": "seedream", "mode": "text", "prompt": "retrato de pie"},
+        owner_uid=_UID,
     )
     deps = await _cb(deps, callback_query("regen", message_id=7000, message=ref_photo))
     sends = deps.gateway.calls_by_method("send_message")
     assert any(s["text"].startswith("Regenerando imagen con Seedream 5.0...") for s in sends)
     assert deps.gateway.calls_by_method("send_photo")
     # el job regen se cerró
+    assert deps.job_manager.active_jobs(_UID) == ()
+
+
+async def test_regen_other_owner_denied_no_job():
+    """R8: un click de OTRO user sobre una imagen con owner_uid ajeno no regenera.
+
+    Misma mecánica que C4 (confirmación): alerta, sin tocar el mensaje del dueño
+    ni arrancar el job de regeneración (que reprocesaría el source ajeno).
+    """
+    deps = make_deps()
+    ref_photo = make_photo_message(message_id=7010)
+    deps.refs.save(
+        _CHAT, 7010,
+        provider="replicate", kind="image", prompt="retrato de pie",
+        regen={"model_key": "seedream", "mode": "edit",
+               "prompt": "retrato de pie", "source_file_id": "FAKE:owner_src"},
+        owner_uid=_OTHER,
+    )
+    deps = await _cb(deps, callback_query("regen", message_id=7010, message=ref_photo))
+    ans = deps.gateway.calls_by_method("answer_callback")[-1]
+    assert ans["text"] == "Esta regeneración pertenece a otro usuario."
+    assert ans["show_alert"] is True
+    # sin status de regeneración, sin photo, sin job, sin editar el mensaje ajeno.
+    assert not any(s["text"].startswith("Regenerando imagen") for s in deps.gateway.calls_by_method("send_message"))
+    assert deps.gateway.calls_by_method("send_photo") == []
+    assert deps.gateway.calls_by_method("edit_message_text") == []
+    assert deps.job_manager.active_jobs(_UID) == ()
+
+
+async def test_regen_owner_mismatch_ref_without_owner_uid_allows_legacy():
+    """R8: ref legacy sin owner_uid no bloquea (bot privado de un solo dueño)."""
+    deps = make_deps()
+    ref_photo = make_photo_message(message_id=7011)
+    deps.refs.save(
+        _CHAT, 7011,
+        provider="replicate", kind="image", prompt="retrato de pie",
+        regen={"model_key": "seedream", "mode": "text", "prompt": "retrato de pie"},
+    )
+    deps = await _cb(deps, callback_query("regen", message_id=7011, message=ref_photo))
+    sends = deps.gateway.calls_by_method("send_message")
+    assert any(s["text"].startswith("Regenerando imagen con Seedream 5.0...") for s in sends)
+    assert deps.gateway.calls_by_method("send_photo")
     assert deps.job_manager.active_jobs(_UID) == ()
 
 

@@ -67,6 +67,25 @@ def test_save_with_only_regen_omits_kie_keys(tmp_path):
     assert rec["provider"] == "kie"
 
 
+def test_save_with_owner_uid_writes_top_level_field(tmp_path):
+    """R8: owner_uid top-level (fuera del regen opaco) y round-trip por get()."""
+    path = tmp_path / "generation_refs.json"
+    repo = JsonGenerationRefsRepository(path)
+    regen = {"source_file_id": "FAKE_FILE_ID", "mode": "edit"}
+    repo.save(30, 5, regen=regen, owner_uid=222222222)  # now real para que get() no prunee
+    rec = load(path)["30:5"]
+    assert rec["owner_uid"] == 222222222
+    assert "owner_uid" not in rec["regen"]  # nunca dentro del payload opaco
+    assert repo.get(30, 5)["owner_uid"] == 222222222
+
+
+def test_save_without_owner_uid_omits_field(tmp_path):
+    path = tmp_path / "generation_refs.json"
+    repo = JsonGenerationRefsRepository(path)
+    repo.save(31, 5, regen={"mode": "text"}, now=1000.0)
+    assert "owner_uid" not in load(path)["31:5"]
+
+
 def test_prompt_truncated_to_500(tmp_path):
     path = tmp_path / "generation_refs.json"
     repo = JsonGenerationRefsRepository(path)

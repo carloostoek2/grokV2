@@ -70,6 +70,8 @@ _HINT_EDIT = (
 _NO_PENDING = "Ya no hay nada pendiente. Envia una imagen o prompt nuevo."
 _EDIT_CANCEL_TEXT = "⏹ Edición cancelada."
 _REGEN_CANCEL_TEXT = "⏹ Regeneración cancelada."
+# R8: el botón Regenerar de una imagen ajena (ref con owner_uid de otro user).
+_REGEN_NOT_OWNER = "Esta regeneración pertenece a otro usuario."
 
 
 def _chat_ui(deps: BotDeps, message: types.Message) -> ChatUI:
@@ -284,13 +286,21 @@ async def handle_regenerate(callback: types.CallbackQuery, deps: BotDeps) -> Non
     if not regen:
         await answer_callback(gateway, callback, "No se puede regenerar (contexto expirado).", show_alert=True)
         return
+
+    uid = callback.from_user.id
+    # R8: el botón Regenerar queda scoped al dueño de la generación (C4, misma
+    # mecánica que la confirmación). Un ref sin owner_uid (legacy) no bloquea.
+    owner_uid = ref.get("owner_uid")
+    if owner_uid is not None and int(owner_uid) != uid:
+        await answer_callback(gateway, callback, _REGEN_NOT_OWNER, show_alert=True)
+        return
+
     prompt = str(regen.get("prompt", "")).strip()
     prompt_err = validate_prompt(prompt)
     if prompt_err:
         await answer_callback(gateway, callback, prompt_err, show_alert=True)
         return
 
-    uid = callback.from_user.id
     cfg = cfg_override_from_regen(deps.sessions.get_config(uid), regen)
     model = model_display(cfg)
     mode = regen.get("mode", "text")

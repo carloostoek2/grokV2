@@ -61,6 +61,21 @@ _GENERATED_FILENAME = "generated.png"
 _GENERATED_VIDEO_FILENAME = "generated.mp4"
 
 
+def _owner_uid(item: ItemResult, owner_uid: int | None) -> int | None:
+    """Dueño de la generación para persistir en el ref (R8).
+
+    Prioriza el ``owner_uid`` explícito que hiloan los presenters (el user que
+    corrió el flujo); si un call site no lo pasa, cae al ``user_id`` que
+    ``generate_image`` estampa en TODO ``regen_context`` de imagen (nunca
+    fail-open en producción).
+    """
+    if owner_uid is not None:
+        return int(owner_uid)
+    ctx = item.regen_context or {}
+    uid = ctx.get("user_id")
+    return int(uid) if uid is not None else None
+
+
 @dataclass(frozen=True)
 class SentItem:
     """Lo que se envió para un ítem: mensajes + forma (single/álbum/video)."""
@@ -126,18 +141,21 @@ class ResultSender:
         caption_prompt: bool = False,
         reply_markup=None,
         save_ref: bool = True,
+        owner_uid: int | None = None,
     ) -> SentItem | None:
         """Enviar el resultado de IMAGEN del ítem (single/álbum/multi-URL).
 
         Devuelve ``None`` cuando no se pudo enviar nada (el status ya refleja el
         error user-safe). ``status_id``/``delete_status`` controlan el status del
-        flujo (paridad grok: batch edita, single borra).
+        flujo (paridad grok: batch edita, single borra). ``owner_uid`` (R8) es el
+        user que corrió el flujo; se persiste en el ref para scopear Regenerar.
         """
         result = item.result
         meta = result.meta or {}
         elapsed = meta.get("elapsed_sec")
         allowlist = meta.get("download_allowlist")
         caption_model = caption_model if caption_model is not None else caption_model_from_request(item)
+        owner = _owner_uid(item, owner_uid)
 
         # Rama local (ComfyUI): 1 → photo, N → álbum.
         paths = meta.get("file_paths") or ([result.file_path] if result.file_path else [])
@@ -147,6 +165,7 @@ class ResultSender:
                 status_id=status_id, delete_status=delete_status,
                 caption_model=caption_model, caption_prompt=caption_prompt,
                 reply_markup=reply_markup, save_ref=save_ref,
+                owner_uid=owner,
             )
 
         urls = meta.get("urls") or ([result.remote_url] if result.remote_url else [])
@@ -169,7 +188,7 @@ class ResultSender:
                 data, filename=_GENERATED_FILENAME, caption=caption, reply_markup=kb
             )
             if save_ref:
-                self._save_image_ref(ui.chat_id, sent, meta, item, index=meta.get("index", 0))
+                self._save_image_ref(ui.chat_id, sent, meta, item, index=meta.get("index", 0), owner_uid=owner)
             if delete_status and status_id is not None:
                 await ui.delete(status_id)
             return SentItem(primary=sent, sent=(sent,), kind="image")
@@ -190,7 +209,7 @@ class ResultSender:
             )
             sent_all.append(sent)
             if save_ref:
-                self._save_image_ref(ui.chat_id, sent, meta, item, index=i)
+                self._save_image_ref(ui.chat_id, sent, meta, item, index=i, owner_uid=owner)
         if not sent_all:
             return None
         if delete_status and status_id is not None:
@@ -207,16 +226,19 @@ class ResultSender:
         status_id: int | None = None,
         delete_status: bool = True,
         caption_model: dict | None = None,
+        owner_uid: int | None = None,
     ) -> SentItem | None:
         """Enviar el resultado de VIDEO (local ComfyUI o URL remota).
 
         Video remoto > tope de Telegram → fallback de texto con la URL y el
         warning (grok bot.py 5402-5407); nunca se reenvía por otro medio.
+        ``owner_uid`` (R8): user que corrió el flujo, persistido en el ref.
         """
         result = item.result
         meta = result.meta or {}
         elapsed = meta.get("elapsed_sec")
         caption_model = caption_model if caption_model is not None else caption_model_from_request(item)
+        owner = _owner_uid(item, owner_uid)
 
         paths = meta.get("file_paths") or ([result.file_path] if result.file_path else [])
         if paths:
@@ -244,6 +266,7 @@ class ResultSender:
                     ui.chat_id, sent.message_id,
                     provider="comfyui", kind="video",
                     prompt=item.prompt, regen=item.regen_context,
+                    owner_uid=owner,
                 )
             if delete_status and status_id is not None:
                 await ui.delete(status_id)
@@ -313,6 +336,7 @@ class ResultSender:
         caption_prompt: bool,
         reply_markup,
         save_ref: bool,
+        owner_uid: int | None,
     ) -> SentItem | None:
         meta = item.result.meta or {}
         elapsed = meta.get("elapsed_sec")
@@ -336,6 +360,7 @@ class ResultSender:
                     ui.chat_id, sent.message_id,
                     provider="comfyui", kind="image",
                     prompt=item.prompt, regen=item.regen_context,
+                    owner_uid=owner_uid,
                 )
             if delete_status and status_id is not None:
                 await ui.delete(status_id)
@@ -369,6 +394,7 @@ class ResultSender:
                 ui.chat_id, sent_group[0].message_id,
                 provider="comfyui", kind="image",
                 prompt=item.prompt, regen=item.regen_context,
+                owner_uid=owner_uid,
             )
         if delete_status and status_id is not None:
             await ui.delete(status_id)
@@ -440,6 +466,7 @@ class ResultSender:
         item: ItemResult,
         *,
         index: int,
+        owner_uid: int | None = None,
     ) -> None:
         """Persiste generation_ref POST-envío (single: índice 0; multi: i)."""
         kie_task_id = meta.get("task_id") if meta.get("provider") == "kie" else None
@@ -457,6 +484,7 @@ class ResultSender:
             kind="image",
             prompt=item.prompt,
             regen=item.regen_context,
+            owner_uid=owner_uid,
         )
 
 

@@ -4,6 +4,8 @@ Behavior parity with grok ``sessions.py`` ``save_generation_ref`` /
 ``get_generation_ref`` (HEAD 81832a5). Records are keyed ``chat_id:message_id``
 and pruned on a 14-day TTL on every save/get. ``regen`` is stored opaquely
 (never re-modeled) and records of untouched keys are preserved on dump.
+``owner_uid`` (R8) is a top-level record field: the user who produced the
+message, used to scope the Regenerar callback to the owner.
 """
 
 from __future__ import annotations
@@ -38,6 +40,7 @@ class JsonGenerationRefsRepository:
         kind: str = "image",
         prompt: str = "",
         regen: dict | None = None,
+        owner_uid: int | None = None,
         now: float | None = None,
     ) -> None:
         """Persist generation metadata for a bot-sent image (no-op without task/regen)."""
@@ -56,6 +59,9 @@ class JsonGenerationRefsRepository:
             rec["kie_index"] = max(0, min(int(kie_index), 5))
         if regen:
             rec["regen"] = regen  # opaque, never re-modeled
+        if owner_uid is not None:
+            # R8: dueño de la generación (scopear el botón Regenerar), top-level.
+            rec["owner_uid"] = int(owner_uid)
         refs[self._key(chat_id, message_id)] = rec
         self._save(refs)
 

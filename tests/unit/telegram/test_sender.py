@@ -33,6 +33,9 @@ URL_1 = "https://files.x.ai/one.png"
 URL_2 = "https://files.x.ai/two.png"
 XAI_URL = "https://files.x.ai/video.mp4"
 
+# Owner anonimizado (R8): el ref se persiste top-level, fuera del regen opaco.
+OWNER_UID = 222222222
+
 
 def _make_sender(gateway, downloader, refs_repo) -> ResultSender:
     return ResultSender(gateway=gateway, downloader=downloader, refs=refs_repo)
@@ -406,6 +409,54 @@ async def test_caption_prompt_truncated_to_1024(gateway, downloader, refs_repo):
     assert len(caption) <= 1024
     assert "\n<b>Prompt:</b> " in caption
     assert caption.endswith("…")
+
+
+# --------------------------------------------------------------------------- #
+# Owner del ref (R8): se persiste top-level para scopear el botón Regenerar
+# --------------------------------------------------------------------------- #
+@pytest.mark.asyncio
+async def test_ref_persists_explicit_owner_uid(gateway, downloader, refs_repo):
+    ui = ChatUI(gateway, CHAT_ID)
+    sender = _make_sender(gateway, downloader, refs_repo)
+    regen = {"provider": "xai", "mode": "text", "prompt": "un retrato"}
+    item = _item(urls=[URL_1], remote_url=URL_1, meta={"download_allowlist": "xai"}, regen=regen)
+    sent = await sender.send_image(ui, item, "Imagen", owner_uid=OWNER_UID)
+    ref = refs_repo.get(CHAT_ID, sent.primary.message_id)
+    assert ref is not None and ref["owner_uid"] == OWNER_UID
+    # owner_uid NUNCA dentro del regen opaco.
+    assert "owner_uid" not in ref["regen"]
+    assert "user_id" not in ref["regen"]
+
+
+@pytest.mark.asyncio
+async def test_ref_owner_falls_back_to_regen_context_user_id(gateway, downloader, refs_repo):
+    """R8: si el caller no hilo owner_uid, cae al user_id que estampa generate_image."""
+    ui = ChatUI(gateway, CHAT_ID)
+    sender = _make_sender(gateway, downloader, refs_repo)
+    regen = {"provider": "xai", "mode": "text", "prompt": "un retrato", "user_id": OWNER_UID}
+    item = _item(urls=[URL_1], remote_url=URL_1, meta={"download_allowlist": "xai"}, regen=regen)
+    sent = await sender.send_image(ui, item, "Imagen")
+    ref = refs_repo.get(CHAT_ID, sent.primary.message_id)
+    assert ref is not None and ref["owner_uid"] == OWNER_UID
+
+
+@pytest.mark.asyncio
+async def test_video_local_ref_persists_owner_uid(tmp_path, gateway, downloader, refs_repo):
+    clip = tmp_path / "clip.mp4"
+    clip.write_bytes(b"mp4-bytes")
+    ui = ChatUI(gateway, CHAT_ID)
+    sender = _make_sender(gateway, downloader, refs_repo)
+    regen = {"provider": "comfyui", "mode": "edit", "user_id": OWNER_UID}
+    item = _item(
+        provider="comfyui",
+        media_type=MediaType.VIDEO,
+        file_paths=[str(clip)],
+        meta={"comfyui_remotes": ["/workspace/clip.mp4"]},
+        regen=regen,
+    )
+    sent = await sender.send_video(ui, item, "Edit", owner_uid=OWNER_UID)
+    ref = refs_repo.get(CHAT_ID, sent.primary.message_id)
+    assert ref is not None and ref["owner_uid"] == OWNER_UID
 
 
 @pytest.mark.asyncio

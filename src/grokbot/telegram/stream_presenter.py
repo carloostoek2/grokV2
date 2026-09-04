@@ -169,6 +169,7 @@ async def present_single_image(
                     caption_model=caption_model,
                     caption_prompt=caption_prompt,
                     user_id=user_id,
+                    owner_uid=user_id,
                     job_id=job.job_id if job is not None and job_manager is not None else None,
                     cancel_event=(
                         job_manager.cancel_event(job)
@@ -183,6 +184,7 @@ async def present_single_image(
                 delete_status=delete_status,
                 caption_model=caption_model,
                 caption_prompt=caption_prompt,
+                owner_uid=user_id,
             )
             return
 
@@ -201,12 +203,13 @@ async def present_video(
     caption_model: dict | None = None,
     status_id: int | None = None,
     delete_status: bool = True,
+    user_id: int | None = None,
 ) -> None:
     """Presenta un stream single de video (grok_video / ComfyUI video).
 
     El status arranca con el mensaje de video (o reusa el del confirm). Un
     ``ItemFailed`` con ``terminal=False`` igual finaliza (O3: sin reintentos de
-    presentación para video).
+    presentación para video). ``user_id`` (R8) se persiste como owner del ref.
     """
     if status_id is None:
         sent = await ui.send_text(video_start_message(model_id, prompt))
@@ -223,6 +226,7 @@ async def present_video(
                     status_id=status_id,
                     delete_status=delete_status,
                     caption_model=caption_model,
+                    owner_uid=user_id,
                 )
             else:
                 await sender.send_image(
@@ -230,6 +234,7 @@ async def present_video(
                     status_id=status_id,
                     delete_status=delete_status,
                     caption_model=caption_model,
+                    owner_uid=user_id,
                 )
             return
 
@@ -371,6 +376,7 @@ async def present_batch(
                     caption_model=model,
                     caption_prompt=True,
                     user_id=user_id,
+                    owner_uid=user_id,
                     job_id=job_id,
                     cancel_event=(
                         job_manager.cancel_event(job)
@@ -385,6 +391,7 @@ async def present_batch(
                     delete_status=False,
                     caption_model=model,
                     caption_prompt=True,
+                    owner_uid=user_id,
                 )
             continue
 

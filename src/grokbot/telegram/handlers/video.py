@@ -126,6 +126,7 @@ async def run_video_generation(
         caption_model={"name": label},
         status_id=status_id,
         delete_status=delete_status,
+        user_id=uid,
     )
 
 

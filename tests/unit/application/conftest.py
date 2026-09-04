@@ -229,6 +229,7 @@ class FakeRefsRepo:
         kind: str = "image",
         prompt: str = "",
         regen: dict | None = None,
+        owner_uid: int | None = None,
         now: float | None = None,
     ) -> None:
         if not kie_task_id and not regen:
@@ -242,6 +243,8 @@ class FakeRefsRepo:
         }
         if regen is not None:
             ref["regen"] = regen
+        if owner_uid is not None:
+            ref["owner_uid"] = int(owner_uid)
         self._data[(chat_id, message_id)] = ref
 
     def get(self, chat_id: int, message_id: int) -> dict | None:
