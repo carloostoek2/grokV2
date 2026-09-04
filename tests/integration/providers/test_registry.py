@@ -150,6 +150,23 @@ def test_unsupported_model_for_media_raises():
         reg.resolve_video(_cfg(model="seedream"))
 
 
+def test_resolve_face_swap_resolves_replicate():
+    reg = _registry()
+
+    res = reg.resolve_face_swap()
+
+    assert res.name == "replicate"
+    assert res.model_id == MODELS["faceswap"]["id"]
+    assert res.available is True
+    assert isinstance(res.provider, ReplicateProvider)
+
+
+def test_resolve_face_swap_raises_when_replicate_missing():
+    reg = _registry(replicate=None)
+    with pytest.raises(ProviderNotConfiguredError):
+        reg.resolve_face_swap()
+
+
 def test_kie_not_configured_raises_not_configured():
     reg = _registry(kie=KieProvider(""))
     cfg = _cfg(model="grok", grok_imagine_provider="kie")

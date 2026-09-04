@@ -291,6 +291,7 @@ class _FakeProviderBase:
         self._default_result = default_result
         self.calls: list[tuple[GenerationRequest, bytes | None]] = []
         self.supports_calls: list[GenerationRequest] = []
+        self.swap_face_calls: list[tuple[bytes, bytes]] = []
 
     def supports(self, request: GenerationRequest) -> bool:
         self.supports_calls.append(request)
@@ -312,6 +313,22 @@ class _FakeProviderBase:
             return self._default_result
         media = request.media_type if request.media_type is not None else self._media_type
         return make_result(provider=self._name, model_id=request.model_id, media_type=media)
+
+    async def swap_face(
+        self,
+        *,
+        swap_image: bytes,
+        input_image: bytes,
+    ) -> GenerationResult:
+        self.swap_face_calls.append((swap_image, input_image))
+        if self.outcomes:
+            outcome = self.outcomes.pop(0)
+            if isinstance(outcome, Exception):
+                raise outcome
+            return outcome
+        if self._default_result is not None:
+            return self._default_result
+        return make_result(provider=self._name, model_id="fake-faceswap", media_type=MediaType.IMAGE)
 
     @property
     def generate_count(self) -> int:

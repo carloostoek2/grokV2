@@ -94,6 +94,10 @@ class ProviderRegistry:
             user_message="El modelo seleccionado no genera video.",
         )
 
+    def resolve_face_swap(self) -> ProviderResolution:
+        """Resolve the Replicate face-swap model (no user config needed)."""
+        return self._resolve("replicate", MODELS["faceswap"]["id"])
+
     def resolve(
         self, cfg: UserConfig, media_type: MediaType
     ) -> ProviderResolution:

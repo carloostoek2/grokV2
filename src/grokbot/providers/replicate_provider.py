@@ -30,6 +30,7 @@ from grokbot.providers.base import (
 _SEEDREAM_ID = MODELS["seedream"]["id"]
 _FACESWAP_ID = MODELS["faceswap"]["id"]
 _GROK_REPLICATE_PREFIX = "xai/grok-imagine-"
+_FACESWAP_WAIT_SEC = 60  # parity grok/bot.py:192 REPLICATE_WAIT_SEC
 
 
 def _replicate_kind(model_id: str) -> str:
@@ -93,6 +94,11 @@ class ReplicateProvider:
         source_image: bytes | None = None,
     ) -> GenerationResult:
         kind = _replicate_kind(request.model_id)
+        if kind == "faceswap":
+            raise ProviderInputError(
+                "El modelo Face Swap no se genera por prompt: usa swap_face().",
+                user_message="Face Swap no se puede generar por texto. Envia una foto para hacer el swap.",
+            )
         input_data: dict = {"prompt": request.prompt}
         extra_kwargs: dict = {}
 
@@ -132,5 +138,52 @@ class ReplicateProvider:
             remote_url=urls[0],
             # Replicate assets are served by replicate.delivery CDNs; the shared
             # downloader applies no host allowlist for replicate (D4/D5).
+            meta={"urls": urls, "download_allowlist": None},
+        )
+
+    async def swap_face(
+        self,
+        *,
+        swap_image: bytes,
+        input_image: bytes,
+    ) -> GenerationResult:
+        """Swap the source face onto a target image (parity grok ``_faceswap_replicate_single``).
+
+        Two images and no prompt: ``swap_image`` is the reference face and
+        ``input_image`` the target. Sent as base64 bytes with a 60s wait, mirroring
+        grok/bot.py:3255-3271.
+        """
+        client = self._resolve_client()
+        input_data = {
+            "swap_image": io.BytesIO(swap_image),
+            "input_image": io.BytesIO(input_image),
+        }
+        try:
+            output = await asyncio.to_thread(
+                client.run,
+                _FACESWAP_ID,
+                input=input_data,
+                file_encoding_strategy="base64",
+                wait=_FACESWAP_WAIT_SEC,
+            )
+        except ProviderError:
+            raise
+        except Exception as exc:  # network/SDK errors -> transient unavailable
+            raise ProviderUnavailableError(
+                f"Replicate face swap failed: {exc}",
+                user_message="Error en el face swap. Intenta de nuevo más tarde.",
+            ) from exc
+
+        urls = _normalize_output_urls(output)
+        if not urls:
+            raise ProviderGenerationError(
+                "Replicate no devolvió URL de imagen.",
+                user_message="Error en el face swap. Intenta de nuevo más tarde.",
+            )
+        return GenerationResult(
+            provider="replicate",
+            model_id=_FACESWAP_ID,
+            media_type=MediaType.IMAGE,
+            remote_url=urls[0],
             meta={"urls": urls, "download_allowlist": None},
         )

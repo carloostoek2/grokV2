@@ -12,7 +12,11 @@ from grokbot.domain.generation import (
     GenerationRequest,
     MediaType,
 )
-from grokbot.providers.base import ProviderInputError, ProviderUnavailableError
+from grokbot.providers.base import (
+    ProviderGenerationError,
+    ProviderInputError,
+    ProviderUnavailableError,
+)
 from grokbot.providers.replicate_provider import ReplicateProvider
 
 API_TOKEN = "r8-token-secret"
@@ -93,14 +97,48 @@ async def test_seedream_i2i_uses_image_input_and_2k():
 
 
 @pytest.mark.asyncio
-async def test_faceswap_i2i_uses_bytesio_and_base64_strategy():
+async def test_swap_face_sends_two_bytesio_without_prompt():
     client = FakeClient()
     prov = ReplicateProvider(API_TOKEN, client=client)
     jpg = b"\xff\xd8\xff\xe0" + b"\x00" * 32
-    await prov.generate(_req("faceswap"), source_image=jpg)
+    await prov.swap_face(swap_image=jpg, input_image=jpg)
     model_id, input_data, kwargs = client.calls[0]
-    assert isinstance(input_data["image"], io.BytesIO)
-    assert kwargs == {"file_encoding_strategy": "base64"}
+    assert model_id == MODELS["faceswap"]["id"]
+    assert kwargs == {"file_encoding_strategy": "base64", "wait": 60}
+    assert isinstance(input_data["swap_image"], io.BytesIO)
+    assert isinstance(input_data["input_image"], io.BytesIO)
+    assert "prompt" not in input_data
+    assert "image" not in input_data
+
+
+@pytest.mark.asyncio
+async def test_swap_face_no_url_raises_generation_error():
+    client = FakeClient()
+    client.output = []  # FakeClient.__init__ treats [] as "no override"
+    prov = ReplicateProvider(API_TOKEN, client=client)
+    jpg = b"\xff\xd8\xff\xe0" + b"\x00" * 32
+    with pytest.raises(ProviderGenerationError):
+        await prov.swap_face(swap_image=jpg, input_image=jpg)
+
+
+@pytest.mark.asyncio
+async def test_swap_face_sdk_exception_maps_to_unavailable():
+    prov = ReplicateProvider(API_TOKEN, client=_FailingClient(RuntimeError("boom")))
+    jpg = b"\xff\xd8\xff\xe0" + b"\x00" * 32
+    with pytest.raises(ProviderUnavailableError):
+        await prov.swap_face(swap_image=jpg, input_image=jpg)
+
+
+@pytest.mark.asyncio
+async def test_generate_faceswap_raises_input_error():
+    # Anti-footgun: faceswap is a two-image operation with no prompt; calling
+    # generate() with that model is a caller bug (must use swap_face()).
+    client = FakeClient()
+    prov = ReplicateProvider(API_TOKEN, client=client)
+    jpg = b"\xff\xd8\xff\xe0" + b"\x00" * 32
+    with pytest.raises(ProviderInputError):
+        await prov.generate(_req("faceswap"), source_image=jpg)
+    assert client.calls == []
 
 
 @pytest.mark.asyncio

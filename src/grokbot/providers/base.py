@@ -180,6 +180,25 @@ class ImageProvider(Protocol):
 
 
 @runtime_checkable
+class FaceSwapProvider(Protocol):
+    """Contract for face-swap providers (two input images, no prompt)."""
+
+    @property
+    def available(self) -> bool:
+        """True when the provider is configured and ready to swap."""
+        ...
+
+    async def swap_face(
+        self,
+        *,
+        swap_image: bytes,
+        input_image: bytes,
+    ) -> GenerationResult:
+        """Swap the face in ``input_image`` using ``swap_image`` as the source face."""
+        ...
+
+
+@runtime_checkable
 class VideoProvider(Protocol):
     """Contract for video generation providers.
 
