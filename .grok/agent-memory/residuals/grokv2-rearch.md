@@ -100,6 +100,12 @@ Estado final por residual en el bloque "Estado al cierre del pool" al pie.
 - Acción sugerida: en un follow-up, persistir `owner_uid` en `generation_refs` y validarlo en el
   callback `regen` (misma mecánica que C4 en PendingPrompts).
 - Archivos: `src/grokbot/telegram/sender.py`, `src/grokbot/telegram/handlers/generation.py` (regen).
+- **Resuelto (wave hardening, 2026-09-04):** `c25c1fe` — ``GenerationRefsRepository.save`` gana
+  ``owner_uid`` (campo top-level, nunca dentro del ``regen`` opaco) thread-eado
+  handler→presenter→sender (5 call sites de ``save``) con fallback fail-closed a
+  ``regen_context["user_id"]``; ``handle_regenerate`` valida el dueño igual que C4
+  ("Esta regeneración pertenece a otro usuario."). Refs legacy sin ``owner_uid`` no bloquean.
+  Suite 521 passed.
 
 ## R9 — Bot abierto por default + sin rate limiting + estado sin TTL (C8, review-loop Round 1)
 - Origen: review 3e662ee1 C8. `sessions.json` crece con cada user nuevo; PendingPrompts sin
@@ -112,6 +118,17 @@ Estado final por residual en el bloque "Estado al cierre del pool" al pie.
 - Acción sugerida: follow-up de hardening (deploy real): documentar configuración de allowlist,
   evaluar rate limit por user y expiración de entradas de sesión.
 - Archivos: `src/grokbot/settings.py`, `src/grokbot/main.py`, `src/grokbot/telegram/deps.py`.
+- **Resuelto por decisión de producto (wave hardening, 2026-09-04):** bot single-owner en SOLO
+  chat privado → sin rate limit ni TTL (R9 declarado en 2bbfdd3/5900809/5e9e88b):
+  - `2bbfdd3` — quitado el tope de 3 procesos activos (`MAX_ACTIVE_JOBS_PER_USER`, evento
+    `JobsFull` y su rama en `present_batch`; `JobManager.start` SIEMPRE registra).
+  - `5900809` — eliminada la cuota horaria de video muerta (Protocol + JSON repo + key legacy
+    `video_hourly_timestamps`, que se purga al 1er load de archivos viejos).
+  - `5e9e88b` — gate GLOBAL de SOLO chat privado (`PrivateChatOnlyMiddleware` en message y
+    callback) + aviso de allowlist abierta en el boot.
+  - **Residual que queda:** la IDENTIDAD sigue abierta hasta que el owner fije
+    `ALLOWED_TELEGRAM_IDS=<su ID numérico>` (aviso de boot lo recuerda; el gate de chat privado
+    no reemplaza la allowlist).
 
 ## R10 — Video remoto rechazado publica URL firmada + rama >50MB muerta (C9a/b, review-loop Round 1)
 - Origen: review 3e662ee1 C9a/b. (a) El fallback de `send_video` rechazado edita el status con la
@@ -127,6 +144,11 @@ Estado final por residual en el bloque "Estado al cierre del pool" al pie.
 - Acción sugerida: follow-up — mover el tope de 50MB a configuración única compartida o evaluar
   ocultar la URL tras un comando de descarga autenticado.
 - Archivos: `src/grokbot/telegram/sender.py`, `src/grokbot/telegram/downloader.py`.
+- **Resuelto (wave hardening, 2026-09-04):** `096dd0d` — tope único `MAX_MEDIA_BYTES = 50MB` en
+  `telegram/media.py` como fuente única de verdad (downloader + sender lo importan; sin
+  constantes duplicadas). La URL firmada SÍ se muestra como camino de recuperación: decisión de
+  producto del owner (bot privado single-owner, nadie más en grupo) — se conserva la
+  degradación user-safe cuando el video local es rechazado por Telegram.
 
 ---
 
@@ -152,3 +174,21 @@ Reconciliación final contra el merged review `/tmp/grok-hardener-review-3e662ee
 
 Nota: el cierre del pool no abre residuales nuevos (Round 3 plan: "sin residual sin registrar").
 El review-loop quedó en 0 open; los diferidos R4/R8/R9/R10 son follow-ups deliberados con paridad grok.
+
+---
+
+## Actualización post-cierre — wave de hardening R8/R9/R10 (2026-09-04)
+
+El owner priorizó cerrar R8/R9/R10 sobre el pool ya cerrado (comunicación producto, en español).
+Decisiones de producto del owner: (1) bot privado single-owner → máximo hardening SIN límites de
+uso; (2) R10: la URL firmada SÍ se muestra (único camino de recuperación); (3) SOLO chat privado.
+R4 (9 flujos D8) queda diferido a una wave posterior. Verificación en disco: HEAD `5e9e88b`,
+suite **519 passed**.
+
+| Residual | Estado final tras la wave |
+|---|---|
+| R8 — Regen no scopeado al owner (C5) | **Resuelto** — `c25c1fe` (owner_uid top-level + validación en `handle_regenerate`). Suite 521. |
+| R9 — Bot abierto + sin rate limit + sin TTL (C8) | **Cerrado por decisión** — `2bbfdd3` (sin tope de concurrencia), `5900809` (sin cuota horaria), `5e9e88b` (gate SOLO chat privado global + aviso de allowlist abierta). Sin rate limit/TTL queda POR DECISIÓN (single-owner). **Residual:** fijar `ALLOWED_TELEGRAM_IDS` con el ID del owner (config de deploy; el boot lo avisa). |
+| R10 — URL firmada cruda + rama >50MB (C9a/b) | **Resuelto** — `096dd0d` (tope único `MAX_MEDIA_BYTES`). URL conservada por decisión de producto. |
+| R4 — 9 flujos D8 degradados | **Diferido (wave 2)** — degradaciones user-safe activas; flujos completos requieren use cases/datos. |
+| Smoke live con infraestructura real | **Pendiente (owner)** — ver PRODUCT_STATUS §4.4: lista de credenciales y pasos interactivos. |
