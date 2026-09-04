@@ -89,7 +89,7 @@ def is_reply_edit(message: types.Message) -> bool:
 
 
 def is_photo_caption(message: types.Message) -> bool:
-    """Foto individual (no álbum) con caption. Los álbumes rutean a degradación."""
+    """Foto individual (no álbum) con caption → edición single/long-prompt."""
     return bool(message.photo) and bool(message.caption) and not message.media_group_id
 
 

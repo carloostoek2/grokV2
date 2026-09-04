@@ -319,13 +319,16 @@ async def _process_album_edit(deps: BotDeps, anchor_message, prompt: str, file_i
     job = deps.job_manager.start(uid, "album_edit")
     if job is None:  # defensivo; R9 no tiene tope de concurrencia
         return
-    status = await ui.send_text(
-        f"Editando 0/{n} imágenes con {model['name']}...",
-        reply_markup=cancel_job_keyboard(job.job_id),
-    )
-    status_id = status.message_id
     completed = 0
+    status_id = None
     try:
+        # El status inicial va DENTRO del try/finally: si este send_text lanza, el
+        # job se cierra igual (nada de jobs huérfanos ni task del drain muerto).
+        status = await ui.send_text(
+            f"Editando 0/{n} imágenes con {model['name']}...",
+            reply_markup=cancel_job_keyboard(job.job_id),
+        )
+        status_id = status.message_id
         for i, file_id in enumerate(file_ids, 1):
             if deps.job_manager.is_cancelled(job):
                 await ui.edit_text(
@@ -373,15 +376,28 @@ async def _process_album_edit(deps: BotDeps, anchor_message, prompt: str, file_i
                             reply_markup=None,
                         )
                         return
-                    await make_sender(deps).send_image(
+                    sent = await make_sender(deps).send_image(
                         ui, ev, "Edit", status_id=status_id,
                         delete_status=False, owner_uid=uid,
                     )
+                    if sent is None:
+                        # send_image ya editó el status con el error user-safe (R6/M2)
+                        # y devolvió None: NO contar como completada ni pisar el error
+                        # con un falso "Completadas N/N"; el álbum termina en parcial.
+                        return
                     completed += 1
             # El stream single termina tras su ItemResult/ItemFailed.
         await ui.edit_text(status_id, f"Completadas {n}/{n} imágenes.", reply_markup=None)
     except Exception:  # noqa: BLE001 — contención del task (parity grok 1957-1962)
-        await ui.edit_text(status_id, _ALBUM_UNEXPECTED_ERROR, reply_markup=None)
+        if status_id is not None:
+            await ui.edit_text(status_id, _ALBUM_UNEXPECTED_ERROR, reply_markup=None)
+        else:
+            # El status inicial nunca llegó a publicarse: feedback genérico
+            # best-effort (si también falla, el finally igual cierra el job).
+            try:
+                await ui.send_text(_ALBUM_UNEXPECTED_ERROR)
+            except Exception:  # noqa: BLE001 — sin canal, no hay nada más que hacer
+                pass
     finally:
         deps.job_manager.finish(uid, job.job_id)
 
