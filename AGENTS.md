@@ -110,8 +110,8 @@ resolver (`workflows/resolver.py`) separa `_meta`, nunca encola `_meta` a ComfyU
 refine 2-stage está **dormido**: no revivirlo sin sacarlo antes de ese estado.
 
 **Idiomas**: el copy de usuario (formatters, keyboards, mensajes/errores user-safe) es
-**siempre en español**; los docstrings/comentarios y nombres de código son **en inglés**;
-los documentos de estado/avance en español. El repo tiene docstrings históricos en español
+**siempre en español neutro**; los docstrings/comentarios y nombres de código son **en inglés**;
+los documentos de estado/avance, en español neutro. El repo tiene docstrings históricos en español
 en `telegram/`/`application/`: no se migran en masa; la regla se aplica al código nuevo.
 
 ## Límites — qué no hacer sin pensarlo dos veces
@@ -161,4 +161,5 @@ en `telegram/`/`application/`: no se migran en masa; la regla se aplica al códi
   viven en la capa telegram, no en `domain/`.
 - `UserConfig` tolera claves extra en lectura (sesiones viejas) y nunca las emite en
   `to_record`.
-- Commits en español, atómicos (código + tests + docs del mismo cambio).
+- Commits en español, atómicos (código + tests + docs del mismo cambio) y **sin
+  coautoría**: no se agrega la línea de trailer Co-Authored-By.
