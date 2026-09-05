@@ -1,0 +1,1109 @@
+{
+  "_meta": {
+    "id": "donut_face",
+    "name": "Donut Face",
+    "media_type": "image",
+    "positive_node": "56",
+    "positive_input": "prompt",
+    "negative_node": null,
+    "seed_nodes": [
+      "195"
+    ],
+    "save_nodes": [
+      "914"
+    ],
+    "supports_source": false,
+    "timeout": 2400
+  },
+  "50": {
+    "inputs": {
+      "model_name": "bbox/face_yolov8m.pt"
+    },
+    "class_type": "UltralyticsDetectorProvider",
+    "_meta": {
+      "title": "UltralyticsDetectorProvider"
+    }
+  },
+  "51": {
+    "inputs": {
+      "anything3": [
+        "50",
+        0
+      ],
+      "SAM_MODEL": [
+        "52",
+        0
+      ]
+    },
+    "class_type": "Anything Everywhere",
+    "_meta": {
+      "title": "Anything Everywhere"
+    }
+  },
+  "52": {
+    "inputs": {
+      "model_name": "sam_vit_b_01ec64.pth",
+      "device_mode": "Prefer GPU"
+    },
+    "class_type": "SAMLoader",
+    "_meta": {
+      "title": "SAMLoader (Impact)"
+    }
+  },
+  "53": {
+    "inputs": {
+      "prompt": "",
+      "seed": [
+        "195",
+        0
+      ]
+    },
+    "class_type": "Wildcard Processor",
+    "_meta": {
+      "title": "Face related only"
+    }
+  },
+  "56": {
+    "inputs": {
+      "prompt": "hourglass thick figure body taking a Mirror selfie ",
+      "seed": [
+        "195",
+        0
+      ]
+    },
+    "class_type": "Wildcard Processor",
+    "_meta": {
+      "title": "Everything Else"
+    }
+  },
+  "57": {
+    "inputs": {
+      "prompt": "3D, rendered, fake, cartoon, anime, drawing, ai-generated, old, elderly, ugly, text, titles, watermark, logo, microphone, depression, sad, boredom. ",
+      "seed": [
+        "195",
+        0
+      ]
+    },
+    "class_type": "Wildcard Processor",
+    "_meta": {
+      "title": "Negative (unused for Krea2)"
+    }
+  },
+  "63": {
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "images": [
+        "759",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Guardar Imagen"
+    }
+  },
+  "64": {
+    "inputs": {
+      "output_path": "Final",
+      "filename_prefix": [
+        "777",
+        1
+      ],
+      "filename_delimiter": "",
+      "filename_number_padding": 1,
+      "filename_number_start": "false",
+      "extension": "webp",
+      "dpi": 300,
+      "quality": 100,
+      "optimize_image": "true",
+      "lossless_webp": "false",
+      "overwrite_mode": "false",
+      "show_history": "false",
+      "show_history_by_prefix": "true",
+      "embed_workflow": "false",
+      "show_previews": "true",
+      "images": [
+        "914",
+        0
+      ]
+    },
+    "class_type": "Image Save",
+    "_meta": {
+      "title": "final save"
+    }
+  },
+  "195": {
+    "inputs": {
+      "seed": 525643498900475
+    },
+    "class_type": "SeedGenerator",
+    "_meta": {
+      "title": "SeedGenerator"
+    }
+  },
+  "430": {
+    "inputs": {
+      "clip_name": "qwen3vl_4b_fp8_scaled.safetensors",
+      "type": "krea2",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Cargar CLIP"
+    }
+  },
+  "468": {
+    "inputs": {
+      "vae_name": "qwen-image/qwen_image_vae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "first pass vae"
+    }
+  },
+  "759": {
+    "inputs": {
+      "upscale_method": "nearest-exact",
+      "scale_by": 0.25,
+      "image": [
+        "1014:991",
+        0
+      ]
+    },
+    "class_type": "ImageScaleBy",
+    "_meta": {
+      "title": "Ampliar Imagen Por"
+    }
+  },
+  "777": {
+    "inputs": {
+      "seed": 630268224798020
+    },
+    "class_type": "Seed String",
+    "_meta": {
+      "title": "Seed String (Mikey)"
+    }
+  },
+  "780": {
+    "inputs": {
+      "unet_name": "krea2_turbo_fp8_scaled.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Cargar Modelo de Difusión"
+    }
+  },
+  "855": {
+    "inputs": {
+      "model_type": "KREA2",
+      "civitai_lookup": "On",
+      "switch_1": "On",
+      "lora_name_1": "krea2/general-purpose/realism_engine_krea2_v1.safetensors",
+      "model_weight_1": 0.77,
+      "clip_weight_1": -0.13,
+      "block_preset_1": "KREA2-ALL:1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1",
+      "block_vector_1": "1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1",
+      "switch_2": "Off",
+      "lora_name_2": "None",
+      "model_weight_2": -0.01,
+      "clip_weight_2": 1,
+      "block_preset_2": "KREA2-ALL:1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1",
+      "block_vector_2": "1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1",
+      "switch_3": "On",
+      "lora_name_3": "krea2/Krea2_NSFW_Aesthetics_V1.safetensors",
+      "model_weight_3": 1,
+      "clip_weight_3": 1.03,
+      "block_preset_3": "KREA2-ALL:1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1",
+      "block_vector_3": "1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1",
+      "lora_stack": [
+        "1056",
+        0
+      ]
+    },
+    "class_type": "DonutLoRAStack",
+    "_meta": {
+      "title": "DonutLoRAStack"
+    }
+  },
+  "881": {
+    "inputs": {
+      "image": "1000208604.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Edit (ignore if red)"
+    }
+  },
+  "883": {
+    "inputs": {
+      "lora_name": "krea2/krea2_identity_edit_v1_2.safetensors",
+      "strength_model": 1,
+      "model": [
+        "1055",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "Edit Lora Loader"
+    }
+  },
+  "893": {
+    "inputs": {
+      "aspect_ratio": "9:16 (Portrait Widescreen)",
+      "megapixels": 1,
+      "multiple": 64
+    },
+    "class_type": "ResolutionSelector",
+    "_meta": {
+      "title": "Selector de Resolución"
+    }
+  },
+  "912": {
+    "inputs": {
+      "images": [
+        "1014:991",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Vista previa de imagen"
+    }
+  },
+  "913": {
+    "inputs": {
+      "images": [
+        "1014:989",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Vista previa de imagen"
+    }
+  },
+  "914": {
+    "inputs": {
+      "images": [
+        "1014:984",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Vista previa de imagen"
+    }
+  },
+  "942": {
+    "inputs": {
+      "model_name": "4x_NickelbackFS_72000_G.pth"
+    },
+    "class_type": "UpscaleModelLoader",
+    "_meta": {
+      "title": "Cargar Modelo de Escala Superior"
+    }
+  },
+  "1005": {
+    "inputs": {
+      "anything": [
+        "1055",
+        1
+      ],
+      "anything23": [
+        "1055",
+        0
+      ],
+      "anything24": [
+        "468",
+        0
+      ]
+    },
+    "class_type": "Anything Everywhere",
+    "_meta": {
+      "title": "Anything Everywhere"
+    }
+  },
+  "1033": {
+    "inputs": {
+      "value": false
+    },
+    "class_type": "PrimitiveBoolean",
+    "_meta": {
+      "title": "Booleano"
+    }
+  },
+  "1042": {
+    "inputs": {
+      "preset": 0,
+      "discard_penultimate_sigma": false,
+      "sampler": [
+        "1045",
+        0
+      ],
+      "any_input": [
+        "780",
+        0
+      ]
+    },
+    "class_type": "BlehSetSamplerPreset",
+    "_meta": {
+      "title": "BlehSetSamplerPreset"
+    }
+  },
+  "1045": {
+    "inputs": {
+      "solver_type": "ODE",
+      "max_stage": 3,
+      "eta": 1,
+      "s_noise": 1
+    },
+    "class_type": "SamplerER_SDE",
+    "_meta": {
+      "title": "eta = 0, no sde. eta = 1 SDE."
+    }
+  },
+  "1055": {
+    "inputs": {
+      "safe_stack": "On",
+      "fusion_aware": "Attenuate only",
+      "max_fusion_boost": 2,
+      "safe_limit": 1,
+      "execution_mode": "Experimental bypass",
+      "model": [
+        "1042",
+        0
+      ],
+      "clip": [
+        "430",
+        0
+      ],
+      "lora_stack": [
+        "855",
+        0
+      ]
+    },
+    "class_type": "DonutApplyLoRAStack",
+    "_meta": {
+      "title": "Donut Apply LoRA Stack"
+    }
+  },
+  "1056": {
+    "inputs": {
+      "model_type": "KREA2",
+      "civitai_lookup": "Off",
+      "switch_1": "Off",
+      "lora_name_1": "None",
+      "model_weight_1": 1,
+      "clip_weight_1": 1,
+      "block_preset_1": "KREA2-ALL:1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1",
+      "block_vector_1": "1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1",
+      "switch_2": "Off",
+      "lora_name_2": "None",
+      "model_weight_2": 1,
+      "clip_weight_2": 3.13,
+      "block_preset_2": "KREA2-ALL:1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1",
+      "block_vector_2": "1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1",
+      "switch_3": "Off",
+      "lora_name_3": "None",
+      "model_weight_3": 1,
+      "clip_weight_3": 1,
+      "block_preset_3": "KREA2-ALL:1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1",
+      "block_vector_3": "1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1"
+    },
+    "class_type": "DonutLoRAStack",
+    "_meta": {
+      "title": "DonutLoRAStack"
+    }
+  },
+  "1014:998": {
+    "inputs": {
+      "prompt": [
+        "1014:1006",
+        0
+      ],
+      "seed": [
+        "195",
+        0
+      ]
+    },
+    "class_type": "Wildcard Processor",
+    "_meta": {
+      "title": "Wildcard Processor (Mikey)"
+    }
+  },
+  "1014:1001": {
+    "inputs": {
+      "prompt": [
+        "1014:1007",
+        0
+      ],
+      "seed": [
+        "195",
+        0
+      ]
+    },
+    "class_type": "Wildcard Processor",
+    "_meta": {
+      "title": "Wildcard Processor (Mikey)"
+    }
+  },
+  "1014:1012": {
+    "inputs": {
+      "prompt": [
+        "53",
+        0
+      ],
+      "seed": [
+        "195",
+        0
+      ]
+    },
+    "class_type": "Wildcard Processor",
+    "_meta": {
+      "title": "Wildcard Processor (Mikey)"
+    }
+  },
+  "1014:1013": {
+    "inputs": {
+      "prompt": [
+        "56",
+        0
+      ],
+      "seed": [
+        "195",
+        0
+      ]
+    },
+    "class_type": "Wildcard Processor",
+    "_meta": {
+      "title": "Wildcard Processor (Mikey)"
+    }
+  },
+  "1014:1011": {
+    "inputs": {
+      "prompt": [
+        "1014:1013",
+        0
+      ],
+      "seed": [
+        "195",
+        0
+      ]
+    },
+    "class_type": "Wildcard Processor",
+    "_meta": {
+      "title": "Wildcard Processor (Mikey)"
+    }
+  },
+  "1014:1010": {
+    "inputs": {
+      "prompt": [
+        "1014:1012",
+        0
+      ],
+      "seed": [
+        "195",
+        0
+      ]
+    },
+    "class_type": "Wildcard Processor",
+    "_meta": {
+      "title": "Wildcard Processor (Mikey)"
+    }
+  },
+  "1014:1007": {
+    "inputs": {
+      "prompt": [
+        "1014:1010",
+        0
+      ],
+      "seed": [
+        "195",
+        0
+      ]
+    },
+    "class_type": "Wildcard Processor",
+    "_meta": {
+      "title": "Wildcard Processor (Mikey)"
+    }
+  },
+  "1014:1008": {
+    "inputs": {
+      "Text": ""
+    },
+    "class_type": "DF_Text",
+    "_meta": {
+      "title": "Text"
+    }
+  },
+  "1014:996": {
+    "inputs": {
+      "separator": "",
+      "text1": [
+        "1014:1001",
+        0
+      ],
+      "text2": [
+        "1014:998",
+        0
+      ]
+    },
+    "class_type": "CR Text Concatenate",
+    "_meta": {
+      "title": "🔤 CR Text Concatenate"
+    }
+  },
+  "1014:997": {
+    "inputs": {
+      "output": "",
+      "source": [
+        "1014:996",
+        0
+      ]
+    },
+    "class_type": "Display Any (rgthree)",
+    "_meta": {
+      "title": "Display Any (rgthree)"
+    }
+  },
+  "1014:995": {
+    "inputs": {
+      "text": [
+        "1014:996",
+        0
+      ],
+      "clip": [
+        "1055",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Positive Prompt)"
+    }
+  },
+  "1014:1006": {
+    "inputs": {
+      "prompt": [
+        "1014:1011",
+        0
+      ],
+      "seed": [
+        "195",
+        0
+      ]
+    },
+    "class_type": "Wildcard Processor",
+    "_meta": {
+      "title": "Wildcard Processor (Mikey)"
+    }
+  },
+  "1014:990": {
+    "inputs": {
+      "text": [
+        "1014:1001",
+        0
+      ],
+      "clip": [
+        "1055",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Positive Prompt)"
+    }
+  },
+  "1014:992": {
+    "inputs": {
+      "seed": [
+        "1014:1000",
+        1
+      ]
+    },
+    "class_type": "SeedGenerator",
+    "_meta": {
+      "title": "SeedGenerator"
+    }
+  },
+  "1014:986": {
+    "inputs": {
+      "seed": [
+        "1014:992",
+        1
+      ]
+    },
+    "class_type": "SeedGenerator",
+    "_meta": {
+      "title": "SeedGenerator"
+    }
+  },
+  "1014:982": {
+    "inputs": {
+      "seed": [
+        "1014:992",
+        1
+      ]
+    },
+    "class_type": "SeedGenerator",
+    "_meta": {
+      "title": "SeedGenerator"
+    }
+  },
+  "1014:991": {
+    "inputs": {
+      "samples": [
+        "1014:993",
+        0
+      ],
+      "vae": [
+        "468",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "Decodificación VAE"
+    }
+  },
+  "1014:1000": {
+    "inputs": {
+      "seed": [
+        "195",
+        0
+      ]
+    },
+    "class_type": "SeedGenerator",
+    "_meta": {
+      "title": "SeedGenerator"
+    }
+  },
+  "1014:985": {
+    "inputs": {
+      "output": "",
+      "source": [
+        "1014:988",
+        5
+      ]
+    },
+    "class_type": "Display Any (rgthree)",
+    "_meta": {
+      "title": "Display Any (rgthree)"
+    }
+  },
+  "1014:983": {
+    "inputs": {
+      "seed": [
+        "1014:982",
+        1
+      ],
+      "steps": 8,
+      "cfg": 1,
+      "sampler_name": "er_sde",
+      "scheduler": "bong_tangent",
+      "denoise": 0.31,
+      "rescale_factor": 1.5,
+      "resampling_method": "bilinear",
+      "feather": 10,
+      "tiled_vae": false,
+      "edit_mode": [
+        "1033",
+        0
+      ],
+      "grounding_px": 1088,
+      "turbo_mode": true,
+      "tiled_diffusion": true,
+      "image": [
+        "1014:989",
+        0
+      ],
+      "upscale_model": [
+        "942",
+        0
+      ],
+      "model": [
+        "1014:1031",
+        0
+      ],
+      "positive": [
+        "1014:988",
+        1
+      ],
+      "negative": [
+        "1014:994",
+        0
+      ],
+      "clip": [
+        "1055",
+        1
+      ],
+      "edit_model": [
+        "883",
+        0
+      ],
+      "edit_source_image": [
+        "881",
+        0
+      ],
+      "edit_prompt": [
+        "1014:996",
+        0
+      ],
+      "edit_negative_prompt": [
+        "1014:1008",
+        0
+      ],
+      "vae": [
+        "468",
+        0
+      ]
+    },
+    "class_type": "DonutTiledUpscale",
+    "_meta": {
+      "title": "Donut Tiled Upscale"
+    }
+  },
+  "1014:984": {
+    "inputs": {
+      "resolution": 1024,
+      "max_resolution": 1024,
+      "guide_size_for": false,
+      "seed": [
+        "1014:986",
+        1
+      ],
+      "steps": 8,
+      "cfg": 1,
+      "sampler_name": "er_sde",
+      "scheduler": "bong_tangent",
+      "denoise": 0.2,
+      "feather": 10,
+      "noise_mask": false,
+      "force_inpaint": false,
+      "bbox_threshold": 0.21,
+      "bbox_dilation": 11,
+      "bbox_crop_factor": 1.5,
+      "sam_detection_hint": "center-1",
+      "sam_dilation": 0,
+      "sam_threshold": 0.93,
+      "sam_bbox_expansion": 0,
+      "sam_mask_hint_threshold": 0.7,
+      "sam_mask_hint_use_negative": "False",
+      "drop_size": 1,
+      "wildcard": "",
+      "cycle": 1,
+      "max_faces": 13,
+      "inpaint_model": false,
+      "noise_mask_feather": 20,
+      "edit_mode": [
+        "1033",
+        0
+      ],
+      "grounding_px": 1088,
+      "vary_seed_per_face": true,
+      "turbo_mode": true,
+      "image": [
+        "1014:983",
+        0
+      ],
+      "model": [
+        "1014:1031",
+        0
+      ],
+      "clip": [
+        "1055",
+        1
+      ],
+      "positive": [
+        "1014:988",
+        2
+      ],
+      "negative": [
+        "1014:994",
+        0
+      ],
+      "edit_prompt": [
+        "1014:1001",
+        0
+      ],
+      "edit_model": [
+        "883",
+        0
+      ],
+      "face_reference": [
+        "881",
+        0
+      ],
+      "edit_negative_prompt": [
+        "1014:1008",
+        0
+      ],
+      "vae": [
+        "468",
+        0
+      ],
+      "bbox_detector": [
+        "50",
+        0
+      ],
+      "sam_model_opt": [
+        "52",
+        0
+      ]
+    },
+    "class_type": "DonutFaceDetailer",
+    "_meta": {
+      "title": "Face Detailer (Max Faces)"
+    }
+  },
+  "1014:999": {
+    "inputs": {
+      "width": [
+        "893",
+        0
+      ],
+      "height": [
+        "893",
+        1
+      ],
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Imagen Latente Vacía"
+    }
+  },
+  "1014:994": {
+    "inputs": {
+      "conditioning": [
+        "1014:1002",
+        0
+      ]
+    },
+    "class_type": "ConditioningZeroOut",
+    "_meta": {
+      "title": "Acondicionamiento Cero"
+    }
+  },
+  "1014:989": {
+    "inputs": {
+      "seed": [
+        "1014:992",
+        1
+      ],
+      "steps": 8,
+      "cfg": 1,
+      "sampler_name": "er_sde",
+      "scheduler": "bong_tangent",
+      "denoise": 0.35,
+      "rescale_factor": 1.5,
+      "resampling_method": "bilinear",
+      "feather": 10,
+      "tiled_vae": false,
+      "edit_mode": [
+        "1033",
+        0
+      ],
+      "grounding_px": 1088,
+      "turbo_mode": true,
+      "tiled_diffusion": true,
+      "image": [
+        "1014:991",
+        0
+      ],
+      "upscale_model": [
+        "942",
+        0
+      ],
+      "model": [
+        "1014:1031",
+        0
+      ],
+      "positive": [
+        "1014:988",
+        1
+      ],
+      "negative": [
+        "1014:994",
+        0
+      ],
+      "clip": [
+        "1055",
+        1
+      ],
+      "edit_model": [
+        "883",
+        0
+      ],
+      "edit_source_image": [
+        "881",
+        0
+      ],
+      "edit_prompt": [
+        "1014:996",
+        0
+      ],
+      "edit_negative_prompt": [
+        "1014:1008",
+        0
+      ],
+      "vae": [
+        "468",
+        0
+      ]
+    },
+    "class_type": "DonutTiledUpscale",
+    "_meta": {
+      "title": "Donut Tiled Upscale"
+    }
+  },
+  "1014:1002": {
+    "inputs": {
+      "text": [
+        "57",
+        0
+      ],
+      "clip": [
+        "1055",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Negative Prompt)"
+    }
+  },
+  "1014:993": {
+    "inputs": {
+      "seed": [
+        "195",
+        0
+      ],
+      "steps": 8,
+      "cfg_start": 1,
+      "cfg_halfway": 1,
+      "cfg_end": 1,
+      "halfway_step": 8,
+      "sampler_name": "er_sde",
+      "scheduler": "bong_tangent",
+      "denoise": 1,
+      "mode": "simple",
+      "cfg_curve": "linear",
+      "add_noise": "enable",
+      "start_at_step": 0,
+      "end_at_step": 10000,
+      "return_with_leftover_noise": "disable",
+      "randomize_seed_per_model": "enable",
+      "switch_at_step_1": 10,
+      "switch_at_step_2": 15,
+      "edit_mode": [
+        "1033",
+        0
+      ],
+      "grounding_px": 1088,
+      "turbo_mode": true,
+      "model": [
+        "1014:1031",
+        0
+      ],
+      "positive": [
+        "1014:988",
+        1
+      ],
+      "negative": [
+        "1014:994",
+        0
+      ],
+      "latent_image": [
+        "1014:999",
+        0
+      ],
+      "source_image": [
+        "881",
+        0
+      ],
+      "clip": [
+        "1055",
+        1
+      ],
+      "edit_model": [
+        "883",
+        0
+      ],
+      "edit_prompt": [
+        "1014:996",
+        0
+      ],
+      "edit_negative_prompt": [
+        "1014:1008",
+        0
+      ]
+    },
+    "class_type": "DonutSampler",
+    "_meta": {
+      "title": "DonutSampler"
+    }
+  },
+  "1014:988": {
+    "inputs": {
+      "compatibility_preset": "Custom settings",
+      "tap_method": "Donut 12-tap gains",
+      "tap_profile": "classic",
+      "per_layer_weights": "1.0,1.0,1.0,1.0,1.0,1.0,1.0,2.5,5.0,1.1,4.0,1.0",
+      "tap_strength": 0,
+      "tap_formula": "scale_around_1",
+      "tap_normalization": "tensor_rms",
+      "projector_method": "Donut projector-input gains",
+      "projector_profile": "off",
+      "projector_layer_weights": "1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0",
+      "projector_strength": 1,
+      "projector_formula": "scale_around_1",
+      "projector_normalization": "none",
+      "fusion_method": "Standard Krea2 fusion",
+      "fusion_strength": 1,
+      "conditioning_in_1": [
+        "1014:995",
+        0
+      ],
+      "conditioning_in_2": [
+        "1014:990",
+        0
+      ],
+      "detail_clip": [
+        "1055",
+        1
+      ],
+      "model": [
+        "1055",
+        0
+      ]
+    },
+    "class_type": "DonutKrea2FusionControl",
+    "_meta": {
+      "title": "Donut Krea2 Fusion Control"
+    }
+  },
+  "1014:1031": {
+    "inputs": {
+      "phi": 4,
+      "tau": 2.5,
+      "alpha": 0.25,
+      "sigma_start": 1000,
+      "sigma_end": 0,
+      "model": [
+        "1055",
+        0
+      ],
+      "nag_negative": [
+        "1014:1002",
+        0
+      ]
+    },
+    "class_type": "Krea2NormalizedAttentionGuidance",
+    "_meta": {
+      "title": "Krea2 Normalized Attention Guidance"
+    }
+  }
+}

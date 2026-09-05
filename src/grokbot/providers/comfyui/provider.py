@@ -196,7 +196,9 @@ class ComfyUIProvider:
             )
 
         graph = render(flow, request.prompt, self._seed)
-        run_timeout = _COMFY_VIDEO_TIMEOUT if flow.media_type is MediaType.VIDEO else _COMFY_IMAGE_TIMEOUT
+        run_timeout = flow.timeout or (
+            _COMFY_VIDEO_TIMEOUT if flow.media_type is MediaType.VIDEO else _COMFY_IMAGE_TIMEOUT
+        )
 
         base_url = await self._transport.ensure()
         client = self._client_factory(base_url)

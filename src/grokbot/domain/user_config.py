@@ -41,7 +41,7 @@ VALID_VIDEO_MODES = ("fun", "normal", "spicy")
 # **id de flujo**; al seleccionar un flujo se manda ese workflow, sin elegir
 # modelo/LoRA por separado. Para añadir un flujo: 1) registrar aquí su (id,
 # nombre) y 2) dejar caer el template ``<id>.json`` (con ``_meta``).
-COMFYUI_FLOWS = (("grok_style", "Grok Style"),)
+COMFYUI_FLOWS = (("grok_style", "Grok Style"), ("donut_face", "Donut Face"))
 DEFAULT_COMFYUI_MODEL = COMFYUI_FLOWS[0][0]
 VALID_COMFYUI_MODELS = tuple(_id for _id, _label in COMFYUI_FLOWS)
 COMFYUI_FLOW_LABELS = dict(COMFYUI_FLOWS)

@@ -77,8 +77,13 @@ def test_config_variant_keyboard():
 def test_config_comfyui_keyboard_lists_only_flow():
     cfg = ComfyUIConfig(model="grok_style")
     data = flat_callback_data(kb.config_comfyui_keyboard(cfg))
-    # Un solo flujo (Grok Style) + navegación; sin modelo/LoRA/refine legacy.
-    assert data == ["cfg:comfyui:flow:grok_style", "cfg:back:model", "cfg:close"]
+    # Los flujos registrados (Grok Style, Donut Face) + navegación; sin legacy.
+    assert data == [
+        "cfg:comfyui:flow:grok_style",
+        "cfg:comfyui:flow:donut_face",
+        "cfg:back:model",
+        "cfg:close",
+    ]
 
 
 def test_config_comfyui_has_no_legacy_model_lora_refine_rows():
