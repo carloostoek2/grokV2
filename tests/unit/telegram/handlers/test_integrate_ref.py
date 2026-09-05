@@ -217,6 +217,46 @@ async def test_long_prompt_single_s_completes_with_ref():
     assert deps.long_prompt.is_awaiting(_UID) is False
 
 
+async def test_grok_video_s_caption_ignores_reference_and_animates():
+    """A5: /s con grok_video anima ignorando la ref; NO valida prereqs (quirk parity).
+
+    El branch video corre antes del single-edit: ni "requiere xAI" ni
+    "No hay imagen de referencia" deben aparecer, y la foto se anima (send_video)
+    sin abrir job de imagen (parity grok: la ref se ignora en i2v).
+    """
+    deps = make_deps()
+    deps.update_config.set_model(_UID, "grok_video")
+    deps = await _msg(
+        deps, make_photo_message(caption="/s mueve la camara lento", file_id="FAKE:vid_src", message_id=14)
+    )
+    sends = [c["text"] for c in deps.gateway.calls_by_method("send_message")]
+    assert any(t.startswith("Animando imagen con <b>grok-imagine-video</b>") for t in sends)
+    assert not any("requiere el proveedor <b>xAI (oficial)</b>" in t for t in sends)
+    assert not any("No hay imagen de referencia configurada" in t for t in sends)
+    assert deps.gateway.calls_by_method("send_video"), "i2v anima ignorando la referencia"
+    assert deps.job_manager.active_jobs(_UID) == (), "el flujo video no abre job de imagen"
+
+
+async def test_awaiting_ref_beats_faceswap_routing():
+    """A2: flag pending chequeado ANTES de faceswap en foto+caption.
+
+    Un user que activó /cambiar_referencia (grok) y cambia a faceswap antes de
+    mandar la foto debe seguir guardando la referencia, no entrar al flujo
+    faceswap (parity grok 2853-2855: el chequeo de awaiting precede al routing).
+    """
+    deps = make_deps()
+    deps.update_config.set_model(_UID, "faceswap")
+    deps.integrate_ref_pending.add(_UID)
+    deps = await _msg(
+        deps, make_photo_message(caption="mi cara", file_id="FAKE:ref_fs", message_id=15)
+    )
+    assert deps.sessions.get_config(_UID).integrate_ref_path == f"/integrate_refs/{_UID}.jpg"
+    assert deps.integrate_ref_pending == set()
+    last = deps.gateway.calls_by_method("send_message")[-1]
+    assert last["text"] == _REF_SAVED
+    assert deps.sessions.get_config(_UID).state == "IDLE", "no entró al flujo faceswap"
+
+
 # --------------------------------------------------------------------------- #
 # Álbum integrate / álbum /s largo
 # --------------------------------------------------------------------------- #
