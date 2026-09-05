@@ -2,18 +2,18 @@
 
 > Fuente única de estado del producto `grokbot` (@grokV2). Arquitectura objetivo:
 > `docs/SPEC_REFACTOR.md`. Fecha de consolidación: 2026-09-05.
-> HEAD verificado: `ca37e72` — suite completa **655 passed** · baseline `grok/**` intacto.
+> HEAD verificado: `622ee5e` — suite completa **659 passed** · baseline `grok/**` intacto.
 > Wave de hardening R8/R9/R10 + smoke live + deploy (2026-09-04) cerrados (detalle §3/§5) y
 > **wave-2/R4 cerrada 2026-09-05**: los **9 flujos** que degradaban D8 ya NO degradan —
 > operan con copy byte-parity de grok (§2/§3). `D8_COMMANDS == ()`. **Deploy: grokV2 corre
 > permanente** como `grok-bot.service`, administrado por el shell `grokbot` (detalle §3/§4.2).
 > **Slice ComfyUI HTTP/WS (2026-09-05)**: `aa65651`→`e5ead0e` — el provider ComfyUI conduce
 > la API nativa (REST+WS) vía túnel SSH; **refine 2-stage fuera del alcance (dormido)**.
-> **Manejo por flujos (`b95dccd` + `ca37e72`, 2026-09-05)**: el `/config` de ComfyUI lista
-> **flujos por nombre** — hoy **Grok Style** y **Donut Face** —, fuera el catálogo legacy de
-> modelo/LoRA/refine; cada flujo = un workflow API-format con su modelo/LoRA horneados
-> (`_meta`). Agregar flujo = template + `COMFYUI_FLOWS`. Detalle y estado en §2 y
-> `docs/comfyui/AVANCE_VAST_HTTP.md`.
+> **Manejo por flujos (`b95dccd` + `ca37e72` + `622ee5e`, 2026-09-05)**: el `/config` de
+> ComfyUI lista **flujos por nombre** — hoy **Grok Style**, **Donut Face**, **Ágil solo** y
+> **Ágil NSFW** —, fuera el catálogo legacy de modelo/LoRA/refine; cada flujo = un workflow
+> API-format con su modelo/LoRA horneados (`_meta`). Agregar flujo = template +
+> `COMFYUI_FLOWS`. Detalle y estado en §2 y `docs/comfyui/AVANCE_VAST_HTTP.md`.
 
 ---
 
@@ -44,7 +44,8 @@ READ-ONLY; su baseline pre-existente se mantuvo intacto en todo momento.
   creación pegando JSON), `/estado` (tarjeta de configuración), `/variables` + `/var`
   (batch random + prompt fijo, multipose, shuffle/blacklist, skip-on-fail, cancel),
   generación de imagen (xai/replicate), video (kie/comfyui), comfyui (imagen por API
-  HTTP/WS vía túnel SSH — por **flujos**: **Grok Style** y **Donut Face**; refine 2-stage
+  HTTP/WS vía túnel SSH — por **flujos**: **Grok Style**, **Donut Face**, **Ágil solo** y
+  **Ágil NSFW**; refine 2-stage
   **fuera del alcance, dormido**), jobs de imagen
   con `cancel_job`, allowlist en message y callback_query. Wave-2/R4 (2026-09-05): **Face
   Swap** (`/cambiar_source` + confirm single/batch) y **edición con referencia `/s`**
@@ -52,7 +53,7 @@ READ-ONLY; su baseline pre-existente se mantuvo intacto en todo momento.
 - **Perímetro (R9, bot single-owner)**: SOLO chat privado (gate global en message y callback);
   sin límites de uso por decisión (sin tope de procesos activos ni cuota horaria); con la
   allowlist vacía el boot avisa y el bot queda abierto a quien te escriba en privado.
-- **Calidad**: **655 tests passed**, política **0-red / 0-mock** — el bot se prueba 100%
+- **Calidad**: **659 tests passed**, política **0-red / 0-mock** — el bot se prueba 100%
   offline contra `FakeTelegramGateway` grabador; el review de cierre del pool rearch (3
   reviewers: general + security + plan) fue íntegramente offline y terminó en **0 issues
   (Round 3)**; cada ítem de la wave-2/R4 cerró su review-loop en **0 issues** tras fix
@@ -122,8 +123,14 @@ local-forward** (`transport.py` → `client.py` → plantillas API-format en
   descargada; prompt en el nodo "Everything Else", salida = preview del Face Detailer).
   El export dependía de nodos "Anything Everywhere" que no materializan sus conexiones en
   modo API: se cablearon explícitos (`vae`, `bbox_detector`, `sam_model_opt`, `model`).
-- **Alcance actual**: flujos de imagen **Grok Style** (txt2img) y **Donut Face**
-  (txt2img + upscale + refine de caras). Video (`wan_i2v`/`minimax_i2v`) y variantes con
+- **Flujos 3 y 4 — Ágil solo / Ágil NSFW (`622ee5e`, 2026-09-05)**: grafos **krea2 turbo
+  fp8_scaled single-pass** a resolución **FIJA 896×1600** (8 pasos, cfg 1, euler/simple),
+  sin ResolutionSelector ni 2.ª pasada; **solo txt2img**. `agil_solo.json` (sin LoRA) y
+  `agil_nsfw.json` (con la LoRA `Krea2NSFWV4.safetensors` @1.0 horneada). **Validados en
+  vivo** contra el box (imagen real PNG 896×1600 desde el template); ~40% más rápidos.
+- **Alcance actual**: flujos de imagen **Grok Style** (txt2img), **Donut Face**
+  (txt2img + upscale + refine de caras) y los ágiles **Ágil solo** / **Ágil NSFW**
+  (krea2 turbo single-pass 896×1600). Video (`wan_i2v`/`minimax_i2v`) y variantes con
   foto quedan pendientes de pesos/plantillas (follow-up T2, §3).
 
 ### Flujos degradados D8 — ninguno (wave-2/R4 resuelta 2026-09-05)
@@ -152,7 +159,7 @@ resueltos; wave-2/R4 resuelta (R4 abajo). Ver commits y cierre en
 | **Deploy** | grokV2 como bot permanente | decisión de deploy (owner) | **Resuelto 2026-09-04** — `grok-bot.service` repunteado a grokV2 (`.venv/bin/grokbot`), administrado por el shell `grokbot`; `enable`+start, lingering activo, allowlist activa desde `.env` (detalle abajo). v1 decommissioned (unidad respaldada). |
 | **Smoke live** | Probar con infraestructura real | follow-up (owner) | **Completado 2026-09-04** con credenciales reales de grok v1: bug del panel `/config` corregido (nota abajo) y recorrido §4.3 validado por el owner — **todo ok** (sesión 36 updates, 0 errores). Pendiente: decidir el deploy (abajo). |
 | **T1** | Mostrar el **tiempo que tarda cada generación** (hoy NO se muestra) | follow-up de producto (request del owner, uso real 2026-09-05) | **Pendiente** — añadir el elapsed time al terminal/status de generación (single, batch, video, refine, faceswap, `/s`) y al terminal de resultados. |
-| **T2** | ComfyUI por API HTTP/WS — flujos y plantillas | slice de integración (2026-09-05, `aa65651`→`e5ead0e`; **`b95dccd` flujos**, **`ca37e72` Donut Face**) | **Avance**: túnel + cliente (REST/WS) + provider HTTP + plantillas API-format self-describables, **manejo por flujos** (`b95dccd`: `/config` lista los flujos por nombre; fuera catálogo modelo/LoRA/refine). **Flujos operativos**: **Grok Style** (txt2img) y **Donut Face** (`ca37e72`, krea2 + upscale + face detailer; export con "Anything Everywhere" → cableado explícito en modo API), ambos **validados en vivo** (imagen real PNG). **Pendiente**: más flujos cuando haya pesos en el box — video (`wan_i2v`/`minimax_i2v`), variantes con foto/img2img (cada uno = template `_meta` + `COMFYUI_FLOWS`, contrato §5 de `AVANCE_VAST_HTTP.md`). **Refine fuera del alcance (dormido)**. Detalle: `docs/comfyui/AVANCE_VAST_HTTP.md`. |
+| **T2** | ComfyUI por API HTTP/WS — flujos y plantillas | slice de integración (2026-09-05, `aa65651`→`e5ead0e`; **`b95dccd` flujos**, **`ca37e72` Donut Face**) | **Avance**: túnel + cliente (REST/WS) + provider HTTP + plantillas API-format self-describables, **manejo por flujos** (`b95dccd`: `/config` lista los flujos por nombre; fuera catálogo modelo/LoRA/refine). **Flujos operativos**: **Grok Style** (txt2img), **Donut Face** (`ca37e72`, krea2 + upscale + face detailer) y los ágiles **Ágil solo** / **Ágil NSFW** (`622ee5e`, krea2 turbo single-pass 896×1600, sin LoRA / con `Krea2NSFWV4`), todos **validados en vivo** (imagen real PNG). **Pendiente**: más flujos cuando haya pesos en el box — video (`wan_i2v`/`minimax_i2v`), variantes con foto/img2img (cada uno = template `_meta` + `COMFYUI_FLOWS`, contrato §5 de `AVANCE_VAST_HTTP.md`). **Refine fuera del alcance (dormido)**. Detalle: `docs/comfyui/AVANCE_VAST_HTTP.md`. |
 | R1/R2 | Baseline sucio de `grok/**` + DeprecationWarnings pytest-asyncio (Py3.14) | out-of-scope | cosmético / no tocar |
 
 Registro detallado con origen y archivos: `.grok/agent-memory/residuals/grokv2-rearch.md`
@@ -311,6 +318,11 @@ debe correr sin las credenciales de (a).
   explícito los inputs que "Anything Everywhere" no materializa en modo API (vae /
   bbox_detector / sam_model_opt / model). **Validado en vivo** contra el box (imagen final
   real). Suite **655 passed**.
+- Flujos ágiles ComfyUI (2026-09-05, suite 659): `622ee5e` — dos flujos krea2 turbo
+  fp8_scaled single-pass a 896×1600 fijos (8 pasos, cfg 1, euler/simple) validados en vivo
+  contra el box (~40% más rápidos): **Ágil solo** (`agil_solo.json`, sin LoRA) y **Ágil NSFW**
+  (`agil_nsfw.json`, con la LoRA `Krea2NSFWV4.safetensors` @1.0); SOLO txt2img, sin
+  ResolutionSelector. `/config` de ComfyUI pasa a listar 4 flujos. Suite **659 passed**.
 - Artefactos de proceso (sin commit, untracked por convención del pool):
   `.planning/quick/20260903-grokv2-rearch/CLOSURE.md` (resultado + learnings),
   `.grok/agent-memory/review/grokv2-rearch-poolclose.md` (review completo),

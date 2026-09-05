@@ -8,9 +8,11 @@ co-autoría; los siguientes **no** (decisión del owner).
 > **Actualización 2026-09-05 — ComfyUI se maneja por FLUJOS (no por catálogo de
 > modelo/LoRA).** El `/config` de ComfyUI ya no lista modelos (qwen, krea2_raw/moody,
 > wan_i2v, …), LoRAs ni el toggle Refinar. Ahora lista **flujos por nombre**; hoy hay
-> dos: **Grok Style** (`workflows/templates/krea2_t2i.json`, que hornea la LoRA
-> `grokstyle_krea2_v2`) y **Donut Face** (`donut_face.json`, pipeline Krea2 con upscale +
-> DonutFaceDetailer, validado en vivo). Cada flujo es un workflow API-format con su
+> cuatro: **Grok Style** (`workflows/templates/krea2_t2i.json`, que hornea la LoRA
+> `grokstyle_krea2_v2`), **Donut Face** (`donut_face.json`, pipeline Krea2 con upscale +
+> DonutFaceDetailer, validado en vivo), **Ágil solo** (`agil_solo.json`, krea2 turbo
+> single-pass 896×1600 sin LoRA) y **Ágil NSFW** (`agil_nsfw.json`, idem + LoRA
+> `Krea2NSFWV4.safetensors` @1.0), ambos validados en vivo. Cada flujo es un workflow API-format con su
 > modelo/LoRA horneados + una clave `_meta` (id, name, media_type, nodos prompt/seed/save,
 > `positive_input`, `timeout`) que el resolver separa antes de encolar. El provider
 > resuelve por `get_flow(id)`; el id vive en `domain/user_config.COMFYUI_FLOWS`. Sesiones
@@ -101,13 +103,22 @@ Con el flujo **Grok Style** (`krea2_t2i.json`, txt2img, 2 pasadas + upscale + `S
   `vae`/`bbox_detector`/`model` faltantes) → se cablearon **explícitos** en el template
   (VAE 468 a los decode/upscale/detailer; detector 50 + SAM 52 al FaceDetailer; model 1055
   al DonutKrea2FusionControl). Suite completa **655 passed** (0-red/0-mock).
+- **Flujos 3 y 4 — Ágil solo / Ágil NSFW (2026-09-05)**: grafos **krea2 turbo
+  fp8_scaled single-pass** a resolución **FIJA 896×1600** (8 pasos, cfg 1, euler/simple,
+  1 VAE + 1 KSampler + SaveImage), **sin** ResolutionSelector ni 2.ª pasada; **solo
+  txt2img** (`supports_source: false`). `agil_solo.json` (sin LoRA) y `agil_nsfw.json`
+  (con la LoRA `Krea2NSFWV4.safetensors` @1.0 horneada en un `LoraLoader`). Ambos
+  renderizados desde el template (vía `resolver.render`) y generados en vivo contra el box
+  (PNG 896×1600); son ~40% más rápidos que Grok Style/Donut Face. Suite completa
+  **659 passed** (0-red/0-mock).
 
 ## 4. Estado del proyecto (resumen)
 
 - El camino SSH (`ssh_client.py`, `gen_comfy.py`) se eliminó del árbol; exports y
   `main.py` apuntan al provider HTTP.
-- **ComfyUI se configura por flujos** (hoy `grok_style`/Grok Style y `donut_face`/Donut
-  Face): el `/config` lista los flujos por nombre; el catálogo legacy de modelo/LoRA (qwen,
+- **ComfyUI se configura por flujos** (hoy `grok_style`/Grok Style, `donut_face`/Donut
+  Face, `agil_solo`/Ágil solo y `agil_nsfw`/Ágil NSFW): el `/config` lista los flujos por
+  nombre; el catálogo legacy de modelo/LoRA (qwen,
   krea2_raw/moody, wan_i2v, LoRAs, refine) salió de la UI y de la validación — las sesiones
   viejas se auto-normalizan al flujo default al cargar.
 - El bot sigue operando igual en Telegram para lo que ya corría; la única diferencia
@@ -143,6 +154,6 @@ nodos inyectaban (caso `donut_face`: `vae`, `bbox_detector`, `sam_model_opt`, `m
 |---|---|
 | Más flujos (video `wan_i2v` / `minimax_i2v`) | El box tiene los nodos (Wan i2v, MiniMax H3) pero **no los pesos** (solo VAE Wan). Cuando haya pesos/receta, añadirlos como flujos (contrato §5) → template + `COMFYUI_FLOWS` → validar. |
 | Variantes con foto (img2img / i2v) | Como flujo con `supports_source: true` (+ `upload_image`); requiere los grafos con `LoadImage`. |
-| Catálogo v1 (recorte UI) | **Hecho (2026-09-05)** — ComfyUI se maneja por flujos; la UI solo ofrece los flujos registrados (**Grok Style**, **Donut Face**). |
-| Smoke Telegram | Recorrido manual en vivo de los flujos ComfyUI imagen (sin refine) — flujos validados por API directa (Grok Style y Donut Face generaron imagen real). |
+| Catálogo v1 (recorte UI) | **Hecho (2026-09-05)** — ComfyUI se maneja por flujos; la UI solo ofrece los flujos registrados (**Grok Style**, **Donut Face**, **Ágil solo**, **Ágil NSFW**). |
+| Smoke Telegram | Recorrido manual en vivo de los flujos ComfyUI imagen (sin refine) — flujos validados por API directa (Grok Style, Donut Face, Ágil solo y Ágil NSFW generaron imagen real). |
 | Hosted API nodes | El box expone también nodos de API alojada (Krea2ImageNode, QwenImage…); fuera de alcance si se decide difusión local. |
