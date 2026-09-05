@@ -223,9 +223,11 @@ async def handle_photo_caption(message: types.Message, deps: BotDeps) -> None:
     # A3/hardening single: preflight integrate ANTES de validar el prompt (el copy
     # "requiere xAI"/"no hay referencia" no queda enmascarado por un prompt corto).
     # grok_video ignora la ref y NO valida prereqs (A5): el branch video corre luego.
+    # validate_for_edit es barato (provider + exists, SIN leer los bytes): la única
+    # lectura completa ocurre en _process_single_photo_edit → load_for_edit.
     if integrate_mode and not is_video_cfg(cfg):
         try:
-            deps.integrate_refs.load_for_edit(uid, cfg)
+            deps.integrate_refs.validate_for_edit(uid, cfg)
         except IntegrateReferenceError as exc:
             await ui.send_text(exc.user_message)
             return
@@ -643,7 +645,9 @@ async def handle_regenerate(callback: types.CallbackQuery, deps: BotDeps) -> Non
             )
         elif integrate_mode:
             # Regen integrate (parity grok 1343-1356): re-descarga el source ORIGINAL
-            # y recarga la referencia por uid (A10) — nunca del ref opaco (R8). Ref
+            # y recarga la referencia por el uid del CONTEXTO (regen["user_id"], nunca
+            # del ref opaco — R8/A10). grok usa regen["user_id"] (bot.py:1353); con un
+            # ref legacy SIN owner_uid esto evita cargar la ref del clickeador. Ref
             # borrada → degrada el status user-safe y cierra el job.
             file_id = regen.get("source_file_id")
             if not file_id:
@@ -661,7 +665,9 @@ async def handle_regenerate(callback: types.CallbackQuery, deps: BotDeps) -> Non
                 return
             source_file_id = file_id
             try:
-                reference_image = deps.integrate_refs.load_for_edit(uid, cfg)
+                reference_image = deps.integrate_refs.load_for_edit(
+                    int(regen.get("user_id") or uid), cfg
+                )
             except IntegrateReferenceError as exc:
                 await ui.edit_text(status_id, exc.user_message, reply_markup=None)
                 return

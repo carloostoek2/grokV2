@@ -53,11 +53,26 @@ class IntegrateRefsUseCase:
             return None
         return self._refs.read(user_id)
 
-    def load_for_edit(self, user_id: int, cfg) -> bytes:
-        """Prereq provider==xai + ref presente; errores user-safe (grok 584-591)."""
+    def validate_for_edit(self, user_id: int, cfg) -> None:
+        """Preflight SIN leer bytes: provider==xai + ref presente (A3, grok 584-591).
+
+        Es el chequeo barato (provider + ``exists``, sin ``read`` completo) que los
+        handlers usan ANTES de validar el prompt / abrir job; :meth:`load_for_edit`
+        re-valida y recién ahí lee los bytes una sola vez.
+        """
         if not _effective_provider_is_xai(cfg):
             raise IntegrateReferenceError(REQUIRES_XAI_MSG)
-        data = self.read_reference(user_id)
+        if not self.reference_available(user_id):
+            raise IntegrateReferenceError(NO_REFERENCE_MSG)
+
+    def load_for_edit(self, user_id: int, cfg) -> bytes:
+        """Prereq provider==xai + ref presente y LECTURA de bytes (grok 584-591).
+
+        Quien ya validó con :meth:`validate_for_edit` puede llamar acá y leer una
+        sola vez (el guard interno es defensivo para los flujos que no preflightean).
+        """
+        self.validate_for_edit(user_id, cfg)
+        data = self._refs.read(user_id)
         if data is None:
             raise IntegrateReferenceError(NO_REFERENCE_MSG)
         return data

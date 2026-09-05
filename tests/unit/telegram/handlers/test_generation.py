@@ -457,8 +457,12 @@ async def test_album_no_caption_shows_hint():
 
 
 async def test_album_too_many_photos_errors():
+    # Margen de delay holgado (fix round R4 Item 3): alimentar 11 updates offline
+    # puede superar 0.05s bajo carga en frío y el drain correría con un álbum
+    # parcial. 1.0s garantiza que los 11 mensajes entren a la colección ANTES de
+    # que el drain popee, y _wait_until hace la aserción determinista.
     deps = make_deps()
-    deps.album.delay = 0.05
+    deps.album.delay = 1.0
     deps = await _feed_album(deps, 11, group="album-big")
     await _wait_until(lambda: any(
         s["text"] == "El album tiene 11 fotos; el maximo es 10."

@@ -115,6 +115,55 @@ async def test_load_for_edit_ok():
     assert uc.load_for_edit(USER_ID, sessions.get_config(USER_ID)) == _REF_BYTES
 
 
+async def test_validate_for_edit_requires_xai_provider():
+    sessions = FakeSessionRepo()  # cfg default grok/kie
+    refs = _refs(seed={USER_ID: _REF_BYTES})
+    uc = _uc(sessions, refs)
+
+    with pytest.raises(IntegrateReferenceError) as exc:
+        uc.validate_for_edit(USER_ID, sessions.get_config(USER_ID))
+    assert exc.value.user_message == REQUIRES_XAI_MSG
+
+
+async def test_validate_for_edit_missing_reference():
+    sessions = FakeSessionRepo(seed={USER_ID: _xai_cfg()})
+    refs = _refs()  # repo vacío
+    uc = _uc(sessions, refs)
+
+    with pytest.raises(IntegrateReferenceError) as exc:
+        uc.validate_for_edit(USER_ID, sessions.get_config(USER_ID))
+    assert exc.value.user_message == NO_REFERENCE_MSG
+
+
+class _ReadSpyRefs(FakeIntegrateRefsRepo):
+    """FakeIntegrateRefsRepo que cuenta lecturas completas (assert sin read)."""
+
+    def __init__(self, **kw) -> None:
+        super().__init__(**kw)
+        self.read_count = 0
+
+    def read(self, user_id: int) -> bytes | None:
+        self.read_count += 1
+        return super().read(user_id)
+
+
+async def test_validate_for_edit_ok_does_not_read_bytes():
+    """validate_for_edit valida (provider + exists) SIN leer los bytes completos.
+
+    El fix round separa validación de lectura: el single /s corto valida una vez
+    (barato) y recién _process_single_photo_edit lee una vez (load_for_edit).
+    """
+    cfg = dataclasses.replace(_xai_cfg(), integrate_ref_path=f"/integrate_refs/{USER_ID}.jpg")
+    sessions = FakeSessionRepo(seed={USER_ID: cfg})
+    refs = _ReadSpyRefs(seed={USER_ID: _REF_BYTES})
+    uc = _uc(sessions, refs)
+
+    assert uc.validate_for_edit(USER_ID, sessions.get_config(USER_ID)) is None
+    assert refs.read_count == 0, "validate_for_edit NO debe leer los bytes"
+    assert uc.load_for_edit(USER_ID, sessions.get_config(USER_ID)) == _REF_BYTES
+    assert refs.read_count == 1, "la lectura completa ocurre una sola vez en load_for_edit"
+
+
 # --------------------------------------------------------------------------- #
 # GenerateImageUseCase.run — seam edit_with_reference (xAI)
 # --------------------------------------------------------------------------- #
