@@ -8,14 +8,15 @@ co-autoría; los siguientes **no** (decisión del owner).
 > **Actualización 2026-09-05 — ComfyUI se maneja por FLUJOS (no por catálogo de
 > modelo/LoRA).** El `/config` de ComfyUI ya no lista modelos (qwen, krea2_raw/moody,
 > wan_i2v, …), LoRAs ni el toggle Refinar. Ahora lista **flujos por nombre**; hoy hay
-> uno: **Grok Style** (`workflows/templates/krea2_t2i.json`, que hornea la LoRA
-> `grokstyle_krea2_v2`). Cada flujo es un workflow API-format con su modelo/LoRA
-> horneados + una clave `_meta` (id, name, media_type, nodos prompt/seed/save) que el
-> resolver separa antes de encolar. El provider resuelve por `get_flow(id)`; el id vive
-> en `domain/user_config.COMFYUI_FLOWS` (`grok_style`). Sesiones legacy con modelos del
-> catálogo anterior se auto-normalizan al flujo default. **Agregar un flujo = dejar
-> caer `templates/<id>.json` con su `_meta` + registrar `(id, name)` en `COMFYUI_FLOWS`**
-> (esta sección actualiza §1-§6).
+> dos: **Grok Style** (`workflows/templates/krea2_t2i.json`, que hornea la LoRA
+> `grokstyle_krea2_v2`) y **Donut Face** (`donut_face.json`, pipeline Krea2 con upscale +
+> DonutFaceDetailer, validado en vivo). Cada flujo es un workflow API-format con su
+> modelo/LoRA horneados + una clave `_meta` (id, name, media_type, nodos prompt/seed/save,
+> `positive_input`, `timeout`) que el resolver separa antes de encolar. El provider
+> resuelve por `get_flow(id)`; el id vive en `domain/user_config.COMFYUI_FLOWS`. Sesiones
+> legacy con modelos del catálogo anterior se auto-normalizan al flujo default.
+> **Agregar un flujo = dejar caer `templates/<id>.json` con su `_meta` + registrar
+> `(id, name)` en `COMFYUI_FLOWS`** (esta sección actualiza §1-§6).
 
 ## 1. Decisión de la integración
 
@@ -93,17 +94,22 @@ Con el flujo **Grok Style** (`krea2_t2i.json`, txt2img, 2 pasadas + upscale + `S
   descargada** (2.4 MB, magic PNG verificado).
 - `media_type=image`, `file_path` local, `meta = {"file_paths", "download_allowlist"}` →
   **refine no se dispara**.
-- Suite completa **653 passed** (0-red/0-mock); tests nuevos de transporte, cliente,
-  resolver y provider (fakes).
+- **Flujo 2 — Donut Face (2026-09-05)**: export del canvas (muestreo + 2 pasadas de
+  tiled-upscale + DonutFaceDetailer) normalizado a `donut_face.json` y generado en vivo:
+  **imagen final real descargada** (~4.8 MB, magic PNG). El export usaba nodos "Anything
+  Everywhere" cuyas conexiones **no se materializan en modo API** (inputs requeridos
+  `vae`/`bbox_detector`/`model` faltantes) → se cablearon **explícitos** en el template
+  (VAE 468 a los decode/upscale/detailer; detector 50 + SAM 52 al FaceDetailer; model 1055
+  al DonutKrea2FusionControl). Suite completa **655 passed** (0-red/0-mock).
 
 ## 4. Estado del proyecto (resumen)
 
 - El camino SSH (`ssh_client.py`, `gen_comfy.py`) se eliminó del árbol; exports y
   `main.py` apuntan al provider HTTP.
-- **ComfyUI se configura por flujos** (hoy `grok_style`/Grok Style): el `/config` lista el
-  flujo por nombre; el catálogo legacy de modelo/LoRA (qwen, krea2_raw/moody, wan_i2v,
-  LoRAs, refine) salió de la UI y de la validación — las sesiones viejas se auto-normalizan
-  al flujo default al cargar.
+- **ComfyUI se configura por flujos** (hoy `grok_style`/Grok Style y `donut_face`/Donut
+  Face): el `/config` lista los flujos por nombre; el catálogo legacy de modelo/LoRA (qwen,
+  krea2_raw/moody, wan_i2v, LoRAs, refine) salió de la UI y de la validación — las sesiones
+  viejas se auto-normalizan al flujo default al cargar.
 - El bot sigue operando igual en Telegram para lo que ya corría; la única diferencia
   visible: los resultados ComfyUI **no** ofrecen refine.
 - `refine` queda dormido (código legacy intacto, sin `comfyui_remotes`; su toggle ya no
@@ -116,16 +122,20 @@ directa no se toca). Contrato:
 
 1. Exportar el workflow desde el canvas de ComfyUI (API-format) y dejarlo en
    `workflows/templates/<id>.json` con su modelo/LoRA **horneados** en los nodos y una
-   clave `_meta` (id, name, media_type, positive_node, negative_node, seed_nodes,
-   save_nodes, supports_source).
+   clave `_meta`: id, name, media_type, positive_node, **positive_input** (default
+   `"text"`; p. ej. `"prompt"` si el nodo es un Wildcard Processor), negative_node,
+   seed_nodes, save_nodes, supports_source y **timeout** (override del default por media).
 2. Registrar el flujo en `domain/user_config.COMFYUI_FLOWS`:
    `(("grok_style", "Grok Style"), ("<id>", "<Nombre>"))`. El id entra a
    `VALID_COMFYUI_MODELS` (validación/normalización) y la UI lo lista por `name`.
 
-El resolver descubre el template solo (`flows()`/`get_flow`); `_meta` se separa del
-grafo antes de encolar (ComfyUI nunca lo ve). Probar offline (tests con fakes) y
-validar en vivo una generación. Si el flujo admite foto (`LoadImage`), declarar
-`supports_source: true` (el provider sube la foto con `upload_image`).
+El resolver descubre el template solo (`flows()`/`get_flow`); `_meta` (top-level y el de
+*cada nodo* del export) se descarta antes de encolar (ComfyUI nunca lo ve). Probar offline
+(tests con fakes) y validar en vivo una generación. Si el flujo admite foto (`LoadImage`),
+declarar `supports_source: true` (el provider sube la foto con `upload_image`).
+**Ojo con los exports que usan nodos "Anything Everywhere"** (conexiones virtuales): en
+modo API no se materializan → hay que cablear **explícitos** los inputs requeridos que esos
+nodos inyectaban (caso `donut_face`: `vae`, `bbox_detector`, `sam_model_opt`, `model`).
 
 ## 6. Pendientes / siguientes pasos
 
@@ -133,6 +143,6 @@ validar en vivo una generación. Si el flujo admite foto (`LoadImage`), declarar
 |---|---|
 | Más flujos (video `wan_i2v` / `minimax_i2v`) | El box tiene los nodos (Wan i2v, MiniMax H3) pero **no los pesos** (solo VAE Wan). Cuando haya pesos/receta, añadirlos como flujos (contrato §5) → template + `COMFYUI_FLOWS` → validar. |
 | Variantes con foto (img2img / i2v) | Como flujo con `supports_source: true` (+ `upload_image`); requiere los grafos con `LoadImage`. |
-| Catálogo v1 (recorte UI) | **Hecho (2026-09-05)** — ComfyUI se maneja por flujos; la UI solo ofrece los flujos registrados (hoy `Grok Style`). |
-| Smoke Telegram | Recorrido manual en vivo del flujo ComfyUI imagen (sin refine). |
+| Catálogo v1 (recorte UI) | **Hecho (2026-09-05)** — ComfyUI se maneja por flujos; la UI solo ofrece los flujos registrados (**Grok Style**, **Donut Face**). |
+| Smoke Telegram | Recorrido manual en vivo de los flujos ComfyUI imagen (sin refine) — flujos validados por API directa (Grok Style y Donut Face generaron imagen real). |
 | Hosted API nodes | El box expone también nodos de API alojada (Krea2ImageNode, QwenImage…); fuera de alcance si se decide difusión local. |
