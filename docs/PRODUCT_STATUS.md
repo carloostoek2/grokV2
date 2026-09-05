@@ -2,14 +2,17 @@
 
 > Fuente única de estado del producto `grokbot` (@grokV2). Arquitectura objetivo:
 > `docs/SPEC_REFACTOR.md`. Fecha de consolidación: 2026-09-05.
-> HEAD verificado: `e5ead0e` — suite completa **653 passed** · baseline `grok/**` intacto.
+> HEAD verificado: `b95dccd` — suite completa **653 passed** · baseline `grok/**` intacto.
 > Wave de hardening R8/R9/R10 + smoke live + deploy (2026-09-04) cerrados (detalle §3/§5) y
 > **wave-2/R4 cerrada 2026-09-05**: los **9 flujos** que degradaban D8 ya NO degradan —
 > operan con copy byte-parity de grok (§2/§3). `D8_COMMANDS == ()`. **Deploy: grokV2 corre
 > permanente** como `grok-bot.service`, administrado por el shell `grokbot` (detalle §3/§4.2).
 > **Slice ComfyUI HTTP/WS (2026-09-05)**: `aa65651`→`e5ead0e` — el provider ComfyUI conduce
 > la API nativa (REST+WS) vía túnel SSH; **refine 2-stage fuera del alcance (dormido)**.
-> Detalle y estado en §2 y `docs/comfyui/AVANCE_VAST_HTTP.md`.
+> **Manejo por flujos (`b95dccd`, 2026-09-05)**: el `/config` de ComfyUI lista **flujos por
+> nombre** (hoy **Grok Style**), fuera el catálogo legacy de modelo/LoRA/refine; cada flujo =
+> un workflow API-format con su modelo/LoRA horneados (`_meta`). Agregar flujo = template +
+> `COMFYUI_FLOWS`. Detalle y estado en §2 y `docs/comfyui/AVANCE_VAST_HTTP.md`.
 
 ---
 
@@ -40,8 +43,8 @@ READ-ONLY; su baseline pre-existente se mantuvo intacto en todo momento.
   creación pegando JSON), `/estado` (tarjeta de configuración), `/variables` + `/var`
   (batch random + prompt fijo, multipose, shuffle/blacklist, skip-on-fail, cancel),
   generación de imagen (xai/replicate), video (kie/comfyui), comfyui (imagen por API
-  HTTP/WS vía túnel SSH — refine 2-stage **fuera del alcance, dormido** desde el slice
-  2026-09-05), jobs de imagen
+  HTTP/WS vía túnel SSH — por **flujos**: hoy **Grok Style**; refine 2-stage **fuera del
+  alcance, dormido**), jobs de imagen
   con `cancel_job`, allowlist en message y callback_query. Wave-2/R4 (2026-09-05): **Face
   Swap** (`/cambiar_source` + confirm single/batch) y **edición con referencia `/s`**
   (`/cambiar_referencia`, modo grok xAI) operativos con parity de copy grok.
@@ -99,13 +102,21 @@ conduce la **API nativa de ComfyUI (REST + WebSocket)** a través de un **túnel
 local-forward** (`transport.py` → `client.py` → plantillas API-format en
 `workflows/templates/` → `provider.py`). Detalle completo: `docs/comfyui/AVANCE_VAST_HTTP.md`.
 
-- **Validado en vivo**: imagen `krea2` real generada (PNG) contra el box; `GenerationResult`
-  con `file_path` + `meta["file_paths"]` (convención intacta). Suite **653 passed**.
-- **Refine 2-stage queda fuera del alcance (dormido)**: el provider no emite
-  `meta["comfyui_remotes"]` ni expone `.refine` → la confirmación de refine no se dispara
-  (el toggle de `/config` queda inerte). El código legacy de refine no se eliminó ni se tocó.
-- **Alcance actual**: plantilla `krea2`/`none` (txt2img). Video (`wan_i2v`/`minimax_i2v`) y
-  variantes con foto quedan pendientes de pesos/plantillas (follow-up T2, §3).
+- **Validado en vivo**: imagen del flujo **Grok Style** real generada (PNG) contra el box;
+  `GenerationResult` con `file_path` + `meta["file_paths"]` (convención intacta). Suite **653 passed**.
+- **Refine 2-stage fuera del alcance (dormido)**: el provider no emite
+  `meta["comfyui_remotes"]` → la confirmación de refine no se dispara; su toggle **salió de
+  la UI** del `/config`. El código legacy de refine no se eliminó ni se tocó.
+- **Manejo por flujos (`b95dccd`)**: el `/config` de ComfyUI lista **flujos por nombre**
+  (hoy **Grok Style** = `krea2_t2i.json`); fuera el catálogo legacy de modelo/LoRA/refine.
+  Cada flujo es un workflow API-format con su modelo/LoRA **horneados** y una clave `_meta`
+  (id, name, media_type, nodos prompt/seed/save) que el resolver separa antes de encolar;
+  el provider resuelve por `get_flow(id)`. `cfg.comfyui.model` = id de flujo
+  (`domain/user_config.COMFYUI_FLOWS`); sesiones con ids del catálogo anterior se
+  auto-normalizan al flujo default. **Agregar un flujo = `templates/<id>.json` + entrada en
+  `COMFYUI_FLOWS`** (contrato en `AVANCE_VAST_HTTP.md` §5).
+- **Alcance actual**: flujo de imagen **Grok Style** (txt2img). Video (`wan_i2v`/`minimax_i2v`)
+  y variantes con foto quedan pendientes de pesos/plantillas (follow-up T2, §3).
 
 ### Flujos degradados D8 — ninguno (wave-2/R4 resuelta 2026-09-05)
 
@@ -133,7 +144,7 @@ resueltos; wave-2/R4 resuelta (R4 abajo). Ver commits y cierre en
 | **Deploy** | grokV2 como bot permanente | decisión de deploy (owner) | **Resuelto 2026-09-04** — `grok-bot.service` repunteado a grokV2 (`.venv/bin/grokbot`), administrado por el shell `grokbot`; `enable`+start, lingering activo, allowlist activa desde `.env` (detalle abajo). v1 decommissioned (unidad respaldada). |
 | **Smoke live** | Probar con infraestructura real | follow-up (owner) | **Completado 2026-09-04** con credenciales reales de grok v1: bug del panel `/config` corregido (nota abajo) y recorrido §4.3 validado por el owner — **todo ok** (sesión 36 updates, 0 errores). Pendiente: decidir el deploy (abajo). |
 | **T1** | Mostrar el **tiempo que tarda cada generación** (hoy NO se muestra) | follow-up de producto (request del owner, uso real 2026-09-05) | **Pendiente** — añadir el elapsed time al terminal/status de generación (single, batch, video, refine, faceswap, `/s`) y al terminal de resultados. |
-| **T2** | ComfyUI por API HTTP/WS — ampliar plantillas y alinear catálogo | slice de integración (2026-09-05, `aa65651`→`e5ead0e`) | **Avance**: túnel + cliente (REST/WS) + provider HTTP + plantilla `krea2`/`none` (txt2img) implementados y **validados en vivo** (imagen real PNG). **Pendiente**: pesos de video en el box + workflows por familia (`wan_i2v`/`minimax_i2v`, variantes con foto/img2img) y recortar catálogo a lo soportado. **Refine fuera del alcance (dormido)**. Detalle: `docs/comfyui/AVANCE_VAST_HTTP.md`. |
+| **T2** | ComfyUI por API HTTP/WS — flujos y plantillas | slice de integración (2026-09-05, `aa65651`→`e5ead0e`; **`b95dccd` flujos**) | **Avance**: túnel + cliente (REST/WS) + provider HTTP + plantillas API-format self-describables, **manejo por flujos** (`b95dccd`: `/config` lista el flujo **Grok Style**; fuera catálogo modelo/LoRA/refine) y **validado en vivo** (imagen real PNG). **Pendiente**: más flujos cuando haya pesos en el box — video (`wan_i2v`/`minimax_i2v`), variantes con foto/img2img (cada uno = template `_meta` + `COMFYUI_FLOWS`, contrato §5 de `AVANCE_VAST_HTTP.md`). **Refine fuera del alcance (dormido)**. Detalle: `docs/comfyui/AVANCE_VAST_HTTP.md`. |
 | R1/R2 | Baseline sucio de `grok/**` + DeprecationWarnings pytest-asyncio (Py3.14) | out-of-scope | cosmético / no tocar |
 
 Registro detallado con origen y archivos: `.grok/agent-memory/residuals/grokv2-rearch.md`
@@ -280,6 +291,11 @@ debe correr sin las credenciales de (a).
   plantillas API-format (`workflows/resolver.py` + `templates/krea2_t2i.json`) y borrado
   del camino SSH (`ssh_client.py`/`gen_comfy.py`); **refine fuera del alcance (dormido)**.
   Validado en vivo contra el box (imagen krea2 real). Detalle: `docs/comfyui/AVANCE_VAST_HTTP.md`.
+- Manejo por flujos (2026-09-05, suite 653): `b95dccd` — ComfyUI se selecciona por **flujo
+  por nombre** (hoy **Grok Style**): templates self-describables (`_meta`) descubiertos por
+  `flows()`/`get_flow()`, `ComfyUIConfig.model` = id de flujo (`domain.COMFYUI_FLOWS`),
+  `/config` lista el flujo (fuera modelo/LoRA/refine legacy del catálogo), provider valida el
+  id (M1). Captions/`/estado` muestran "Grok Style". Suite **653 passed**.
 - Artefactos de proceso (sin commit, untracked por convención del pool):
   `.planning/quick/20260903-grokv2-rearch/CLOSURE.md` (resultado + learnings),
   `.grok/agent-memory/review/grokv2-rearch-poolclose.md` (review completo),

@@ -5,6 +5,18 @@ Sigue a la investigación `API_COMFYUI.md` y documenta **cómo quedó implementa
 flujo, el estado del proyecto y lo que falta. Los commits previos del slice llevan
 co-autoría; los siguientes **no** (decisión del owner).
 
+> **Actualización 2026-09-05 — ComfyUI se maneja por FLUJOS (no por catálogo de
+> modelo/LoRA).** El `/config` de ComfyUI ya no lista modelos (qwen, krea2_raw/moody,
+> wan_i2v, …), LoRAs ni el toggle Refinar. Ahora lista **flujos por nombre**; hoy hay
+> uno: **Grok Style** (`workflows/templates/krea2_t2i.json`, que hornea la LoRA
+> `grokstyle_krea2_v2`). Cada flujo es un workflow API-format con su modelo/LoRA
+> horneados + una clave `_meta` (id, name, media_type, nodos prompt/seed/save) que el
+> resolver separa antes de encolar. El provider resuelve por `get_flow(id)`; el id vive
+> en `domain/user_config.COMFYUI_FLOWS` (`grok_style`). Sesiones legacy con modelos del
+> catálogo anterior se auto-normalizan al flujo default. **Agregar un flujo = dejar
+> caer `templates/<id>.json` con su `_meta` + registrar `(id, name)` en `COMFYUI_FLOWS`**
+> (esta sección actualiza §1-§6).
+
 ## 1. Decisión de la integración
 
 grokbot ya no depende de scripts dentro de la GPU (`/workspace/gen_comfy.py` vía
@@ -14,20 +26,20 @@ a través de un **túnel SSH local-forward** al box Vast:
 - **Refine (2-stage) queda fuera de esta integración**: no se eliminó del repo, pero
   no se toma en cuenta. El nuevo provider **no emite `meta["comfyui_remotes"]`**, y ese
   key es el disparo de `ResolveRefineUseCase.offer(...)` → ninguna generación entra a la
-  confirmación de refine (el botón "Refinar" no aparece). El toggle de `/config` queda
-  inerte.
-- Alcance v1: **imagen** (`krea2`/`none`, txt2img) validado en vivo. Video y variantes
-  con foto quedan pendientes de plantillas/pesos (ver §6).
+  confirmación de refine. El toggle "Refinar" **salió de la UI** del `/config` (ya no se
+  ofrece; refine sigue dormido en el código).
+- Alcance v1: **imagen** con el flujo **Grok Style** (txt2img) validado en vivo. Video y
+  variantes con foto quedan pendientes de plantillas/pesos (ver §6).
 
 ## 2. Cómo está implementado el flujo
 
 ```
 Telegram handler / use case (application)
    └─ registry.resolve_image(cfg) ──► ComfyUIProvider.generate(request[, source_image])
-                                          │ 1. lookup(model, lora, media) → TemplateSpec
+                                          │ 1. get_flow(id) → Flow (workflow horneado + nodos)
                                           │ 2. transport.ensure() → base_url (túnel ssh -N -L)
                                           │ 3. ComfyApiClient(base_url)
-                                          │ 4. render(spec, prompt, seeds) → grafo API-format
+                                          │ 4. render(flow, prompt, seeds) → grafo API-format
                                           │ 5. run_workflow(graph)  (POST /prompt + WS + /history)
                                           │ 6. history(prompt_id) → outputs de save_nodes
                                           │ 7. view(...) → bytes → archivo local en tmp/comfyui
@@ -43,17 +55,18 @@ Componentes (bajo `src/grokbot/providers/comfyui/`):
 |---|---|
 | `transport.py` | `SshLocalForward`: abre/mantiene `ssh -N -L 127.0.0.1:<local>:127.0.0.1:<remote>` al box. `ensure()/restart()/close()`; spawner inyectable (tests). No ejecuta comandos remotos. |
 | `client.py` | `ComfyApiClient` (aiohttp): `enqueue`, `run_workflow` (fin por WS con match de `prompt_id` y fallback a `/history`; deadline único), `history`, `view` (acepta MP4), `upload_image`, `health`, `object_info`. Errores tipados de `providers/base.py`. Sesión y fuente WS inyectables. |
-| `workflows/resolver.py` | Registro `(model, lora, media_type)` → `TemplateSpec` (grafo + nodos prompt/seed/save + `supports_source`). `render()` copia el grafo y parchea prompt + seeds. |
-| `workflows/templates/*.json` | Grafos API-format versionados (hoy `krea2_t2i.json`). |
-| `provider.py` | `ComfyUIProvider` (implements `ImageProvider`/`VideoProvider`): valida model/lora (M1), preconditions (foto para video), resuelve plantilla, corre y descarga a `tmp/comfyui`, normaliza a `GenerationResult`. |
+| `workflows/resolver.py` | Registro de **flujos** por id: `flows()`/`get_flow(id)` → `Flow` (grafo limpio + nodos prompt/seed/save + `supports_source`), descubriendo los `templates/*.json`. `render()` copia el grafo (sin `_meta`) y parchea prompt + seeds. |
+| `workflows/templates/*.json` | Workflows API-format versionados, **self-describables** (`_meta`: id, name, media_type, nodos a parchear). Hoy `krea2_t2i.json` = flujo `grok_style`. |
+| `provider.py` | `ComfyUIProvider` (implements `ImageProvider`/`VideoProvider`): valida el **id de flujo** (M1), resuelve el flujo, corre y descarga a `tmp/comfyui`, normaliza a `GenerationResult`. |
 
 Detalles del flujo por generación:
 
-1. `_model_lora(request)` valida `model`/`lora` contra el catálogo (M1: nunca se
-   interpolan valores crudos a ningún shell; solo se parchean inputs del JSON).
-2. `lookup(cm, cl, media)` → plantilla; si no hay, el request **no** es soportado
-   (`supports()==False` → mensaje user-safe "el modelo configurado no puede generar…")
-   o `ProviderInputError` directo.
+1. `_resolve_flow(request)` resuelve el flujo por su id (`get_flow(flow_id)`); un id
+   desconocido es `ProviderInputError` (M1: nunca se interpolan valores crudos a ningún
+   shell; solo se parchean inputs del JSON).
+2. `supports()` = existe el flujo y su `media_type` coincide con el request; si no, el
+   request **no** es soportado (`supports()==False` → mensaje user-safe) o
+   `ProviderInputError` directo.
 3. `transport.ensure()` devuelve `http://127.0.0.1:<puerto_local>` (túnel al
    `COMFYUI_REMOTE_PORT` dentro del box, en el box real **18188**).
 4. `render()` copia la plantilla, pone el prompt del usuario en el nodo positivo y
@@ -74,7 +87,7 @@ Settings/env: `COMFYUI_HOST`/`COMFYUI_PORT` = SSH al box (host vacío = deshabil
 
 ## 3. Qué se validó (smoke en vivo)
 
-Con el grafo real de krea2 (txt2img, 2 pasadas + upscale + `SaveImage`):
+Con el flujo **Grok Style** (`krea2_t2i.json`, txt2img, 2 pasadas + upscale + `SaveImage`):
 
 - Generación real contra el box por el flujo HTTP: **imagen krea2 PNG generada y
   descargada** (2.4 MB, magic PNG verificado).
@@ -87,31 +100,39 @@ Con el grafo real de krea2 (txt2img, 2 pasadas + upscale + `SaveImage`):
 
 - El camino SSH (`ssh_client.py`, `gen_comfy.py`) se eliminó del árbol; exports y
   `main.py` apuntan al provider HTTP.
+- **ComfyUI se configura por flujos** (hoy `grok_style`/Grok Style): el `/config` lista el
+  flujo por nombre; el catálogo legacy de modelo/LoRA (qwen, krea2_raw/moody, wan_i2v,
+  LoRAs, refine) salió de la UI y de la validación — las sesiones viejas se auto-normalizan
+  al flujo default al cargar.
 - El bot sigue operando igual en Telegram para lo que ya corría; la única diferencia
   visible: los resultados ComfyUI **no** ofrecen refine.
-- `refine` queda dormido (código legacy intacto, sin `comfyui_remotes`).
+- `refine` queda dormido (código legacy intacto, sin `comfyui_remotes`; su toggle ya no
+  se ofrece en `/config`).
 
-## 5. Cómo añadir una nueva familia/plantilla
+## 5. Cómo añadir un flujo nuevo
 
-Patrón (mismo slice, siguiente commit):
+Cada flujo = **un archivo JSON + una entrada de dominio**; nada más (la conexión
+directa no se toca). Contrato:
 
-1. Exportar el workflow desde el canvas de ComfyUI (formato UI o API). Colocarlo como
-   grafo API-format en `workflows/templates/<clave>.json` (quitar `_meta`, prompts
-   ejemplo, prefixes; seeds a 0).
-2. Registrar en `workflows/resolver.py`:
-   `(model, lora, MediaType.X.value) → {"file", "positive_node", "seed_nodes",
-   "save_nodes", "supports_source": bool}`.
-3. Si la plantilla admite foto (`LoadImage`), subir con `upload_image` (nombre único por
-   job) y apuntar el nodo; marcar `supports_source=True`.
-4. Probar offline (tests con fakes) y validar en vivo una generación; actualizar
-   catálogo/UI solo cuando haya plantilla.
+1. Exportar el workflow desde el canvas de ComfyUI (API-format) y dejarlo en
+   `workflows/templates/<id>.json` con su modelo/LoRA **horneados** en los nodos y una
+   clave `_meta` (id, name, media_type, positive_node, negative_node, seed_nodes,
+   save_nodes, supports_source).
+2. Registrar el flujo en `domain/user_config.COMFYUI_FLOWS`:
+   `(("grok_style", "Grok Style"), ("<id>", "<Nombre>"))`. El id entra a
+   `VALID_COMFYUI_MODELS` (validación/normalización) y la UI lo lista por `name`.
+
+El resolver descubre el template solo (`flows()`/`get_flow`); `_meta` se separa del
+grafo antes de encolar (ComfyUI nunca lo ve). Probar offline (tests con fakes) y
+validar en vivo una generación. Si el flujo admite foto (`LoadImage`), declarar
+`supports_source: true` (el provider sube la foto con `upload_image`).
 
 ## 6. Pendientes / siguientes pasos
 
 | Pendiente | Detalle |
 |---|---|
-| Video (`wan_i2v` / `minimax_i2v`) | El box tiene los nodos (Wan i2v, MiniMax H3) pero **no los pesos** (solo VAE Wan). Confirmar/instalar pesos y receta → plantilla API-format + `SaveVideo` → validar. |
-| Variantes con foto (img2img / i2v) | `supports_source` + `upload_image`; requiere los grafos con `LoadImage`. |
-| Catálogo v1 (recorte UI) | Solo cuando haya plantillas: reducir modelos/loras ofrecidos a los soportados. |
+| Más flujos (video `wan_i2v` / `minimax_i2v`) | El box tiene los nodos (Wan i2v, MiniMax H3) pero **no los pesos** (solo VAE Wan). Cuando haya pesos/receta, añadirlos como flujos (contrato §5) → template + `COMFYUI_FLOWS` → validar. |
+| Variantes con foto (img2img / i2v) | Como flujo con `supports_source: true` (+ `upload_image`); requiere los grafos con `LoadImage`. |
+| Catálogo v1 (recorte UI) | **Hecho (2026-09-05)** — ComfyUI se maneja por flujos; la UI solo ofrece los flujos registrados (hoy `Grok Style`). |
 | Smoke Telegram | Recorrido manual en vivo del flujo ComfyUI imagen (sin refine). |
 | Hosted API nodes | El box expone también nodos de API alojada (Krea2ImageNode, QwenImage…); fuera de alcance si se decide difusión local. |
