@@ -286,3 +286,19 @@ disco: `D8_*`/`_cmd_unavailable`/`_PACK_NEW_D8` ausentes de `src/`+`tests/`;
 Nota: el cierre del pool wave-2 no abre otros residuales. Los aceptados/wontfix de los
 reviews (desviación preflight `/s` antes de `validate_prompt`, etc.) son desviaciones
 documentadas con Response y comentario en código/SUMMARY — no diferidos con follow-up.
+
+---
+
+## Residual nuevo — T1: mostrar tiempo de cada generación (request del owner, 2026-09-05)
+
+- Origen: owner, tras el deploy de la wave-2/R4 (uso real). "falta que muestre el tiempo, en cada
+  generación debe demostrar el tiempo que tarda Y ahorita no lo está mostrando".
+- Clase: follow-up de producto (feature request, in-scope-followup de producto).
+- Detalle: hoy ninguna generación muestra cuánto tardó. Se quiere el elapsed time visible en la
+  generación (single, batch/variables, video, refine, faceswap, edición `/s`) — p. ej. en el
+  terminal/status y/o en el mensaje de resultado.
+- Acción sugerida: añadir elapsed time (tiempo real transcurrido) al flujo de presentación de
+  resultados/status en telegram (medido desde el start del job/use case hasta el resultado),
+  formatters/terminal; definir el copy exacto. Requiere decidir dónde mostrarlo (status final vs
+  caption del media vs ambos). No requiere providers nuevos; es capa telegram/application.
+- Registrado en docs/PRODUCT_STATUS.md §3 como fila T1 (pendiente).
