@@ -81,6 +81,8 @@ def test_config_comfyui_keyboard_lists_only_flow():
     assert data == [
         "cfg:comfyui:flow:grok_style",
         "cfg:comfyui:flow:donut_face",
+        "cfg:comfyui:flow:agil_solo",
+        "cfg:comfyui:flow:agil_nsfw",
         "cfg:back:model",
         "cfg:close",
     ]

@@ -18,7 +18,7 @@ def test_get_flow_grok_style_returns_flow():
 
 def test_flows_returns_registered_flows():
     ids = {f.id for f in flows()}
-    assert ids == {"grok_style", "donut_face"}
+    assert ids == {"grok_style", "donut_face", "agil_solo", "agil_nsfw"}
 
 
 def test_get_flow_donut_face():
@@ -64,3 +64,66 @@ def test_render_patches_prompt_and_seeds_without_mutating_template():
     # El template cacheado queda intacto.
     assert flow.graph["4"]["inputs"]["text"] == ""
     assert flow.graph["1"]["inputs"]["seed"] == 0
+
+
+def test_get_flow_agil_solo():
+    flow = get_flow("agil_solo")
+    assert flow is not None
+    assert flow.name == "Ágil solo"
+    assert flow.media_type is MediaType.IMAGE
+    assert flow.positive_node == "5"
+    assert flow.seed_nodes == ("8",)
+    assert flow.save_nodes == ("10",)
+    assert flow.supports_source is False
+    # Variante base: sin LoRA (no existe el nodo LoraLoader "4").
+    assert "4" not in flow.graph
+    assert not any(
+        isinstance(n, dict) and n.get("class_type") == "LoraLoader"
+        for n in flow.graph.values()
+    )
+
+
+def test_render_agil_solo_patches_prompt_and_seed():
+    flow = get_flow("agil_solo")
+    graph = render(flow, "un paisaje al atardecer", lambda: 12345)
+    assert graph["5"]["inputs"]["text"] == "un paisaje al atardecer"
+    assert graph["8"]["inputs"]["seed"] == 12345
+    # Resolución FIJA 896x1600, sin ResolutionSelector.
+    assert graph["7"]["inputs"]["width"] == 896
+    assert graph["7"]["inputs"]["height"] == 1600
+    # ``_meta`` nunca viaja en el grafo que se encola a ComfyUI.
+    assert "_meta" not in graph
+    assert all("_meta" not in node for node in graph.values())
+    # La plantilla cacheada no se muta.
+    assert flow.graph["5"]["inputs"]["text"] == ""
+    assert flow.graph["8"]["inputs"]["seed"] == 0
+
+
+def test_get_flow_agil_nsfw_has_lora():
+    flow = get_flow("agil_nsfw")
+    assert flow is not None
+    assert flow.name == "Ágil NSFW"
+    assert flow.media_type is MediaType.IMAGE
+    assert flow.positive_node == "5"
+    assert flow.seed_nodes == ("8",)
+    assert flow.save_nodes == ("10",)
+    assert flow.supports_source is False
+    lora = flow.graph["4"]
+    assert lora["class_type"] == "LoraLoader"
+    assert lora["inputs"]["lora_name"] == "Krea2NSFWV4.safetensors"
+    assert lora["inputs"]["strength_model"] == 1.0
+    assert lora["inputs"]["strength_clip"] == 1.0
+    assert flow.graph["8"]["inputs"]["model"] == ["4", 0]
+    assert flow.graph["5"]["inputs"]["clip"] == ["4", 1]
+
+
+def test_render_agil_nsfw_patches_prompt_and_seed():
+    flow = get_flow("agil_nsfw")
+    graph = render(flow, "retrato editorial", lambda: 987)
+    assert graph["5"]["inputs"]["text"] == "retrato editorial"
+    assert graph["8"]["inputs"]["seed"] == 987
+    assert "_meta" not in graph
+    assert all("_meta" not in node for node in graph.values())
+    # El LoRA sigue cableado tras el render y la plantilla no se muta.
+    assert graph["8"]["inputs"]["model"] == ["4", 0]
+    assert flow.graph["8"]["inputs"]["seed"] == 0
