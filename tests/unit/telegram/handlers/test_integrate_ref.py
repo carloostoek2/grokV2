@@ -17,6 +17,7 @@ from conftest import (
     CHAT_ID,
     USER_ID,
     FakeImageProvider,
+    FakeIntegrateRefsRepo,
     callback_query,
     callback_update,
     make_deps,
@@ -165,6 +166,36 @@ async def test_photo_awaiting_media_unavailable_keeps_pending():
     assert "No se pudo recuperar la imagen." in last["text"]
     assert _UID in deps.integrate_ref_pending, "el flag se conserva para reintentar"
     assert deps.sessions.get_config(_UID).integrate_ref_path is None
+
+
+class _FailingIntegrateRefsRepo(FakeIntegrateRefsRepo):
+    """FakeIntegrateRefsRepo cuyo save lanza (fuerza la rama de contención del drain)."""
+
+    def save(self, user_id: int, data: bytes) -> str:
+        raise RuntimeError("boom interno")
+
+
+async def test_album_drain_internal_error_clears_pending_and_degrades():
+    """Rama de contención del drain (fix round): un fallo interno de set_reference
+    limpia el flag pending y degrada _UNEXPECTED_ERROR user-safe (sin fuga R6/C3).
+
+    Si el discard del except se quitara o rompiera, un error interno dejaría el flag
+    awaiting-ref colgado (las fotos siguientes se guardarían como referencia sin
+    feedback) y la suite no lo detectaría.
+    """
+    from grokbot.telegram.handlers.integrate_ref import _UNEXPECTED_ERROR
+
+    deps = make_deps(integrate_refs_repo=_FailingIntegrateRefsRepo())
+    deps.integrate_ref_pending.add(_UID)
+    deps.album.delay = 0.05
+    deps = await _feed_album(deps, 2, group="ref-album-err", file_prefix="FAKE:referr")
+    await _wait_until(lambda: deps.integrate_ref_pending == set())
+    sends = [c["text"] for c in deps.gateway.calls_by_method("send_message")]
+    assert _UNEXPECTED_ERROR in sends, "feedback user-safe de la contención"
+    assert not any("boom interno" in t or "RuntimeError" in t for t in sends), "R6: sin detalle"
+    assert deps.sessions.get_config(_UID).integrate_ref_path is None, "no persiste ref"
+    assert deps.job_manager.active_jobs(_UID) == ()
+    assert not deps.gateway.calls_by_method("send_photo"), "sin media"
 
 
 # --------------------------------------------------------------------------- #
