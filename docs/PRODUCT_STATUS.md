@@ -2,18 +2,22 @@
 
 > Fuente única de estado del producto `grokbot` (@grokV2). Arquitectura objetivo:
 > `docs/SPEC_REFACTOR.md`. Fecha de consolidación: 2026-09-05.
-> HEAD verificado: `841df64` — suite completa **653 passed** · baseline `grok/**` intacto.
+> HEAD verificado: `e5ead0e` — suite completa **653 passed** · baseline `grok/**` intacto.
 > Wave de hardening R8/R9/R10 + smoke live + deploy (2026-09-04) cerrados (detalle §3/§5) y
 > **wave-2/R4 cerrada 2026-09-05**: los **9 flujos** que degradaban D8 ya NO degradan —
 > operan con copy byte-parity de grok (§2/§3). `D8_COMMANDS == ()`. **Deploy: grokV2 corre
 > permanente** como `grok-bot.service`, administrado por el shell `grokbot` (detalle §3/§4.2).
+> **Slice ComfyUI HTTP/WS (2026-09-05)**: `aa65651`→`e5ead0e` — el provider ComfyUI conduce
+> la API nativa (REST+WS) vía túnel SSH; **refine 2-stage fuera del alcance (dormido)**.
+> Detalle y estado en §2 y `docs/comfyui/AVANCE_VAST_HTTP.md`.
 
 ---
 
 ## 1. Resumen de producto
 
 **@grokV2** (`src/grokbot/`) es la re-arquitectura greenfield del bot de Telegram `@grok`
-(generación de imagen/video con xAI Grok Imagine, Replicate, Kie.ai y ComfyUI remoto),
+(generación de imagen/video con xAI Grok Imagine, Replicate, Kie.ai y ComfyUI — vía su API
+nativa HTTP/WS a través de un túnel SSH, slice 2026-09-05),
 construida capa por capa a partir de las 6 fases de `SPEC_REFACTOR.md`. Reproduce la lógica
 de negocio y el copy byte-a-byte de grok en los flujos **no degradados**, sobre una base
 limpia y testeable. `grok/` (repo hermano) se usó solo como referencia de comportamiento
@@ -35,8 +39,9 @@ READ-ONLY; su baseline pre-existente se mantuvo intacto en todo momento.
 - **Comandos funcionales**: `/start`, `/config` (FSM), `/listas` (CRUD paquetes/plantillas y
   creación pegando JSON), `/estado` (tarjeta de configuración), `/variables` + `/var`
   (batch random + prompt fijo, multipose, shuffle/blacklist, skip-on-fail, cancel),
-  generación de imagen (xai/replicate), video (kie/comfyui), **refine 2-stage** con
-  confirmación ComfyUI (single y batch, token opaco + owner gate + timeout), jobs de imagen
+  generación de imagen (xai/replicate), video (kie/comfyui), comfyui (imagen por API
+  HTTP/WS vía túnel SSH — refine 2-stage **fuera del alcance, dormido** desde el slice
+  2026-09-05), jobs de imagen
   con `cancel_job`, allowlist en message y callback_query. Wave-2/R4 (2026-09-05): **Face
   Swap** (`/cambiar_source` + confirm single/batch) y **edición con referencia `/s`**
   (`/cambiar_referencia`, modo grok xAI) operativos con parity de copy grok.
@@ -62,8 +67,9 @@ marca **[R4]** son exactamente los que en la wave rearch degradaban **D8** (resp
 "no disponible" user-safe) y que la **wave-2/R4** resolvió (2026-09-05,
 `fa2d1e0`→`841df64`, suite **653 passed**):
 
-- Imagen (xai/replicate), video (kie/comfyui), `/variables`+`/var` (random y prompt fijo,
-  incl. multipose), refine 2-stage con confirmación ComfyUI, `/config`, `/listas` (CRUD),
+- Imagen (xai/replicate), video (kie/comfyui), comfyui imagen (API HTTP/WS vía túnel SSH),
+  `/variables`+`/var` (random y prompt fijo,
+  incl. multipose), `/config`, `/listas` (CRUD),
   jobs single-image (`cancel_job:<id>`), allowlist, `/start`.
 - **Crear paquete de variables pegando JSON** en `/listas` (FSM `pack_json` →
   `save_package` + activación) **[R4 · Item 1]**.
@@ -85,6 +91,21 @@ marca **[R4]** son exactamente los que en la wave rearch degradaban **D8** (resp
 Backing completo de capa `application` para los flujos R4 (use cases `faceswap` /
 `integrate_refs`, repos binarios atómicos, seams de providers `swap_face` /
 `edit_with_reference`).
+
+### Integración ComfyUI por API HTTP/WS — slice 2026-09-05 (`aa65651`→`e5ead0e`)
+
+El provider ComfyUI dejó de ejecutar scripts en la GPU (`gen_comfy.py` vía SSH/scp) y
+conduce la **API nativa de ComfyUI (REST + WebSocket)** a través de un **túnel SSH
+local-forward** (`transport.py` → `client.py` → plantillas API-format en
+`workflows/templates/` → `provider.py`). Detalle completo: `docs/comfyui/AVANCE_VAST_HTTP.md`.
+
+- **Validado en vivo**: imagen `krea2` real generada (PNG) contra el box; `GenerationResult`
+  con `file_path` + `meta["file_paths"]` (convención intacta). Suite **653 passed**.
+- **Refine 2-stage queda fuera del alcance (dormido)**: el provider no emite
+  `meta["comfyui_remotes"]` ni expone `.refine` → la confirmación de refine no se dispara
+  (el toggle de `/config` queda inerte). El código legacy de refine no se eliminó ni se tocó.
+- **Alcance actual**: plantilla `krea2`/`none` (txt2img). Video (`wan_i2v`/`minimax_i2v`) y
+  variantes con foto quedan pendientes de pesos/plantillas (follow-up T2, §3).
 
 ### Flujos degradados D8 — ninguno (wave-2/R4 resuelta 2026-09-05)
 
@@ -112,6 +133,7 @@ resueltos; wave-2/R4 resuelta (R4 abajo). Ver commits y cierre en
 | **Deploy** | grokV2 como bot permanente | decisión de deploy (owner) | **Resuelto 2026-09-04** — `grok-bot.service` repunteado a grokV2 (`.venv/bin/grokbot`), administrado por el shell `grokbot`; `enable`+start, lingering activo, allowlist activa desde `.env` (detalle abajo). v1 decommissioned (unidad respaldada). |
 | **Smoke live** | Probar con infraestructura real | follow-up (owner) | **Completado 2026-09-04** con credenciales reales de grok v1: bug del panel `/config` corregido (nota abajo) y recorrido §4.3 validado por el owner — **todo ok** (sesión 36 updates, 0 errores). Pendiente: decidir el deploy (abajo). |
 | **T1** | Mostrar el **tiempo que tarda cada generación** (hoy NO se muestra) | follow-up de producto (request del owner, uso real 2026-09-05) | **Pendiente** — añadir el elapsed time al terminal/status de generación (single, batch, video, refine, faceswap, `/s`) y al terminal de resultados. |
+| **T2** | ComfyUI por API HTTP/WS — ampliar plantillas y alinear catálogo | slice de integración (2026-09-05, `aa65651`→`e5ead0e`) | **Avance**: túnel + cliente (REST/WS) + provider HTTP + plantilla `krea2`/`none` (txt2img) implementados y **validados en vivo** (imagen real PNG). **Pendiente**: pesos de video en el box + workflows por familia (`wan_i2v`/`minimax_i2v`, variantes con foto/img2img) y recortar catálogo a lo soportado. **Refine fuera del alcance (dormido)**. Detalle: `docs/comfyui/AVANCE_VAST_HTTP.md`. |
 | R1/R2 | Baseline sucio de `grok/**` + DeprecationWarnings pytest-asyncio (Py3.14) | out-of-scope | cosmético / no tocar |
 
 Registro detallado con origen y archivos: `.grok/agent-memory/residuals/grokv2-rearch.md`
@@ -153,7 +175,7 @@ validó en vivo el recorrido completo de §4.3 y reportó **todo ok** (36 update
 ## 4. ¿Listo para arrancar?
 
 **Código: sí.** El entrypoint `grokbot` (`main.run()`) hace polling con fail-fast claro y
-arranque verificado por 519 tests offline. Para levantarlo **en vivo** se necesita:
+arranque verificado por 653 tests offline. Para levantarlo **en vivo** se necesita:
 
 ### 1. Credenciales (fail-fast al boot)
 
@@ -253,6 +275,11 @@ debe correr sin las credenciales de (a).
   parity de copy grok: Item 1 utilidades →556, Item 2 Face Swap →613, Item 3 edición `/s`
   →653. Review-loop por ítem hasta 0 issues (R1: Item1 7 opens / 2 rounds, Item2 6+1 /
   3 rounds, Item3 6+1 / 3 rounds). `D8_COMMANDS == ()`.
+- Slice ComfyUI HTTP/WS (2026-09-05, suite 653): `aa65651` transporte+cliente (túnel SSH
+  local-forward + API REST/WS nativa con tests), `e5ead0e` provider sobre HTTP con
+  plantillas API-format (`workflows/resolver.py` + `templates/krea2_t2i.json`) y borrado
+  del camino SSH (`ssh_client.py`/`gen_comfy.py`); **refine fuera del alcance (dormido)**.
+  Validado en vivo contra el box (imagen krea2 real). Detalle: `docs/comfyui/AVANCE_VAST_HTTP.md`.
 - Artefactos de proceso (sin commit, untracked por convención del pool):
   `.planning/quick/20260903-grokv2-rearch/CLOSURE.md` (resultado + learnings),
   `.grok/agent-memory/review/grokv2-rearch-poolclose.md` (review completo),
