@@ -50,6 +50,17 @@ Estado final por residual en el bloque "Estado al cierre del pool" al pie.
   (cerró solo la consistencia del help, C10). Las degradaciones D8 quedaron verificadas
   user-safe en el review ("Verificados sin hallazgo: R4 degradación user-safe"). Los 9 flujos
   completos siguen como follow-up del pool (requieren use case o dato de providers antes de cablearse).
+- **Resuelto (wave-2/R4, 2026-09-05):** los 9 flujos quedaron habilitados con parity de copy
+  grok en 3 ítems (pool wave-2/R4; suite 521→**653 passed**, HEAD `841df64`):
+  - Item 1 — utilidades (`fa2d1e0`→`681ba13`): pack JSON `/listas`, long-prompt >1020,
+    álbumes/media groups, `/estado` tarjeta (R4 #9, #4, #2, #7).
+  - Item 2 — Face Swap (`db8a43b`→`3d0dc37`): `/cambiar_source` + modo faceswap + swap
+    Replicate 2-imágenes con confirm single/batch (R4 #1 y #5).
+  - Item 3 — edición `/s` (`fd8dd43`→`841df64`): `/cambiar_referencia`, `/s`
+    single/álbum/long-prompt/regen integrate (R4 #3, #6, #8).
+  `D8_COMMANDS == ()`; sin constantes D8_* ni `_cmd_unavailable` en `src/`+`tests/`. Detalle
+  y residuales documentados del pool en la sección "wave-2/R4" al pie y en
+  `docs/PRODUCT_STATUS.md` §2/§3.
 
 ## R5 — Item 5 M1 (arch): cancel en refine de batch no suprime la refinada en vuelo
 - Origen: arch-enforcer item5 (M1). `stream_presenter.present_batch` llama `run_refine_flow(... cancel_event=None)` (:336) aun con job real; un cancel del job durante el refine en batch (post-yes) no suprime la refinada en vuelo, a diferencia del single-image (:167).
@@ -231,3 +242,47 @@ mensaje enviado por el bot lleva `from_user` = el BOT.
   `data_dir=/home/ubuntu/repos/grokV2/data` (WorkingDirectory del unit; sin `GROK_DATA_DIR` en
   `.env`, el default `./data` relativo al repo es el correcto). v1 `grok/bot.py` queda
   decommissioned (unidad original respaldada).
+
+---
+
+## Actualización post-cierre — wave-2/R4 (2026-09-05): R4 resuelto
+
+Pool wave-2/R4 (3 ítems, suite 521→**653 passed**, HEAD `841df64`): los 9 flujos que
+degradaban D8 operan con parity de copy grok y `D8_COMMANDS == ()`. Reconciliación contra
+los SUMMARYs de los 3 ítems y los reviews (0 issues tras fix rounds). Verificación en
+disco: `D8_*`/`_cmd_unavailable`/`_PACK_NEW_D8` ausentes de `src/`+`tests/`;
+`_common.py` `D8_COMMANDS == ()`; umbral long-prompt `TELEGRAM_CAPTION_COLLECT_THRESHOLD
+= 1020`.
+
+| Flujo R4 | Item wave-2 | Rango/commit | Estado |
+|---|---|---|---|
+| Face Swap + `/cambiar_source` | Item 2 — Face Swap completo | `db8a43b`→`3d0dc37` | **Resuelto** |
+| Álbumes / media groups | Item 1 — utilidades | `fa2d1e0`→`681ba13` | **Resuelto** |
+| integrate_ref `/s` | Item 3 — edición con referencia | `fd8dd43`→`841df64` | **Resuelto** |
+| Long-prompt collection | Item 1 | `375e670` (Task 2) | **Resuelto** |
+| `/estado` (tarjeta de configuración) | Item 1 | `8e62d4e` (Task 4) | **Resuelto** |
+| `/cambiar_referencia` | Item 3 | `2d00312` (Task 3) | **Resuelto** |
+| Regen de integración | Item 3 | `2d00312`/`c46dcef` | **Resuelto** |
+| Crear paquete pegando JSON | Item 1 | `fa2d1e0` (Task 1) | **Resuelto** |
+| Registro D8 (tupla/comandos) | retiro total D8 | `2d00312` (Item 3, Task 3) | **Resuelto** — `D8_COMMANDS == ()` |
+
+### Nuevos residuales del pool wave-2 (documentados only; ninguno bloquea)
+
+- **out-of-scope (test gap, Item 1):** el completado **multi-file** de long-prompt
+  (`_complete_long_prompt_collection` vía texto sobre un álbum → `_process_album_edit`) no
+  tiene test directo; quedan cubiertas la ruta single-file y el defer álbum→texto. Acción
+  sugerida (deferred): test 0-mock del tramo multi-file.
+- **out-of-scope (Item 1, parity grok):** `estado_card` no cubre la rama ComfyUI "Listo…"
+  con detalle de modelo/lora; grok v1 tampoco la expone en `/estado` (solo "Listo para
+  generar/editar imagenes.") → se dejó la rama genérica del PLAN. Documentar.
+- **out-of-scope (Item 3, observación arch):** los labels del álbum **no-integrate** de
+  grokV2 siguen sin sufijo `({backend})` (grok álbum sí lo incluye) — pre-existente del
+  Item 2 (A2, documentado en el docstring de `_process_album_edit`), NO regresionado por
+  Item 3. Posible follow-up de parity: añadir el sufijo a la rama no-integrate.
+- **out-of-scope (Item 3, observación arch):** copy inventado "No se pudo recuperar la
+  imagen original para regenerar." en el regen integrate con `source_file_id` ausente del
+  ctx (grok no cubre ese caso con ese copy). User-safe, no expone ids. Documentar.
+
+Nota: el cierre del pool wave-2 no abre otros residuales. Los aceptados/wontfix de los
+reviews (desviación preflight `/s` antes de `validate_prompt`, etc.) son desviaciones
+documentadas con Response y comentario en código/SUMMARY — no diferidos con follow-up.

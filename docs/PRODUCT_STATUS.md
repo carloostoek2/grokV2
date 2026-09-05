@@ -1,11 +1,12 @@
 # grokV2 — Estado de producto (consolidado)
 
 > Fuente única de estado del producto `grokbot` (@grokV2). Arquitectura objetivo:
-> `docs/SPEC_REFACTOR.md`. Fecha de consolidación: 2026-09-04.
-> HEAD verificado: `742b566` — suite completa **521 passed** · baseline `grok/**` intacto.
-> Wave de hardening R8/R9/R10 cerrada + smoke live con infra real **completado y validado**
-> por el owner (bug de panel `/config` corregido, detalle en §3/§5). **Deploy: grokV2 corre
-> permanente** como `grok-bot.service`, administrado por el shell `grokbot` (detalle en §3/§4.2).
+> `docs/SPEC_REFACTOR.md`. Fecha de consolidación: 2026-09-05.
+> HEAD verificado: `841df64` — suite completa **653 passed** · baseline `grok/**` intacto.
+> Wave de hardening R8/R9/R10 + smoke live + deploy (2026-09-04) cerrados (detalle §3/§5) y
+> **wave-2/R4 cerrada 2026-09-05**: los **9 flujos** que degradaban D8 ya NO degradan —
+> operan con copy byte-parity de grok (§2/§3). `D8_COMMANDS == ()`. **Deploy: grokV2 corre
+> permanente** como `grok-bot.service`, administrado por el shell `grokbot` (detalle §3/§4.2).
 
 ---
 
@@ -31,17 +32,22 @@ READ-ONLY; su baseline pre-existente se mantuvo intacto en todo momento.
 
 ### Características clave
 
-- **Comandos funcionales**: `/start`, `/config` (FSM), `/listas` (CRUD paquetes/plantillas),
-  `/variables` + `/var` (batch random + prompt fijo, multipose, shuffle/blacklist,
-  skip-on-fail, cancel), generación de imagen (xai/replicate), video (kie/comfyui),
-  **refine 2-stage** con confirmación ComfyUI (single y batch, token opaco + owner gate +
-  timeout), jobs de imagen con `cancel_job`, allowlist en message y callback_query.
+- **Comandos funcionales**: `/start`, `/config` (FSM), `/listas` (CRUD paquetes/plantillas y
+  creación pegando JSON), `/estado` (tarjeta de configuración), `/variables` + `/var`
+  (batch random + prompt fijo, multipose, shuffle/blacklist, skip-on-fail, cancel),
+  generación de imagen (xai/replicate), video (kie/comfyui), **refine 2-stage** con
+  confirmación ComfyUI (single y batch, token opaco + owner gate + timeout), jobs de imagen
+  con `cancel_job`, allowlist en message y callback_query. Wave-2/R4 (2026-09-05): **Face
+  Swap** (`/cambiar_source` + confirm single/batch) y **edición con referencia `/s`**
+  (`/cambiar_referencia`, modo grok xAI) operativos con parity de copy grok.
 - **Perímetro (R9, bot single-owner)**: SOLO chat privado (gate global en message y callback);
   sin límites de uso por decisión (sin tope de procesos activos ni cuota horaria); con la
   allowlist vacía el boot avisa y el bot queda abierto a quien te escriba en privado.
-- **Calidad**: **521 tests passed**, política **0-red / 0-mock** — el bot se prueba 100%
-  offline contra `FakeTelegramGateway` grabador; el review de cierre del pool (3 reviewers:
-  general + security + plan) fue íntegramente offline y terminó en **0 issues (Round 3)**.
+- **Calidad**: **653 tests passed**, política **0-red / 0-mock** — el bot se prueba 100%
+  offline contra `FakeTelegramGateway` grabador; el review de cierre del pool rearch (3
+  reviewers: general + security + plan) fue íntegramente offline y terminó en **0 issues
+  (Round 3)**; cada ítem de la wave-2/R4 cerró su review-loop en **0 issues** tras fix
+  rounds.
 - **Errores user-safe**: los mensajes de boot/error jamás exponen tokens/IDs/payloads
   (solo nombres de campo o `type(exception).__name__`).
 
@@ -51,44 +57,83 @@ READ-ONLY; su baseline pre-existente se mantuvo intacto en todo momento.
 
 ### Flujos operativos (no degradados)
 
-Imagen (xai/replicate), video (kie/comfyui), `/variables`+`/var` (random y prompt fijo,
-incl. multipose), refine 2-stage, `/config`, `/listas` (sobre payloads persistidos),
-jobs single-image (`cancel_job:<id>`), allowlist, `/estado`, long-prompt collection,
-álbumes entrantes (grok y **face swap**), el modo **Face Swap** completo
-(`/cambiar_source`, foto/álbum con confirm dedicado, progreso + cancel y terminales
-byte-parity de grok — R4 Item 2), y la **edición con referencia `/s`** (R4 Item 3):
-`/cambiar_referencia` (fija la referencia en `data/integrate_refs/`, solo modo grok),
-foto single/álbum/long-prompt con caption `/s` que editan cada imagen junto con la
-referencia vía xAI (`edit_with_reference`, 2 imágenes) y **regen integrate** que
-re-descarga el source original y recarga la referencia. Backing completo de capa
-`application`.
+Operan con backing completo y copy byte-parity de grok (0-red/0-mock). Los flujos con
+marca **[R4]** son exactamente los que en la wave rearch degradaban **D8** (respondían
+"no disponible" user-safe) y que la **wave-2/R4** resolvió (2026-09-05,
+`fa2d1e0`→`841df64`, suite **653 passed**):
 
-### Flujos degradados D8 (responden con mensaje user-safe, NO silencioso) — R4
+- Imagen (xai/replicate), video (kie/comfyui), `/variables`+`/var` (random y prompt fijo,
+  incl. multipose), refine 2-stage con confirmación ComfyUI, `/config`, `/listas` (CRUD),
+  jobs single-image (`cancel_job:<id>`), allowlist, `/start`.
+- **Crear paquete de variables pegando JSON** en `/listas` (FSM `pack_json` →
+  `save_package` + activación) **[R4 · Item 1]**.
+- **Long-prompt collection** — caption > 1020 no edita directo: guarda el file_id y pide el
+  prompt por texto (foto con/sin caption, grok_video incluido) **[R4 · Item 1]**.
+- **Álbumes entrantes / media groups** — colección (`AlbumStore`) + edición secuencial
+  "Editando i/N" (máx. 10, cancel, long-prompt multi-file) **[R4 · Item 1]**.
+- **`/estado`** — tarjeta de configuración byte-parity con grok `cmd_estado` (sin lista de
+  jobs activos por decisión del owner) **[R4 · Item 1]**.
+- **Face Swap completo** — modo `faceswap` con `/cambiar_source` (foto/álbum, confirm
+  single/batch con fallback foto-a-foto del media group, progreso + cancel, terminales
+  byte-parity) **[R4 · Item 2]**.
+- **Edición con referencia `/s`** — `/cambiar_referencia` (fija la referencia en
+  `data/integrate_refs/`, solo modo grok), foto single/álbum/long-prompt con caption `/s`
+  que editan cada imagen con la referencia vía xAI (`edit_with_reference`, 2 imágenes), y
+  **regen integrate** que re-descarga el source original y recarga la referencia
+  **[R4 · Item 3]**.
 
-Estos flujos de grok **no** tienen backing en esta versión y responden con un mensaje
-claro de no-disponible. Requieren un use case o dato de providers antes de cablearse:
+Backing completo de capa `application` para los flujos R4 (use cases `faceswap` /
+`integrate_refs`, repos binarios atómicos, seams de providers `swap_face` /
+`edit_with_reference`).
 
-1. Crear paquete de variables pegando JSON (el resto del flujo de paquetes sí opera).
+### Flujos degradados D8 — ninguno (wave-2/R4 resuelta 2026-09-05)
+
+`D8_COMMANDS == ()` (tupla residual vacía en `telegram/handlers/_common.py`). No queda
+ningún flujo de grok cableado a mensaje D8 de no-disponible por falta de backing: las
+constantes `D8_*` (`D8_INTEGRATE_MSG`, `D8_ALBUM_MSG`, `D8_LONG_PROMPT_MSG`,
+`D8_FACESWAP_MSG`, `D8_REPLY_NO_PHOTO`, `D8_CMD_MSG`), `_PACK_NEW_D8`, `is_d8_command` y
+`_cmd_unavailable` están ausentes de `src/`+`tests/`. Si un provider no está configurado,
+la degradación es `ProviderNotConfiguredError` user-safe (no un comando D8).
 
 ---
 
-## 3. Pendientes / follow-ups (2026-09-04 — wave de hardening R8/R9/R10 cerrada)
+## 3. Pendientes / follow-ups (actualizado 2026-09-05 — wave de hardening R8/R9/R10 y wave-2/R4 cerradas)
 
 Wave de hardening cerrada por decisión de producto (bot privado single-owner): R8, R9 y R10
-resueltos. Ver commits y cierre en `.grok/agent-memory/residuals/grokv2-rearch.md`.
+resueltos; wave-2/R4 resuelta (R4 abajo). Ver commits y cierre en
+`.grok/agent-memory/residuals/grokv2-rearch.md`.
 
 | ID | Pendiente | Clase | Estado / Acción sugerida |
 |---|---|---|---|
 | **R8** | Botón "Regenerar" no scopeado al owner | hardening | **Resuelto** — `c25c1fe` (`owner_uid` en refs + validación en `regen`). |
 | **R9** | Sin límites de uso + perímetro | hardening / decisión | **Cerrado por decisión** — sin tope de procesos ni cuota horaria (`2bbfdd3`, `5900809`); gate SOLO chat privado + aviso de allowlist abierta (`5e9e88b`). |
 | **R10** | Tope 50MB duplicado; URL firmada | hardening / decisión | **Resuelto** — `096dd0d` (tope único `MAX_MEDIA_BYTES`); la URL se muestra: camino de recuperación por decisión del owner. |
-| **R4** | Flujos degradados D8 (§2) | follow-up de producto (wave 2) | cablear use cases/datos por flujo. Degradaciones user-safe activas. Face Swap + álbumes + `/cambiar_source` entregados (Item 2); edición con referencia `/s` + `/cambiar_referencia` + regen integrate entregados (Item 3). `D8_COMMANDS == ()`. |
+| **R4** | Flujos degradados D8 (§2) — 9 flujos sin backing | follow-up de producto (wave 2) | **Resuelto (wave-2/R4, 2026-09-05)** — `fa2d1e0`→`841df64`, suite **653 passed**, review-loops 0-issues. Item 1 utilidades (`fa2d1e0`→`681ba13`): pack JSON en `/listas`, long-prompt >1020, álbumes, `/estado` tarjeta. Item 2 Face Swap (`db8a43b`→`3d0dc37`): `/cambiar_source` + confirm single/batch. Item 3 edición `/s` (`fd8dd43`→`841df64`): `/cambiar_referencia` + regen integrate. `D8_COMMANDS == ()`; §2 sin flujos degradados. |
 | **Deploy** | grokV2 como bot permanente | decisión de deploy (owner) | **Resuelto 2026-09-04** — `grok-bot.service` repunteado a grokV2 (`.venv/bin/grokbot`), administrado por el shell `grokbot`; `enable`+start, lingering activo, allowlist activa desde `.env` (detalle abajo). v1 decommissioned (unidad respaldada). |
 | **Smoke live** | Probar con infraestructura real | follow-up (owner) | **Completado 2026-09-04** con credenciales reales de grok v1: bug del panel `/config` corregido (nota abajo) y recorrido §4.3 validado por el owner — **todo ok** (sesión 36 updates, 0 errores). Pendiente: decidir el deploy (abajo). |
 | R1/R2 | Baseline sucio de `grok/**` + DeprecationWarnings pytest-asyncio (Py3.14) | out-of-scope | cosmético / no tocar |
 
 Registro detallado con origen y archivos: `.grok/agent-memory/residuals/grokv2-rearch.md`
 (proceso, no commiteado en el detalle por convención de artefactos de pool).
+
+**Wave-2/R4 — flujos R4 operativos (2026-09-05):** la wave rearch dejó 9 flujos de grok
+degradando D8 (§2). La wave-2 los habilitó en 3 ítems con parity de copy byte-byte
+(seams de providers/repos, use cases en `application`, handlers de presentación, tests
+0-mock) y retiró el registro D8 del árbol:
+
+- **Item 1 — utilidades** (`fa2d1e0`→`681ba13`, suite 521→556): pack JSON en `/listas`,
+  long-prompt collection (>1020), álbumes/media groups con edición secuencial, `/estado`
+  como tarjeta de configuración.
+- **Item 2 — Face Swap** (`db8a43b`→`3d0dc37`, suite →613): `/cambiar_source`, modo
+  faceswap, swap Replicate de 2 imágenes con confirm single/batch y cancel, fallback
+  foto-a-foto del media group.
+- **Item 3 — edición con referencia `/s`** (`fd8dd43`→`841df64`, suite →653):
+  `/cambiar_referencia`, `/s` en single/álbum/long-prompt/regen-integrate con prereq
+  provider xAI, retiro total de D8.
+
+Suite final **653 passed** (521→556→613→653). Detalle: SUMMARYs en
+`.planning/quick/20260904-grokv2-r4-item{1,2,3}/`, reviews en
+`.grok/agent-memory/review/`, learnings en `.grok/agent-memory/documentador/`.
 
 **Smoke live — hallazgo corregido y validación completa (2026-09-04):** el panel de
 `/config` se re-renderizaba con la config del PROPIO BOT en vez de la del dueño: en Telegram
@@ -203,6 +248,10 @@ debe correr sin las credenciales de (a).
   `from_user` = el bot) en vez de la del dueño; fix `742b566` + 2 regresiones que simulan el
   mensaje del bot. **Validación final del owner: todo ok** — recorrido §4.3 completo con
   36 updates manejados y 0 errores. Registro: `.grok/agent-memory/residuals/grokv2-rearch.md`.
+- Wave-2/R4 (2026-09-05): 521→**653** — los 9 flujos D8 (R4) habilitados en 3 ítems con
+  parity de copy grok: Item 1 utilidades →556, Item 2 Face Swap →613, Item 3 edición `/s`
+  →653. Review-loop por ítem hasta 0 issues (R1: Item1 7 opens / 2 rounds, Item2 6+1 /
+  3 rounds, Item3 6+1 / 3 rounds). `D8_COMMANDS == ()`.
 - Artefactos de proceso (sin commit, untracked por convención del pool):
   `.planning/quick/20260903-grokv2-rearch/CLOSURE.md` (resultado + learnings),
   `.grok/agent-memory/review/grokv2-rearch-poolclose.md` (review completo),
