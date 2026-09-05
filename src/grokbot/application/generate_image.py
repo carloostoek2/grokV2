@@ -13,9 +13,10 @@ from collections.abc import AsyncIterator
 
 from grokbot.application._retry import GENERATE_MAX_RETRIES, _retry_backoff
 from grokbot.application.events import ItemFailed, ItemResult, RetryScheduled
+from grokbot.application.integrate_refs import REQUIRES_XAI_MSG
 from grokbot.domain.generation import GenerationRequest, ImageSource, KieTaskRef, MediaType
 from grokbot.domain.user_config import UserConfig, is_comfy_video_model
-from grokbot.providers.base import ProviderError
+from grokbot.providers.base import ProviderError, ProviderInputError
 from grokbot.providers.registry import ProviderRegistry, ProviderResolution
 from grokbot.repositories.base import SessionRepository
 
@@ -70,12 +71,15 @@ def _build_image_regen_context(
     source_image: bytes | None,
     source: ImageSource | None,
     source_file_id: str | None,
+    integrate_mode: bool = False,
 ) -> dict:
     """Contexto de regeneración (item 5 lo persiste opaco; sin URLs/payloads).
 
     Espejo de grok ``_build_image_regen_context`` (bot.py:780-810): guarda el
     modo, el modelo activo, provider y (para grok) el proveedor/variante de
-    Grok Imagine, más el ref de archivo/Kie cuando aplica.
+    Grok Imagine, más el ref de archivo/Kie cuando aplica. Con
+    ``integrate_mode=True`` se estampa la marca para que el regen re-descargue la
+    ref por ``user_id`` (A10) — NUNCA el path/file_id de la referencia (R6/R8).
     """
     ctx = {
         "mode": "edit" if (source_image is not None or source is not None) else "text",
@@ -91,7 +95,25 @@ def _build_image_regen_context(
         ctx["source_file_id"] = source_file_id
     if isinstance(source, KieTaskRef):
         ctx["kie_source_ref"] = {"task_id": source.task_id, "index": source.index}
+    if integrate_mode:
+        ctx["integrate_mode"] = True
     return ctx
+
+
+async def _edit_with_reference(provider, request, source_image, reference_image):
+    """Duck-type del seam xAI de 2 imágenes (fuera de los Protocols).
+
+    Solo se invoca con provider efectivo ``xai`` (guard en ``run``); los demás
+    providers NO soportan la edición contra una segunda imagen de referencia. Un
+    provider sin el método es un fallo terminal user-safe (nunca ``repr``).
+    """
+    edit = getattr(provider, "edit_with_reference", None)
+    if edit is None:
+        raise ProviderInputError(
+            "Provider does not support edit_with_reference.",
+            user_message="Error en la generación. Intenta de nuevo más tarde.",
+        )
+    return await edit(request, source_image=source_image, reference_image=reference_image)
 
 
 class GenerateImageUseCase:
@@ -116,6 +138,7 @@ class GenerateImageUseCase:
         index: int | None = None,
         total: int | None = None,
         cfg_override: UserConfig | None = None,
+        reference_image: bytes | None = None,
     ) -> AsyncIterator[ItemResult | ItemFailed | RetryScheduled]:
         # cfg_override (aditivo D2 del item 5): el caller (regen/edit) puede fijar
         # la config efectiva del request sin re-leer sessions (el usuario pudo
@@ -136,6 +159,20 @@ class GenerateImageUseCase:
             return
 
         request = build_image_request(cfg, res, prompt, source, prompts)
+
+        # 1b. Guard integrate: la edición con referencia SOLO va por xAI (el wire
+        # de 2 imágenes es ``edit_with_reference``, fuera de ImageProvider). El
+        # provider no-xai con reference_image emite el copy REQUIRES_XAI_MSG
+        # (el handler ya hizo preflight; esto es el guard defensivo del use case).
+        if reference_image is not None and res.name != "xai":
+            yield ItemFailed(
+                reason=REQUIRES_XAI_MSG,
+                prompt=prompt,
+                terminal=True,
+                index=index,
+                total=total,
+            )
+            return
 
         # 2. Guard M2: validar media_type ANTES de generar.
         if res.name == "comfyui" and is_comfy_video_model(cfg.comfyui.model):
@@ -160,7 +197,12 @@ class GenerateImageUseCase:
         # 3. Loop de intentos (primer intento + GENERATE_MAX_RETRIES reintentos).
         for attempt in range(GENERATE_MAX_RETRIES + 1):
             try:
-                result = await res.provider.generate(request, source_image=source_image)
+                if reference_image is not None:
+                    result = await _edit_with_reference(
+                        res.provider, request, source_image, reference_image
+                    )
+                else:
+                    result = await res.provider.generate(request, source_image=source_image)
             except ProviderError as err:
                 if err.retryable and attempt < GENERATE_MAX_RETRIES:
                     yield RetryScheduled(
@@ -209,6 +251,7 @@ class GenerateImageUseCase:
                 source_image=source_image,
                 source=source,
                 source_file_id=source_file_id,
+                integrate_mode=reference_image is not None,
             )
             yield ItemResult(
                 result=result,

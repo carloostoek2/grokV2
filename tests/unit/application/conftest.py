@@ -224,6 +224,29 @@ class FakeSourceFacesRepo:
         return user_id in self._data
 
 
+# --- Integrate refs repo --------------------------------------------------------
+class FakeIntegrateRefsRepo:
+    """IntegrateRefsRepository in-memory: dict user_id → bytes."""
+
+    def __init__(self, *, seed: dict[int, bytes] | None = None) -> None:
+        self._data = dict(seed or {})
+        self.saved: list[tuple[int, bytes]] = []
+        self.saved_paths: dict[int, str] = {}
+
+    def save(self, user_id: int, data: bytes) -> str:
+        self._data[user_id] = data
+        self.saved.append((user_id, data))
+        path = f"/integrate_refs/{user_id}.jpg"
+        self.saved_paths[user_id] = path
+        return path
+
+    def read(self, user_id: int) -> bytes | None:
+        return self._data.get(user_id)
+
+    def exists(self, user_id: int) -> bool:
+        return user_id in self._data
+
+
 # --- Refs repo ----------------------------------------------------------------
 class FakeRefsRepo:
     """GenerationRefsRepository in-memory (disponible para item 5)."""
@@ -315,6 +338,7 @@ class _FakeProviderBase:
         self.calls: list[tuple[GenerationRequest, bytes | None]] = []
         self.supports_calls: list[GenerationRequest] = []
         self.swap_face_calls: list[tuple[bytes, bytes]] = []
+        self.edit_with_reference_calls: list[tuple[GenerationRequest, bytes, bytes]] = []
 
     def supports(self, request: GenerationRequest) -> bool:
         self.supports_calls.append(request)
@@ -336,6 +360,18 @@ class _FakeProviderBase:
             return self._default_result
         media = request.media_type if request.media_type is not None else self._media_type
         return make_result(provider=self._name, model_id=request.model_id, media_type=media)
+
+    async def edit_with_reference(self, request, source_image, reference_image):
+        """Wire de 2 imágenes del seam xAI (fuera de ImageProvider; Task 2 R4 Item 3)."""
+        self.edit_with_reference_calls.append((request, source_image, reference_image))
+        if self.outcomes:
+            outcome = self.outcomes.pop(0)
+            if isinstance(outcome, Exception):
+                raise outcome
+            return outcome
+        if self._default_result is not None:
+            return self._default_result
+        return make_result(provider=self._name, model_id=request.model_id, media_type=MediaType.IMAGE)
 
     async def swap_face(
         self,

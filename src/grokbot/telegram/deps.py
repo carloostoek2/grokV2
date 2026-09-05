@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from grokbot.application.faceswap import SourceFacesUseCase, SwapFaceUseCase
 from grokbot.application.generate_image import GenerateImageUseCase
 from grokbot.application.generate_video import GenerateVideoUseCase
+from grokbot.application.integrate_refs import IntegrateRefsUseCase
 from grokbot.application.job_manager import JobManager
 from grokbot.application.manage_config import UpdateUserConfigUseCase
 from grokbot.application.manage_lists import ManageListsUseCase
@@ -217,10 +218,14 @@ class BotDeps:
     manage_lists: ManageListsUseCase
     source_faces: SourceFacesUseCase
     swap_face: SwapFaceUseCase
+    integrate_refs: IntegrateRefsUseCase
     pending: PendingPrompts = field(default_factory=PendingPrompts)
     faceswap_pending: FaceswapPending = field(default_factory=FaceswapPending)
     long_prompt: LongPromptStore = field(default_factory=LongPromptStore)
     album: AlbumStore = field(default_factory=AlbumStore)
+    # Flag efímero awaiting-ref (A2): en memoria, NUNCA en cfg.state/sessions.json
+    # (parity grok ``state["integrate_ref_awaiting"]``, se pierde al reiniciar).
+    integrate_ref_pending: set[int] = field(default_factory=set)
     allowed_telegram_ids: set[int] | None = None
     variables_admin_ids: set[int] | None = None
 

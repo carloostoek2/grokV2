@@ -34,6 +34,7 @@ from pydantic import ValidationError
 from grokbot.application.faceswap import SourceFacesUseCase, SwapFaceUseCase
 from grokbot.application.generate_image import GenerateImageUseCase
 from grokbot.application.generate_video import GenerateVideoUseCase
+from grokbot.application.integrate_refs import IntegrateRefsUseCase
 from grokbot.application.job_manager import JobManager
 from grokbot.application.manage_config import UpdateUserConfigUseCase
 from grokbot.application.manage_lists import ManageListsUseCase
@@ -47,6 +48,7 @@ from grokbot.providers import (
     XaiProvider,
 )
 from grokbot.repositories import (
+    DiskIntegrateRefsRepository,
     DiskSourceFacesRepository,
     JsonGenerationRefsRepository,
     JsonSessionRepository,
@@ -149,6 +151,8 @@ def build_deps(
     sources_repo = DiskSourceFacesRepository(settings.sources_dir)
     source_faces = SourceFacesUseCase(sessions=sessions, sources=sources_repo)
     swap_face = SwapFaceUseCase(sessions=sessions, sources=sources_repo, registry=registry)
+    integrate_refs_repo = DiskIntegrateRefsRepository(settings.integrate_refs_dir)
+    integrate_refs = IntegrateRefsUseCase(sessions=sessions, refs=integrate_refs_repo)
 
     gateway = gateway if gateway is not None else AiogramGateway(settings.telegram_bot_token)
     downloader = downloader if downloader is not None else AiohttpMediaDownloader()
@@ -168,6 +172,7 @@ def build_deps(
         manage_lists=manage_lists,
         source_faces=source_faces,
         swap_face=swap_face,
+        integrate_refs=integrate_refs,
         allowed_telegram_ids=settings.allowed_telegram_ids,
         variables_admin_ids=settings.variables_admin_ids,
     )
@@ -248,6 +253,7 @@ def run() -> int:
         settings = get_settings()
         settings.data_dir.mkdir(parents=True, exist_ok=True)  # D7: fail-fast permisos
         settings.sources_dir.mkdir(parents=True, exist_ok=True)  # D7: fail-fast permisos
+        settings.integrate_refs_dir.mkdir(parents=True, exist_ok=True)  # D7: fail-fast permisos
         deps = build_deps(settings)  # D5 puede lanzar ValueError (token vacío)
         dp = assemble_dispatcher(deps)
     except ValidationError as exc:  # subclase de ValueError → va ANTES

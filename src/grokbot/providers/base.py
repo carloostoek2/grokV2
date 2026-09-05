@@ -199,6 +199,20 @@ class FaceSwapProvider(Protocol):
 
 
 @runtime_checkable
+class EditWithReferenceProvider(Protocol):
+    """Providers that can edit an image against a second fixed reference."""
+
+    async def edit_with_reference(
+        self,
+        request: GenerationRequest,
+        source_image: bytes,
+        reference_image: bytes,
+    ) -> GenerationResult:
+        """Two-image edit: ``images=[source, reference]``."""
+        ...
+
+
+@runtime_checkable
 class VideoProvider(Protocol):
     """Contract for video generation providers.
 
