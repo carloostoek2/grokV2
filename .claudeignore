@@ -1,0 +1,8 @@
+# Datos de runtime — privados del usuario (ver AGENTS.md, "Reglas duras" n.º 2).
+# Un agente NO los lee por su cuenta; solo se accede si el usuario lo solicita
+# explícitamente.
+/data/
+/tmp/
+
+# Secretos de entorno
+.env
