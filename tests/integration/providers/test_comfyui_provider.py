@@ -1,9 +1,12 @@
-"""ComfyUIProvider tests with an injected fake ssh client (no SSH/network)."""
+"""ComfyUIProvider tests with injected fake transport/client (no SSH/network).
+
+The provider composes templates + ComfyApiClient; this file drives it with a
+fake tunnel and a fake client, asserting the GenerationResult convention and
+that results NEVER carry ``comfyui_remotes`` (refine stays dormant).
+"""
 
 from __future__ import annotations
 
-import base64
-import json
 from pathlib import Path
 
 import pytest
@@ -20,24 +23,49 @@ from grokbot.providers.comfyui.provider import ComfyUIProvider
 PNG_1x1 = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
 
 
-class FakeSsh:
-    """Stand-in SshClient: records run_remote/pull and serves scripted outputs."""
+class FakeTransport:
+    """Stand-in SshLocalForward: reports configured and returns a base_url."""
 
-    def __init__(self, host="box", remotes=("/workspace/out.png",), rc=0):
+    def __init__(self, host="box"):
         self.host = host
         self.is_configured = bool(host)
-        self.remotes = list(remotes)
-        self.rc = rc
-        self.run_calls = []
-        self.pull_calls = []
+        self.ensure_calls = 0
 
-    async def run_remote(self, cmd: str, payload: str, *, timeout: int):
-        self.run_calls.append({"cmd": cmd, "payload": payload, "timeout": timeout})
-        return list(self.remotes), self.rc
+    async def ensure(self) -> str:
+        self.ensure_calls += 1
+        return "http://127.0.0.1:19000"
 
-    async def pull(self, remote_path: str) -> str:
-        self.pull_calls.append(remote_path)
-        return f"local-{Path(remote_path).name}"
+
+class FakeClient:
+    """Stand-in ComfyApiClient serving a scripted run/history/view."""
+
+    def __init__(self, url: str, *, images=("out.png",), blob: bytes = PNG_1x1):
+        self.url = url
+        self._images = [{"filename": f, "subfolder": "", "type": "output"} for f in images]
+        self._blob = blob
+        self.closed = False
+        self.graph: dict | None = None
+        self.timeout: float | None = None
+        self.prompt_id = "p1"
+
+    async def run_workflow(self, workflow: dict, *, timeout: float) -> str:
+        self.graph = workflow
+        self.timeout = timeout
+        return self.prompt_id
+
+    async def history(self, prompt_id: str) -> dict:
+        return {
+            prompt_id: {
+                "status": {"status_str": "success", "completed": True},
+                "outputs": {"19": {"images": self._images}},
+            }
+        }
+
+    async def view(self, *, filename: str, subfolder: str = "", type_: str = "output") -> bytes:
+        return self._blob
+
+    async def aclose(self) -> None:
+        self.closed = True
 
 
 def _req(media_type=MediaType.IMAGE, **overrides):
@@ -51,194 +79,91 @@ def _req(media_type=MediaType.IMAGE, **overrides):
     return GenerationRequest(**base)
 
 
-def _provider(fake: FakeSsh) -> ComfyUIProvider:
-    return ComfyUIProvider(fake.host or "", 22, ssh=fake)
+def _provider(transport: FakeTransport, tmp_path, images=("out.png",)) -> ComfyUIProvider:
+    return ComfyUIProvider(
+        transport.host,
+        22,
+        transport=transport,
+        client_factory=lambda url: FakeClient(url, images=images),
+        tmpdir=tmp_path,
+        seed_factory=lambda: 42,
+    )
 
 
 @pytest.mark.asyncio
-async def test_t2i_generate_file_path_and_meta():
-    fake = FakeSsh(remotes=("/workspace/out.png",))
-    prov = _provider(fake)
+async def test_t2i_generate_patches_graph_and_returns_local_file(tmp_path):
+    transport = FakeTransport("box")
+    calls: list[FakeClient] = []
+    prov = ComfyUIProvider(
+        "box", 22, transport=transport,
+        client_factory=lambda url: calls.append(FakeClient(url)) or calls[-1],
+        tmpdir=tmp_path, seed_factory=lambda: 42,
+    )
 
     result = await prov.generate(_req())
 
     assert result.provider == "comfyui"
     assert result.media_type is MediaType.IMAGE
-    assert result.file_path == "local-out.png"
-    assert result.meta["file_paths"] == ["local-out.png"]
-    assert result.meta["comfyui_remotes"] == ["/workspace/out.png"]
-    assert result.meta["download_allowlist"] is None
+    assert result.file_path.startswith(str(tmp_path))
+    assert Path(result.file_path).read_bytes() == PNG_1x1
+    assert result.meta["file_paths"] == [result.file_path]
+    # Refine must stay dormant: the legacy trigger key is never emitted.
+    assert "comfyui_remotes" not in result.meta
 
-    call = fake.run_calls[0]
-    assert "MODEL='krea2' LORA='none' python3 /workspace/gen_comfy.py" == call["cmd"]
-    assert call["payload"] == "hola"  # t2i sends the raw prompt on stdin
-    assert call["timeout"] == 600
-    assert fake.pull_calls == ["/workspace/out.png"]
-
-
-@pytest.mark.asyncio
-async def test_img2img_generate_sends_json_with_image_b64():
-    fake = FakeSsh(remotes=("/workspace/edit.png",))
-    prov = _provider(fake)
-    req = _req(params={"model": "krea2", "lora": "krea_edit"})
-
-    await prov.generate(req, source_image=PNG_1x1)
-
-    call = fake.run_calls[0]
-    assert "MODEL='krea2' LORA='krea_edit' python3 /workspace/gen_comfy.py" == call["cmd"]
-    payload = json.loads(call["payload"])
-    assert payload["prompt"] == "hola"
-    assert payload["image_b64"] == base64.b64encode(PNG_1x1).decode("ascii")
-    assert "prompts" not in payload
+    client = calls[-1]
+    assert client.graph["4"]["inputs"]["text"] == "hola"
+    assert isinstance(client.graph["1"]["inputs"]["seed"], int)
+    assert isinstance(client.graph["17"]["inputs"]["seed"], int)
+    assert client.timeout == 600
+    assert client.closed is True
+    assert transport.ensure_calls == 1
 
 
 @pytest.mark.asyncio
-async def test_img2img_with_prompts_param():
-    fake = FakeSsh(remotes=("/workspace/multi.png",))
-    prov = _provider(fake)
-    req = _req(params={"model": "qwen", "lora": "multipose_batch", "prompts": ["rama a", "rama b"]})
+async def test_generate_no_outputs_raises_unavailable(tmp_path):
+    prov = _provider(FakeTransport("box"), tmp_path, images=())
 
-    await prov.generate(req, source_image=PNG_1x1)
-
-    payload = json.loads(fake.run_calls[0]["payload"])
-    assert payload["prompts"] == ["rama a", "rama b"]
+    with pytest.raises(ProviderUnavailableError):
+        await prov.generate(_req())
 
 
-@pytest.mark.parametrize(
-    "params,needle",
-    [
-        ({"model": "wan_i2v"}, "video necesita una foto"),
-        ({"model": "minimax_i2v"}, "video necesita una foto"),
-        ({"model": "krea2", "lora": "krea_edit"}, "edición de identidad"),
-        ({"model": "qwen", "lora": "multipose_batch"}, "Multi-pose"),
-        ({"model": "qwen_aio"}, "Qwen AIO"),
-    ],
-)
 @pytest.mark.asyncio
-async def test_t2i_preconditions_without_photo_raise(params, needle):
-    fake = FakeSsh()
-    prov = _provider(fake)
+async def test_empty_host_raises_not_configured(tmp_path):
+    transport = FakeTransport(host="")
+    prov = _provider(transport, tmp_path)
+
+    assert not prov.available
+    with pytest.raises(ProviderNotConfiguredError):
+        await prov.generate(_req())
+
+
+@pytest.mark.asyncio
+async def test_source_photo_without_template_variant_raises(tmp_path):
+    prov = _provider(FakeTransport("box"), tmp_path)
 
     with pytest.raises(ProviderInputError) as exc:
-        await prov.generate(_req(params=params))
+        await prov.generate(_req(), source_image=PNG_1x1)
 
-    assert needle in exc.value.user_message
-    assert fake.run_calls == []  # validated before hitting the box
-
-
-@pytest.mark.asyncio
-async def test_video_generate_detected_by_model_and_longer_timeout():
-    fake = FakeSsh(remotes=("/workspace/vid.mp4",))
-    prov = _provider(fake)
-    req = _req(media_type=MediaType.VIDEO, params={"model": "wan_i2v"})
-
-    assert prov.supports(req)
-    result = await prov.generate(req, source_image=PNG_1x1)
-
-    assert result.media_type is MediaType.VIDEO
-    assert result.file_path == "local-vid.mp4"
-    assert fake.run_calls[0]["timeout"] == 1500
+    assert "foto" in exc.value.user_message
 
 
 @pytest.mark.asyncio
-async def test_multi_output_meta_lists():
-    fake = FakeSsh(remotes=("/workspace/a.png", "/workspace/b.png"))
-    prov = _provider(fake)
+async def test_missing_template_combo_raises(tmp_path):
+    prov = _provider(FakeTransport("box"), tmp_path)
 
-    result = await prov.generate(_req())
-
-    assert result.file_path == "local-a.png"
-    assert result.meta["file_paths"] == ["local-a.png", "local-b.png"]
-    assert result.meta["comfyui_remotes"] == ["/workspace/a.png", "/workspace/b.png"]
-
-
-@pytest.mark.asyncio
-async def test_c7_generate_filters_malicious_remote_paths():
-    """C7: los remotes con charset inválido se descartan antes del scp/pull."""
-    fake = FakeSsh(remotes=("/workspace/ok.png", "/workspace/$(touch pwn).png"))
-    prov = _provider(fake)
-
-    result = await prov.generate(_req())
-
-    assert fake.pull_calls == ["/workspace/ok.png"], "solo se pullea el path válido"
-    assert result.meta["file_paths"] == ["local-ok.png"]
-    assert result.meta["comfyui_remotes"] == ["/workspace/ok.png"]
-
-
-@pytest.mark.asyncio
-async def test_c7_generate_all_invalid_raises_unavailable():
-    """C7: si todos los remotes fallan el charset, el generate es un fallo."""
-    fake = FakeSsh(remotes=("/workspace/bad;rm -rf.png",))
-    prov = _provider(fake)
-
-    with pytest.raises(ProviderUnavailableError):
-        await prov.generate(_req())
-
-    assert fake.pull_calls == []
-
-
-async def test_no_remotes_raises_unavailable():
-    fake = FakeSsh(remotes=())
-    prov = _provider(fake)
-
-    with pytest.raises(ProviderUnavailableError):
-        await prov.generate(_req())
-
-
-@pytest.mark.asyncio
-async def test_empty_host_raises_not_configured():
-    fake = FakeSsh(host="")
-    prov = _provider(fake)
-
-    with pytest.raises(ProviderNotConfiguredError):
-        await prov.generate(_req())
-    with pytest.raises(ProviderNotConfiguredError):
-        await prov.refine(_req(), ["/workspace/a.png"])
-    assert not prov.available
-
-
-@pytest.mark.asyncio
-async def test_refine_builds_refine_only_command():
-    fake = FakeSsh(remotes=("/workspace/refined.png",))
-    prov = _provider(fake)
-    req = _req(params={"model": "krea2_raw", "lora": "none"})
-
-    result = await prov.refine(req, ["/workspace/base.png", "/workspace/base2.png"])
-
-    assert result.file_path == "local-refined.png"
-    call = fake.run_calls[0]
-    assert "REFINE_ONLY='1'" in call["cmd"]
-    assert "REFINE_INPUT='/workspace/base.png,/workspace/base2.png'" in call["cmd"]
-    assert "MODEL='krea2_raw'" in call["cmd"]
-    assert call["payload"] == "hola"
-    assert call["timeout"] == 1200 * 2 + 300
-
-
-@pytest.mark.asyncio
-async def test_refine_invalid_remote_path_raises():
-    fake = FakeSsh()
-    prov = _provider(fake)
-
-    # A non-"/workspace" prefix and a shell meta-character are both rejected
-    # (the charset guard prevents shell injection when the path is embedded).
     with pytest.raises(ProviderInputError):
-        await prov.refine(_req(), ["bad-no-slash.png"])
-    with pytest.raises(ProviderInputError):
-        await prov.refine(_req(), ["/workspace/a'; rm -rf /tmp"])
-    assert fake.run_calls == []
+        await prov.generate(_req(params={"model": "qwen", "lora": "none"}))
 
 
 @pytest.mark.asyncio
-async def test_refine_returncodes_map_to_typed_errors():
-    fake = FakeSsh(remotes=())
-    fake.rc = 2
-    prov = _provider(fake)
-    with pytest.raises(ProviderInputError):
-        await prov.refine(_req(), ["/workspace/a.png"])
+async def test_m2_video_request_with_image_model_raises(tmp_path):
+    prov = _provider(FakeTransport("box"), tmp_path)
+    req = _req(media_type=MediaType.VIDEO, params={"model": "krea2", "lora": "none"})
 
-    fake.rc = 3
-    with pytest.raises(ProviderGenerationError):
-        await prov.refine(_req(), ["/workspace/a.png"])
+    with pytest.raises(ProviderInputError) as exc:
+        await prov.generate(req, source_image=PNG_1x1)
+
+    assert "no genera video" in exc.value.user_message
 
 
 @pytest.mark.parametrize(
@@ -247,66 +172,28 @@ async def test_refine_returncodes_map_to_typed_errors():
         {"model": "krea2' ; touch /tmp/pwned", "lora": "none"},
         {"model": "krea2", "lora": "none'; rm -rf /tmp"},
         {"model": "modelo_inexistente", "lora": "none"},
-        {"model": "krea2", "lora": "$(id)"},
     ],
 )
 @pytest.mark.asyncio
-async def test_m1_invalid_model_or_lora_raises_before_command(params):
-    fake = FakeSsh()
-    prov = _provider(fake)
+async def test_m1_invalid_model_or_lora_raises_before_transport(params, tmp_path):
+    transport = FakeTransport("box")
+    prov = _provider(transport, tmp_path)
 
     with pytest.raises(ProviderInputError):
         await prov.generate(_req(params=params))
 
-    assert fake.run_calls == []  # never composed/ran a shell command
+    assert transport.ensure_calls == 0  # never reached the tunnel/client
 
 
 @pytest.mark.asyncio
-async def test_m1_refine_validates_model_and_lora():
-    fake = FakeSsh()
-    prov = _provider(fake)
+async def test_supports_routing(tmp_path):
+    prov = _provider(FakeTransport("box"), tmp_path)
 
-    with pytest.raises(ProviderInputError):
-        await prov.refine(_req(params={"model": "krea2'; id", "lora": "none"}), ["/workspace/a.png"])
-
-    assert fake.run_calls == []
-
-
-@pytest.mark.asyncio
-async def test_m1_valid_model_lora_command_is_plain():
-    fake = FakeSsh(remotes=("/workspace/ok.png",))
-    prov = _provider(fake)
-    await prov.generate(_req(params={"model": "krea2_raw", "lora": "krea_snapshot"}))
-
-    cmd = fake.run_calls[0]["cmd"]
-    model_part = cmd.split("MODEL='")[1].split("'", 1)[0]
-    lora_part = cmd.split("LORA='")[1].split("'", 1)[0]
-    # Only the validated identifiers reach the shell command (no raw params).
-    assert model_part == "krea2_raw"
-    assert lora_part == "krea_snapshot"
-
-
-@pytest.mark.asyncio
-async def test_m2_video_request_with_image_model_raises():
-    fake = FakeSsh()
-    prov = _provider(fake)
-    req = _req(media_type=MediaType.VIDEO, params={"model": "krea2"})
-
-    with pytest.raises(ProviderInputError) as exc:
-        await prov.generate(req, source_image=PNG_1x1)
-
-    assert "no genera video" in exc.value.user_message
-    assert fake.run_calls == []
-
-
-@pytest.mark.asyncio
-async def test_supports_routing():
-    fake = FakeSsh()
-    prov = _provider(fake)
-
-    assert prov.supports(_req(media_type=MediaType.IMAGE, params={"model": "krea2"}))
-    assert prov.supports(_req(media_type=MediaType.VIDEO, params={"model": "minimax_i2v"}))
-    assert not prov.supports(_req(media_type=MediaType.VIDEO, params={"model": "krea2"}))
+    # Only template-backed combos are supported (v1: krea2/none image).
+    assert prov.supports(_req(media_type=MediaType.IMAGE, params={"model": "krea2", "lora": "none"}))
+    assert not prov.supports(_req(media_type=MediaType.IMAGE, params={"model": "qwen", "lora": "none"}))
+    assert not prov.supports(_req(media_type=MediaType.VIDEO, params={"model": "krea2", "lora": "none"}))
+    assert not prov.supports(_req(media_type=MediaType.VIDEO, params={"model": "wan_i2v", "lora": "none"}))
     assert not prov.supports(
-        GenerationRequest(provider="xai", model_id="grok-imagine-image", media_type=MediaType.IMAGE, prompt="x")
+        GenerationRequest(provider="xai", model_id="x", media_type=MediaType.IMAGE, prompt="x")
     )

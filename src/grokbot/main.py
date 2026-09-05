@@ -88,7 +88,12 @@ def _build_providers(
         XaiProvider(settings.xai_api_key),
         ReplicateProvider(settings.replicate_api_token),
         KieProvider(settings.kie_api_key),
-        ComfyUIProvider(settings.comfyui_host, settings.comfyui_port),
+        ComfyUIProvider(
+            settings.comfyui_host,
+            settings.comfyui_port,
+            remote_port=settings.comfyui_remote_port,
+            tunnel_local_port=settings.comfyui_tunnel_local_port,
+        ),
     )
 
 

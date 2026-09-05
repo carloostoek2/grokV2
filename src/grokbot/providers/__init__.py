@@ -41,7 +41,6 @@ __all__ = [
     "ReplicateProvider",
     "KieProvider",
     "ComfyUIProvider",
-    "SshClient",
     "ProviderRegistry",
     "ProviderResolution",
 ]
@@ -74,7 +73,6 @@ _SOURCES = {
         "validate_image_for_i2v",
     ],
     "grokbot.providers.comfyui.provider": ["ComfyUIProvider"],
-    "grokbot.providers.comfyui.ssh_client": ["SshClient"],
     "grokbot.providers.kie_provider": ["KieProvider"],
     "grokbot.providers.registry": ["ProviderRegistry", "ProviderResolution"],
     "grokbot.providers.replicate_provider": ["ReplicateProvider"],

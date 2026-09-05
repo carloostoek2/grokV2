@@ -1,6 +1,5 @@
-"""ComfyUI providers (SSH to a Vast box running ``gen_comfy.py``)."""
+"""ComfyUI provider — ComfyUI native HTTP/WS API (imagen + video) via SSH tunnel."""
 
 from grokbot.providers.comfyui.provider import ComfyUIProvider
-from grokbot.providers.comfyui.ssh_client import SshClient
 
-__all__ = ["SshClient", "ComfyUIProvider"]
+__all__ = ["ComfyUIProvider"]

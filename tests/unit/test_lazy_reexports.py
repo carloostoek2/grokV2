@@ -43,7 +43,6 @@ _CONCRETE_PROVIDERS = (
     "grokbot.providers.kie_provider",
     "grokbot.providers.comfyui",
     "grokbot.providers.comfyui.provider",
-    "grokbot.providers.comfyui.ssh_client",
 )
 _CONCRETE_REPOS = (
     "grokbot.repositories.json_session_repo",
@@ -85,7 +84,7 @@ def test_providers_lazy_no_arrastra_concretos_ni_rompe_api():
         + "\n"
         + (
             "from grokbot.providers import ("
-            "XaiProvider, ComfyUIProvider, SshClient, ProviderRegistry, "
+            "XaiProvider, ComfyUIProvider, ProviderRegistry, "
             "ProviderResolution, ProviderError, FaceSwapProvider)\n"
             "print('providers api ok')\n"
         )
