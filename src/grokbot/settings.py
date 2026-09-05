@@ -27,9 +27,15 @@ class Settings(BaseSettings):
     # Optional credentials (empty = provider not available).
     kie_api_key: str = ""
 
-    # ComfyUI remote (SSH/Vast). Host empty = disabled; port defaults to SSH.
+    # ComfyUI (Vast): the bot reaches the box over SSH and talks to ComfyUI's
+    # native HTTP/WS API through a local-forward tunnel. ``comfyui_host`` /
+    # ``comfyui_port`` are the SSH endpoint of the box (empty host = disabled).
     comfyui_host: str = ""
     comfyui_port: int = 22
+    # ComfyUI HTTP port INSIDE the box (the tunnel forwards to 127.0.0.1:<this>)
+    # and the LOCAL port the tunnel binds (0 = pick a free ephemeral port).
+    comfyui_remote_port: int = 18188
+    comfyui_tunnel_local_port: int = 0
 
     # Telegram user ID allowlists. blank/whitespace -> None (open bot); None too.
     allowed_telegram_ids: Annotated[set[int] | None, NoDecode] = None

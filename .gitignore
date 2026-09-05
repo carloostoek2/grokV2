@@ -16,3 +16,6 @@ htmlcov/
 
 # Runtime data (GROK_DATA_DIR default ./data)
 /data/
+
+# ComfyUI provider downloads generated outputs here at runtime (repo-local tmp).
+/tmp/
