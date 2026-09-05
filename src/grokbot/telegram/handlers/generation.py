@@ -5,18 +5,21 @@ Rutea los updates aiogram de generación a los use cases con copy exacto de grok
 * texto → faceswap delega en faceswap.send_faceswap_text (guía con/sin source);
   validar prompt; grok/grok_video → confirm efímero ``PendingPrompts`` + keyboard
   ``confirm:yes/no`` (D7/A6); resto → single image.
-* foto+caption → var/variables ya los capturó variables_cmd (Command antes); aquí
-  degrade integrate ``/s`` y long-prompt; grok_video → imagen-a-video
-  (video.run_video_generation, sin job); faceswap delega en
-  faceswap.handle_faceswap_photo (source-save o confirm single); resto → edit
-  con job "edit".
-* foto sin caption → faceswap delega en faceswap.handle_faceswap_photo; resto →
-  hint de editar/video (grok 2895-2928).
-* álbum → faceswap agenda faceswap.drain_faceswap_album; grok → _drain_grok_album.
+* foto+caption → var/variables ya los capturó variables_cmd (Command antes); el
+  flag awaiting-ref (integrate_ref_pending) guarda la referencia; aquí corre el
+  integrate ``/s`` real (single/álbum/long-prompt) y long-prompt; grok_video →
+  imagen-a-video (video.run_video_generation, sin job; A5: la ref se ignora);
+  faceswap delega en faceswap.handle_faceswap_photo (source-save o confirm single);
+  resto → edit con job "edit".
+* foto sin caption → awaiting-ref guarda la referencia; faceswap delega en
+  faceswap.handle_faceswap_photo; resto → hint de editar/video (grok 2895-2928).
+* álbum → awaiting-ref agenda integrate_ref.drain_integrate_ref_album (final-wins,
+  A1); faceswap agenda faceswap.drain_faceswap_album; grok → _drain_grok_album.
 * reply texto→foto → faceswap responde reply-not-used solo si el reply es foto;
   resto → edit sin job (KieTaskRef o download por gateway); video si
   grok_video (grok 2934-3061).
-* callbacks ``confirm:yes/no`` (1274-1271) y ``regen`` (1305-1418, job "regen").
+* callbacks ``confirm:yes/no`` (1274-1271) y ``regen`` (1305-1418, job "regen";
+  el regen integrate re-descarga source y recarga la ref por uid — A10).
 
 Nunca ``message.answer`` directo: TODO outbound por :class:`ChatUI` y callbacks por
 ``deps.gateway.answer_callback``. Media I/O (file_ids) por ``deps.gateway``.
@@ -30,6 +33,7 @@ from functools import partial
 from aiogram import Dispatcher, types
 
 from grokbot.application.events import ItemFailed, ItemResult, RetryScheduled
+from grokbot.application.integrate_refs import IntegrateReferenceError
 from grokbot.domain.generation import KieTaskRef
 from grokbot.telegram.chat_ui import ChatUI
 from grokbot.telegram.deps import BotDeps
@@ -37,13 +41,12 @@ from grokbot.telegram.formatters import (
     escape,
     estado_card,
     model_display,
+    prov_label,
     retry_status_text,
     validate_prompt,
     video_start_message,
 )
 from grokbot.telegram.handlers._common import (
-    D8_CMD_MSG,
-    D8_INTEGRATE_MSG,
     INTEGRATE_MAX_ALBUM,
     SOURCE_MEDIA_UNAVAILABLE_MSG,
     TELEGRAM_CAPTION_COLLECT_THRESHOLD,
@@ -63,6 +66,7 @@ from grokbot.telegram.handlers._common import (
 )
 from grokbot.telegram.handlers.video import is_video_cfg, run_video_generation
 from grokbot.telegram.handlers import faceswap as faceswap_handlers
+from grokbot.telegram.handlers import integrate_ref as integrate_ref_handlers
 from grokbot.telegram.keyboards import cancel_job_keyboard, confirmation_keyboard
 from grokbot.telegram.stream_presenter import present_single_image
 
@@ -132,6 +136,7 @@ async def _complete_long_prompt_collection(deps: BotDeps, message: types.Message
         return
     file_ids = entry["file_ids"]
     is_video = entry.get("is_video", False)
+    integrate_mode = entry.get("integrate_mode", False)
     cfg = deps.sessions.get_config(uid)
     if is_video and len(file_ids) == 1:
         image_data = await fetch_source_bytes(deps.gateway, file_ids[0])
@@ -144,10 +149,14 @@ async def _complete_long_prompt_collection(deps: BotDeps, message: types.Message
         )
         return
     if len(file_ids) == 1:
-        await _process_single_photo_edit(deps, message, prompt, file_ids[0])
+        await _process_single_photo_edit(
+            deps, message, prompt, file_ids[0], integrate_mode=integrate_mode
+        )
         return
-    # Multi-file (álbum grok) — _process_album_edit se define con Task 3.
-    await _process_album_edit(deps, message, prompt, file_ids, cfg)
+    # Multi-file (álbum grok) — _process_album_edit (A4: álbum /s largo consume).
+    await _process_album_edit(
+        deps, message, prompt, file_ids, cfg, integrate_mode=integrate_mode
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -188,32 +197,43 @@ async def handle_text(message: types.Message, deps: BotDeps) -> None:
 # Foto + caption / sin caption / álbum
 # --------------------------------------------------------------------------- #
 async def handle_photo_caption(message: types.Message, deps: BotDeps) -> None:
-    cfg = deps.sessions.get_config(message.from_user.id)
+    uid = message.from_user.id
+    # A2: flag awaiting-ref chequeado ANTES de faceswap/otras rutas (parity grok 2853-2855).
+    if uid in deps.integrate_ref_pending:
+        await integrate_ref_handlers.save_reference_from_photo(deps, message)
+        return
+    cfg = deps.sessions.get_config(uid)
     if cfg.model == "faceswap":
         await faceswap_handlers.handle_faceswap_photo(deps, message)
         return
     ui = _chat_ui(deps, message)
     integrate_mode, prompt = parse_integrate_caption(message.caption)
-    if integrate_mode:
-        await ui.send_text(D8_INTEGRATE_MSG)
-        return
     if len(prompt) > TELEGRAM_CAPTION_COLLECT_THRESHOLD:
         file_id = largest_photo(message)
         # grok _set_long_prompt_collection clears pending_prompt (bot.py 525).
-        deps.pending.clear(message.from_user.id)
+        deps.pending.clear(uid)
         deps.long_prompt.set(
-            message.from_user.id,
+            uid,
             file_ids=[file_id] if file_id else [],
-            integrate_mode=False,
+            integrate_mode=integrate_mode,
             is_video=is_video_cfg(cfg),
         )
         await ui.send_text(_long_prompt_reply_text(is_video=is_video_cfg(cfg), n_photos=1))
         return
+    # A3/hardening single: preflight integrate ANTES de validar el prompt (el copy
+    # "requiere xAI"/"no hay referencia" no queda enmascarado por un prompt corto).
+    # grok_video ignora la ref y NO valida prereqs (A5): el branch video corre luego.
+    if integrate_mode and not is_video_cfg(cfg):
+        try:
+            deps.integrate_refs.load_for_edit(uid, cfg)
+        except IntegrateReferenceError as exc:
+            await ui.send_text(exc.user_message)
+            return
     prompt_err = validate_prompt(prompt)
     if prompt_err:
         await ui.send_text(prompt_err)
         return
-    deps.long_prompt.clear(message.from_user.id)  # parity grok 2881
+    deps.long_prompt.clear(uid)  # parity grok 2881
     file_id = largest_photo(message)
     if is_video_cfg(cfg):
         image_data = await fetch_source_bytes(deps.gateway, file_id)
@@ -221,21 +241,28 @@ async def handle_photo_caption(message: types.Message, deps: BotDeps) -> None:
             await ui.send_text(SOURCE_MEDIA_UNAVAILABLE_MSG)
             return
         await run_video_generation(
-            deps, message, uid=message.from_user.id, cfg=cfg,
+            deps, message, uid=uid, cfg=cfg,
             prompt=prompt, source_image=image_data, prefix="Edit",
         )
         return
-    await _process_single_photo_edit(deps, message, prompt, file_id)
+    await _process_single_photo_edit(
+        deps, message, prompt, file_id, integrate_mode=integrate_mode
+    )
 
 
 async def handle_photo_no_caption(message: types.Message, deps: BotDeps) -> None:
-    cfg = deps.sessions.get_config(message.from_user.id)
+    uid = message.from_user.id
+    # A2: awaiting-ref → guardar la referencia (parity grok 2899-2901).
+    if uid in deps.integrate_ref_pending:
+        await integrate_ref_handlers.save_reference_from_photo(deps, message)
+        return
+    cfg = deps.sessions.get_config(uid)
     if cfg.model == "faceswap":
         await faceswap_handlers.handle_faceswap_photo(deps, message)
         return
     ui = _chat_ui(deps, message)
     # Long-prompt pendiente: recordar el prompt por texto (grok 2907-2913).
-    if deps.long_prompt.is_awaiting(message.from_user.id):
+    if deps.long_prompt.is_awaiting(uid):
         await ui.send_text(_LONG_PROMPT_REMINDER)
         return
     if is_video_cfg(cfg):
@@ -246,17 +273,23 @@ async def handle_photo_no_caption(message: types.Message, deps: BotDeps) -> None
 
 async def handle_album(message: types.Message, deps: BotDeps) -> None:
     """Media group → colección efímera y edición/drain secuencial (grok/faceswap)."""
-    cfg = deps.sessions.get_config(message.from_user.id)
+    uid = message.from_user.id
+    key = (message.chat.id, message.media_group_id)
+    # A2/A1: álbum en awaiting-ref → drain que guarda la ÚLTIMA foto (final-wins,
+    # una sola respuesta; parity grok 3084-3086 delega por update).
+    if uid in deps.integrate_ref_pending:
+        if deps.album.add(key, message):
+            asyncio.create_task(integrate_ref_handlers.drain_integrate_ref_album(deps, key))
+        return
+    cfg = deps.sessions.get_config(uid)
     if cfg.model == "faceswap":
         # El drain decide por cfg.state: source-save (AWAITING_SOURCE, final-wins)
         # o confirm N (parity grok 3088-3113; A2: respuestas una sola vez).
-        key = (message.chat.id, message.media_group_id)
         if deps.album.add(key, message):
             asyncio.create_task(faceswap_handlers.drain_faceswap_album(deps, key, message))
         return
     if cfg.model != "grok":
         return  # paridad grok 3088-3089: seedream/comfyui/grok_video en silencio
-    key = (message.chat.id, message.media_group_id)
     if deps.album.add(key, message):
         asyncio.create_task(_drain_grok_album(deps, key))
 
@@ -291,15 +324,14 @@ async def _drain_grok_album(deps: BotDeps, key: tuple[int, str]) -> None:
         await ui.send_text(_HINT_EDIT)  # copy grok 3139-3143
         return
     integrate_mode, prompt = parse_integrate_caption(raw_caption)
-    if integrate_mode:
-        await ui.send_text(D8_INTEGRATE_MSG)  # grokV2 no implementa integrate en álbum
-        return
     if len(prompt) > TELEGRAM_CAPTION_COLLECT_THRESHOLD:
         file_ids = [largest_photo(m) for m in messages if m.photo]
         file_ids = [f for f in file_ids if f]
         uid = first.from_user.id
         deps.pending.clear(uid)
-        deps.long_prompt.set(uid, file_ids=file_ids, integrate_mode=False, is_video=False)
+        deps.long_prompt.set(
+            uid, file_ids=file_ids, integrate_mode=integrate_mode, is_video=False
+        )
         await ui.send_text(_long_prompt_reply_text(is_video=False, n_photos=len(file_ids)))
         return
     prompt_err = validate_prompt(prompt)
@@ -310,31 +342,57 @@ async def _drain_grok_album(deps: BotDeps, key: tuple[int, str]) -> None:
     deps.long_prompt.clear(first.from_user.id)
     file_ids = [largest_photo(m) for m in messages if m.photo]
     file_ids = [f for f in file_ids if f]
-    await _process_album_edit(deps, first, prompt, file_ids, cfg)
+    await _process_album_edit(
+        deps, first, prompt, file_ids, cfg, integrate_mode=integrate_mode
+    )
 
 
-async def _process_album_edit(deps: BotDeps, anchor_message, prompt: str, file_ids: list[str], cfg) -> None:
+async def _process_album_edit(
+    deps: BotDeps,
+    anchor_message,
+    prompt: str,
+    file_ids: list[str],
+    cfg,
+    *,
+    integrate_mode: bool = False,
+) -> None:
     """Edición secuencial del álbum con UN job ``album_edit`` (parity 1815-1963).
 
     NO reutiliza ``present_single_image``: necesita continuar por foto editando un
-    UNICO status "Editando i/N" con cancel cooperativo y terminales byte-parity.
-    Álbum solo llega con ``cfg.model == "grok"`` (sin refine). A2: label de status
-    sin sufijo ``({backend})`` (consistente con el single-edit de grokV2).
+    UNICO status con cancel cooperativo y terminales byte-parity. Álbum solo llega
+    con ``cfg.model == "grok"`` (sin refine). A2 (Item 2): la rama no-integrate
+    mantiene los labels SIN sufijo ``({backend})``. La rama integrate (R4 Item 3)
+    transcribe el copy de grok CON sufijo ``({backend})`` (A6: en la práctica
+    ``backend == "xAI"`` por el prereq del use case).
     """
     uid = anchor_message.from_user.id
     ui = _chat_ui(deps, anchor_message)
+    # Preflight integrate (A3) ANTES de abrir job: provider xai + ref presente.
+    reference_image = None
+    if integrate_mode:
+        try:
+            reference_image = deps.integrate_refs.load_for_edit(uid, cfg)
+        except IntegrateReferenceError as exc:
+            await ui.send_text(exc.user_message)
+            return
     model = model_display(cfg)
+    backend = prov_label(effective_image_provider(cfg))
     n = len(file_ids)
     job = deps.job_manager.start(uid, "album_edit")
     if job is None:  # defensivo; R9 no tiene tope de concurrencia
         return
     completed = 0
     status_id = None
+    initial_label = (
+        f"Integrando referencia 0/{n} imágenes ({backend})..."
+        if integrate_mode
+        else f"Editando 0/{n} imágenes con {model['name']}..."
+    )
     try:
         # El status inicial va DENTRO del try/finally: si este send_text lanza, el
         # job se cierra igual (nada de jobs huérfanos ni task del drain muerto).
         status = await ui.send_text(
-            f"Editando 0/{n} imágenes con {model['name']}...",
+            initial_label,
             reply_markup=cancel_job_keyboard(job.job_id),
         )
         status_id = status.message_id
@@ -344,7 +402,11 @@ async def _process_album_edit(deps: BotDeps, anchor_message, prompt: str, file_i
                     status_id, f"⏹ Cancelado. Completadas {completed}/{n} imágenes.", reply_markup=None
                 )
                 return
-            label = f"Editando {i}/{n} imágenes con {model['name']}..."
+            label = (
+                f"Integrando referencia {i}/{n} imágenes ({backend})..."
+                if integrate_mode
+                else f"Editando {i}/{n} imágenes con {model['name']}..."
+            )
             await ui.edit_text(status_id, label, reply_markup=cancel_job_keyboard(job.job_id))
             image_data = await fetch_source_bytes(deps.gateway, file_id)
             if image_data is None:
@@ -361,6 +423,7 @@ async def _process_album_edit(deps: BotDeps, anchor_message, prompt: str, file_i
                 source_image=image_data,
                 source_file_id=file_id,
                 cfg_override=cfg,
+                reference_image=reference_image,
             )
             async for ev in events:
                 if isinstance(ev, RetryScheduled):
@@ -571,11 +634,37 @@ async def handle_regenerate(callback: types.CallbackQuery, deps: BotDeps) -> Non
         source_image = None
         source = None
         source_file_id = None
+        reference_image = None
+        integrate_mode = bool(regen.get("integrate_mode"))
         kie_ref = regen.get("kie_source_ref")
         if kie_ref:
             source = KieTaskRef(
                 task_id=str(kie_ref["task_id"]), index=int(kie_ref.get("index", 0))
             )
+        elif integrate_mode:
+            # Regen integrate (parity grok 1343-1356): re-descarga el source ORIGINAL
+            # y recarga la referencia por uid (A10) — nunca del ref opaco (R8). Ref
+            # borrada → degrada el status user-safe y cierra el job.
+            file_id = regen.get("source_file_id")
+            if not file_id:
+                await ui.edit_text(
+                    status_id,
+                    "No se pudo recuperar la imagen original para regenerar.",
+                    reply_markup=None,
+                )
+                return
+            source_image = await fetch_source_bytes(deps.gateway, file_id)
+            if source_image is None:
+                await ui.edit_text(
+                    status_id, SOURCE_MEDIA_UNAVAILABLE_MSG, reply_markup=None
+                )
+                return
+            source_file_id = file_id
+            try:
+                reference_image = deps.integrate_refs.load_for_edit(uid, cfg)
+            except IntegrateReferenceError as exc:
+                await ui.edit_text(status_id, exc.user_message, reply_markup=None)
+                return
         elif mode == "edit":
             file_id = regen.get("source_file_id")
             if not file_id:
@@ -596,6 +685,7 @@ async def handle_regenerate(callback: types.CallbackQuery, deps: BotDeps) -> Non
             deps, callback.message, cfg, prompt, uid=uid,
             prefix="Edit" if mode == "edit" else "Prompt",
             source_image=source_image, source=source, source_file_id=source_file_id,
+            reference_image=reference_image,
             label=label, status_id=status_id,
             cancel_text=_REGEN_CANCEL_TEXT, job=job,
         )
@@ -617,6 +707,7 @@ async def _run_single_image(
     source_image: bytes | None = None,
     source: object | None = None,
     source_file_id: str | None = None,
+    reference_image: bytes | None = None,
     label: str | None = None,
     status_id: int | None = None,
     delete_status: bool = True,
@@ -633,6 +724,7 @@ async def _run_single_image(
         source=source,
         source_file_id=source_file_id,
         cfg_override=cfg,
+        reference_image=reference_image,
     )
     await present_single_image(
         ui,
@@ -652,13 +744,31 @@ async def _run_single_image(
 
 
 async def _process_single_photo_edit(
-    deps: BotDeps, message: types.Message, prompt: str, file_id: str | None
+    deps: BotDeps,
+    message: types.Message,
+    prompt: str,
+    file_id: str | None,
+    *,
+    integrate_mode: bool = False,
 ) -> None:
-    """Foto + caption de edición → job "edit" con source descargado (parity 1702-1812)."""
+    """Foto + caption de edición → job "edit" con source descargado (parity 1702-1812).
+
+    Con ``integrate_mode`` preflight A3 ANTES de descargar el source y de abrir el
+    job: provider efectivo xai + referencia presente; los errores user-safe salen
+    por ``IntegrateReferenceError.user_message`` (copy byte-parity de grok). El
+    label del status integra es "Editando imagen (referencia+foto)..." (grok 1733-1737).
+    """
     uid = message.from_user.id
     ui = _chat_ui(deps, message)
     cfg = deps.sessions.get_config(uid)
     model = model_display(cfg)
+    reference_image = None
+    if integrate_mode:
+        try:
+            reference_image = deps.integrate_refs.load_for_edit(uid, cfg)
+        except IntegrateReferenceError as exc:
+            await ui.send_text(exc.user_message)
+            return
     if file_id:
         source_image = await fetch_source_bytes(deps.gateway, file_id)
         if source_image is None:
@@ -668,11 +778,16 @@ async def _process_single_photo_edit(
         source_image = None
 
     job = deps.job_manager.start(uid, "edit")
-    label = f"Editando imagen con {model['name']}..."
+    label = (
+        "Editando imagen (referencia+foto)..."
+        if integrate_mode
+        else f"Editando imagen con {model['name']}..."
+    )
     try:
         await _run_single_image(
             deps, message, cfg, prompt, uid=uid, prefix="Edit",
             source_image=source_image, source_file_id=file_id,
+            reference_image=reference_image,
             label=label, cancel_text=_EDIT_CANCEL_TEXT, job=job,
         )
     finally:
@@ -682,11 +797,6 @@ async def _process_single_photo_edit(
 # --------------------------------------------------------------------------- #
 # Registro
 # --------------------------------------------------------------------------- #
-async def _cmd_unavailable(message: types.Message, deps: BotDeps) -> None:
-    ui = _chat_ui(deps, message)
-    await ui.send_text(D8_CMD_MSG)
-
-
 async def handle_estado(message: types.Message, deps: BotDeps) -> None:
     """``/estado`` → tarjeta de configuración (grok cmd_estado, sin jobs activos)."""
     cfg = deps.sessions.get_config(message.from_user.id)
@@ -700,11 +810,8 @@ async def handle_estado(message: types.Message, deps: BotDeps) -> None:
 def register_generation(dp: Dispatcher, deps: BotDeps) -> None:
     from aiogram.filters import Command
 
-    # Comandos residuales D8 (flujos de grok sin use case).
-    # /cambiar_source sale de D8: lo registra faceswap.register_faceswap (Task 3).
-    for command in ("cambiar_referencia",):
-        dp.message.register(partial(_cmd_unavailable, deps=deps), Command(command))
-    # /estado sale del bucle D8: responde la tarjeta de configuración.
+    # /estado responde la tarjeta de configuración (R4 Item 1); /cambiar_referencia
+    # es real y lo registra integrate_ref.register_integrate_ref (R4 Item 3).
     dp.message.register(partial(handle_estado, deps=deps), Command("estado"))
     # Texto plano de generación (no comando, no reply).
     dp.message.register(partial(handle_text, deps=deps), is_plain_prompt)

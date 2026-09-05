@@ -19,6 +19,7 @@ from grokbot.telegram.handlers import (
     config_cmd,
     faceswap,
     generation,
+    integrate_ref,
     jobs,
     listas_cmd,
     start,
@@ -42,5 +43,7 @@ def register_all(dp: Dispatcher, deps: BotDeps) -> None:
     # /cambiar_source real + callbacks dedicados faceswap:confirm:* (no colisionan
     # con confirm:yes/no de prompts; pool R4 Item 2).
     faceswap.register_faceswap(dp, deps)
+    # /cambiar_referencia real (edición con referencia /s; R4 Item 3).
+    integrate_ref.register_integrate_ref(dp, deps)
     # Callbacks transaccionales (confirm/refine/regen/cancel).
     jobs.register_jobs(dp, deps)

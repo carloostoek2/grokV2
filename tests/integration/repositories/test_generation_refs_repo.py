@@ -188,6 +188,26 @@ def test_regen_opaque_round_trip(tmp_path):
     assert load(path)["20:5"]["regen"] == regen
 
 
+def test_regen_opaque_round_trip_integrate_mode(tmp_path):
+    """R4 Item 3: el ref opaco guarda la marca integrate_mode sin re-modelarla."""
+    path = tmp_path / "generation_refs.json"
+    repo = JsonGenerationRefsRepository(path)
+    regen = {
+        "model_key": "grok",
+        "imagine_provider": "xai",
+        "imagine_variant": "quality",
+        "mode": "edit",
+        "prompt": "hazla sonreir",
+        "source_file_id": "FAKE_FILE_ID",
+        "integrate_mode": True,
+    }
+    repo.save(40, 5, regen=regen)  # real now so get() finds a live record
+    assert repo.get(40, 5)["regen"] == regen
+    assert load(path)["40:5"]["regen"] == regen
+    # A10: el ref del integrate NUNCA lleva path/file_id de la referencia.
+    assert "integrate_ref_path" not in regen
+
+
 def test_non_dict_top_level_treated_as_empty_and_corrupt_raises(tmp_path):
     path = tmp_path / "generation_refs.json"
     path.write_text("[]", encoding="utf-8")

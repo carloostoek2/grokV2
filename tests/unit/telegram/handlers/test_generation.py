@@ -322,11 +322,19 @@ async def test_faceswap_text_guidance_with_source():
     )
 
 
-async def test_photo_integrate_degrades():
+async def test_photo_integrate_non_xai_requires_xai():
+    """/s single con provider no-xai (default grok/kie) → copy "requiere xAI".
+
+    A3: el prereq se valida ANTES de descargar/abrir job; el copy es user-safe y
+    el flujo no degrada D8 (no aparece "no está disponible").
+    """
     deps = make_deps()
-    deps = await _msg(deps, make_photo_message(caption="/s referencia extra", message_id=5))
+    deps = await _msg(deps, make_photo_message(caption="/s x", message_id=5))
     last = deps.gateway.calls_by_method("send_message")[-1]
-    assert "La edición con referencia (/s) no está disponible en esta versión." in last["text"]
+    assert "requiere el proveedor <b>xAI (oficial)</b>" in last["text"]
+    assert "no está disponible" not in last["text"]
+    assert deps.job_manager.active_jobs(_UID) == ()
+    assert deps.gateway.calls_by_method("send_photo") == []
 
 
 async def test_long_caption_starts_collection_reply():
@@ -366,14 +374,21 @@ async def test_short_caption_does_not_collect():
     assert deps.long_prompt.is_awaiting(_UID) is False
 
 
-async def test_integrate_still_beats_long():
+async def test_integrate_long_caption_collects_with_mode():
+    """/s largo en provider no-xai → colecciona con integrate_mode (A4), sin D8."""
     deps = make_deps()
     deps = await _msg(
         deps, make_photo_message(caption="/s " + "x" * 1100, message_id=5)
     )
-    last = deps.gateway.calls_by_method("send_message")[-1]
-    assert "La edición con referencia (/s) no está disponible en esta versión." in last["text"]
-    assert deps.long_prompt.is_awaiting(_UID) is False
+    assert deps.long_prompt.is_awaiting(_UID) is True
+    entry = deps.long_prompt.get(_UID)
+    assert entry["integrate_mode"] is True
+    assert deps.gateway.calls_by_method("send_photo") == []
+    sends = deps.gateway.calls_by_method("send_message")
+    assert not any("no está disponible" in s["text"] for s in sends)
+    assert sends[-1]["text"].startswith(
+        "El caption es demasiado largo para procesarlo directamente."
+    )
 
 
 async def test_photo_no_caption_while_awaiting_reminds():
@@ -477,7 +492,8 @@ async def test_album_faceswap_schedules_drain_and_confirm():
     assert deps.faceswap_pending.get(_UID) == ["FAKE:fs_gen1", "FAKE:fs_gen2"]
 
 
-async def test_album_integrate_caption_still_d8():
+async def test_album_integrate_non_xai_requires_xai():
+    """Álbum /s con provider no-xai → tras drain, copy "requiere xAI"; sin job."""
     deps = make_deps()
     deps.album.delay = 0.05
     dp, deps = make_dispatcher(deps)
@@ -488,11 +504,13 @@ async def test_album_integrate_caption_still_d8():
     msg2 = make_photo_message(message_id=202, media_group_id="album-int")
     await dp.feed_update(_BOT, message_update(msg2))
     await _wait_until(lambda: any(
-        "La edición con referencia (/s) no está disponible en esta versión." in s["text"]
+        "requiere el proveedor <b>xAI (oficial)</b>" in s["text"]
         for s in deps.gateway.calls_by_method("send_message")
     ))
     last = deps.gateway.calls_by_method("send_message")[-1]
-    assert "La edición con referencia (/s) no está disponible en esta versión." in last["text"]
+    assert "requiere el proveedor <b>xAI (oficial)</b>" in last["text"]
+    assert deps.gateway.calls_by_method("send_photo") == []
+    assert deps.job_manager.active_jobs(_UID) == ()
 
 
 async def test_album_long_caption_defers_to_text():

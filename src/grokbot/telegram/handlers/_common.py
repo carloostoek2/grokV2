@@ -1,10 +1,11 @@
 """Helpers compartidos de los handlers de telegram (item 5).
 
 Utilidades de routing/armado SIN registro de handlers ni copy de negocio:
-filtros de mensaje de prompt, degradaciones D8 (mensajes user-safe), constructor
-del :class:`ResultSender`, reconstrucción de ``cfg_override`` para regen (parity
-grok ``_model_from_regen`` bot.py 769-777) y resolución de ref Kie al responder a
-una foto del bot (parity ``_resolve_reply_kie_ref`` bot.py 813-823).
+filtros de mensaje de prompt, la tupla residual ``D8_COMMANDS`` (vacía desde
+R4 Item 3), constructor del :class:`ResultSender`, reconstrucción de
+``cfg_override`` para regen (parity grok ``_model_from_regen`` bot.py 769-777) y
+resolución de ref Kie al responder a una foto del bot (parity
+``_resolve_reply_kie_ref`` bot.py 813-823).
 
 Reglas de capa (SPEC §5.2): aquí solo se importa stdlib + aiogram + domain/
 application; todo I/O de media se delega a los seams inyectados (gateway/
@@ -30,14 +31,6 @@ from grokbot.telegram.sender import ResultSender
 # prompt como mensaje de texto (ver generation._complete_long_prompt_collection).
 TELEGRAM_CAPTION_COLLECT_THRESHOLD = 1020
 
-# --- Degradaciones D8 (flujos de grok sin use case; residuales del pool) ------
-D8_INTEGRATE_MSG = (
-    "La edición con referencia (/s) no está disponible en esta versión. "
-    "Envía el caption sin /s."
-)
-D8_CMD_MSG = "Este comando no está disponible en esta versión todavía."
-D8_REPLY_NO_PHOTO = "Responde a una foto para editarla."
-
 # Máximo de fotos de un media group que grok edita (paridad bot.py). Por encima
 # el álbum degrada con el copy exacto de grok (generation._drain_grok_album).
 INTEGRATE_MAX_ALBUM = 10
@@ -49,14 +42,10 @@ SOURCE_MEDIA_UNAVAILABLE_MSG = (
     "Envíala de nuevo."
 )
 
-# Comandos residuales que se degradan (D8) sin implementar su flujo.
-# /cambiar_source salió de D8 (flujo Face Swap real, R4 Item 2).
-D8_COMMANDS = ("cambiar_referencia",)
-
-
-def is_d8_command(command: str | None) -> bool:
-    """True cuando el comando es uno de los flujos residuales no implementados."""
-    return command in D8_COMMANDS
+# Comandos residuales D8 (flujos de grok sin use case). Desde R4 Item 3 quedó
+# vacío: /estado (R4 Item 1), /cambiar_source y face swap (R4 Item 2) y
+# /cambiar_referencia + la edición /s (R4 Item 3) son flujos reales.
+D8_COMMANDS: tuple[str, ...] = ()
 
 
 # --- Filtros de routing (aiogram) --------------------------------------------
@@ -171,7 +160,12 @@ def parse_var_count_and_text(text: str | None) -> tuple[int, str | None]:
 
 
 def parse_integrate_caption(caption: str) -> tuple[bool, str]:
-    """Detecta el prefijo '/s' (integrate); en grokV2 se degrada D8."""
+    """Detecta el prefijo '/s' (integrate) y devuelve el prompt limpio (R4 Item 3).
+
+    Espejo de grok ``_parse_integrate_caption`` (bot.py:416-423): un caption que
+    empieza por ``/s`` activa el flujo de edición con referencia; el resto (tras
+    quitar ``/s`` y espacios) es el prompt de edición.
+    """
     text = caption.strip()
     if not text.startswith("/s"):
         return False, text
@@ -263,10 +257,7 @@ async def fetch_source_bytes(gateway: TelegramGateway, file_id: str | None) -> b
 
 
 __all__ = [
-    "D8_CMD_MSG",
     "D8_COMMANDS",
-    "D8_INTEGRATE_MSG",
-    "D8_REPLY_NO_PHOTO",
     "INTEGRATE_MAX_ALBUM",
     "SOURCE_MEDIA_UNAVAILABLE_MSG",
     "TELEGRAM_CAPTION_COLLECT_THRESHOLD",
@@ -275,7 +266,6 @@ __all__ = [
     "effective_image_provider",
     "fetch_source_bytes",
     "is_album",
-    "is_d8_command",
     "is_photo_caption",
     "is_photo_no_caption",
     "is_plain_prompt",
