@@ -107,7 +107,9 @@ dejar `templates/<id>.json` con grafo API-format (modelo/LoRA **horneados**) + `
 (`id/name/media_type/positive_node/positive_input/negative_node/seed_nodes/save_nodes/
 supports_source/timeout`) y registrar el id en `domain/user_config.COMFYUI_FLOWS`. El
 resolver (`workflows/resolver.py`) separa `_meta`, nunca encola `_meta` a ComfyUI. El
-refine 2-stage está **dormido**: no revivirlo sin sacarlo antes de ese estado.
+refine 2-stage está **dormido**: no revivirlo sin sacarlo antes de ese estado. Módulo
+**dinámico**: registrar/ajustar un flujo no exige doc ni tests propios (exención en la
+Regla dura 1); el dueño mantiene los tests de cardinalidad de flujos si decide tocarlos.
 
 **Idiomas**: el copy de usuario (formatters, keyboards, mensajes/errores user-safe) es
 **siempre en español neutro**; los docstrings/comentarios y nombres de código son **en inglés**;
@@ -142,6 +144,11 @@ en `telegram/`/`application/`: no se migran en masa; la regla se aplica al códi
    proveedor, copy de usuario) actualiza `docs/PRODUCT_STATUS.md` — y
    `docs/comfyui/AVANCE_VAST_HTTP.md` si toca el slice ComfyUI — **en el mismo cambio**,
    junto con sus tests.
+   *Excepción — módulo de flujos ComfyUI (dinámico):* registrar/ajustar un flujo
+   (`templates/<id>.json` + `COMFYUI_FLOWS`) **no** requiere actualizar docs ni escribir
+   tests; el contrato vive en `resolver.py` y `AVANCE_VAST_HTTP.md` §5, y el menú del
+   `/config` es la UI. El dueño mantiene los tests de cardinalidad de flujos si decide
+   tocarlos.
 2. **No leer datos de runtime sin que el usuario lo pida** — `data/` y `tmp/` (los
    archivos que escriben los repos: `sessions.json`, `variables_lists.json`,
    `generation_refs.json`, `variables_packages/`, `sources/`, `integrate_refs/`)
