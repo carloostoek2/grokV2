@@ -56,7 +56,10 @@ async def test_video_text_confirm_yes_sends_video():
     assert flat_callback_data(confirm["reply_markup"]) == ["confirm:yes", "confirm:no"]
     mid = confirm["sent"].message_id
     deps = await _cb(deps, callback_query("confirm:yes", message_id=mid))
-    assert deps.gateway.calls_by_method("send_video"), "esperaba el video enviado"
+    videos = deps.gateway.calls_by_method("send_video")
+    assert videos, "esperaba el video enviado"
+    # el video responde al prompt ORIGINAL del usuario (message_id=1), no al confirm.
+    assert videos[-1]["reply_to_message_id"] == 1
 
 
 async def test_video_photo_caption_i2v():
@@ -67,7 +70,10 @@ async def test_video_photo_caption_i2v():
     )
     texts = _send_texts(deps)
     assert any(t.startswith("Animando imagen con <b>grok-imagine-video</b>") for t in texts)
-    assert deps.gateway.calls_by_method("send_video")
+    videos = deps.gateway.calls_by_method("send_video")
+    assert videos
+    # el video imagen-a-video responde a la foto que lo invocó (message_id=1).
+    assert videos[-1]["reply_to_message_id"] == 1
 
 
 async def test_video_photo_caption_source_fetch_failure_degrades():

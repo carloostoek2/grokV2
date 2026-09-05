@@ -9,6 +9,7 @@ NUNCA se reintentan. Emite eventos tipados que item 5 traduce.
 from __future__ import annotations
 
 import asyncio
+import time
 from collections.abc import AsyncIterator
 
 from grokbot.application._retry import GENERATE_MAX_RETRIES, _retry_backoff
@@ -195,6 +196,10 @@ class GenerateImageUseCase:
             return
 
         # 3. Loop de intentos (primer intento + GENERATE_MAX_RETRIES reintentos).
+        # El cronómetro arranca ANTES del loop (paridad grok bot.py:3772/3791/3794):
+        # el elapsed incluye reintentos + backoff, y se escribe en el meta del
+        # resultado exitoso (única salida) para que el sender lo muestre en el caption.
+        started = time.monotonic()
         for attempt in range(GENERATE_MAX_RETRIES + 1):
             try:
                 if reference_image is not None:
@@ -243,6 +248,13 @@ class GenerateImageUseCase:
                 )
                 return
 
+            # Tiempo real de la generación (incluye reintentos). Mutación in-place
+            # del dict mutable de meta: preserva la identidad del GenerationResult
+            # que los tests y el sender esperan (nunca dataclasses.replace). Si un
+            # resultado llegara con ``meta=None`` (el sender lo tolera con ``or {}``),
+            # no se marca y el caption queda con "…".
+            if result.meta is not None:
+                result.meta["elapsed_sec"] = int(time.monotonic() - started)
             ctx = _build_image_regen_context(
                 cfg=cfg,
                 user_id=user_id,

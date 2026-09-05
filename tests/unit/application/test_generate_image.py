@@ -219,3 +219,37 @@ async def test_comfyui_prompts_multipose_in_request(sessions):
 
     request, _ = prov.calls[0]
     assert request.params["prompts"] == ramas
+
+
+async def test_success_sets_elapsed_sec_in_meta(sessions):
+    """El use case estampa el tiempo real en el meta del resultado (paridad grok).
+
+    Se muta el dict mutable de meta IN-PLACE: ``ev.result is result`` se conserva
+    (los test previos ya dependen de esa identidad) y el sender podrá leer
+    ``meta["elapsed_sec"]`` para mostrar ``<b>Tiempo:</b> Ns`` en el caption.
+    """
+    result = make_result(provider="kie", model_id="grok-imagine-image-2-0/text-to-image")
+    prov = FakeImageProvider(name="kie", outcomes=[result])
+    reg = make_registry(kie=prov)
+    events = await _run(_uc(reg, sessions), user_id=USER_ID, prompt="un retrato")
+
+    ev = events[0]
+    assert isinstance(ev, ItemResult)
+    assert ev.result is result
+    assert isinstance(ev.result.meta.get("elapsed_sec"), int)
+    assert ev.result.meta["elapsed_sec"] >= 0
+
+
+async def test_success_after_retry_includes_elapsed(sessions, fast_sleep):
+    """El cronómetro arranca ANTES del loop: el elapsed cubre reintentos+backoff."""
+    err = ProviderRateLimitError("rate", user_message="Demasiadas peticiones.")
+    ok = make_result(provider="kie", model_id="grok-imagine-image-2-0/text-to-image")
+    prov = FakeImageProvider(name="kie", outcomes=[err, ok])
+    reg = make_registry(kie=prov)
+
+    events = await _run(_uc(reg, sessions), user_id=USER_ID, prompt="x")
+
+    results = [ev for ev in events if isinstance(ev, ItemResult)]
+    assert len(results) == 1
+    assert isinstance(results[0].result.meta.get("elapsed_sec"), int)
+    assert results[0].result.meta["elapsed_sec"] >= 0

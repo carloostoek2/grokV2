@@ -322,7 +322,7 @@ class PendingPrompts:
     """Mapa user_id → prompt atado a (chat, mensaje) y dueño (paridad prod)."""
 
     def __init__(self) -> None:
-        self._pending: dict[int, tuple[str, int | None, int | None]] = {}
+        self._pending: dict[int, tuple[str, int | None, int | None, int | None]] = {}
         self._owners: dict[tuple[int, int], int] = {}
 
     def set(
@@ -332,11 +332,12 @@ class PendingPrompts:
         *,
         chat_id: int | None = None,
         message_id: int | None = None,
+        source_message_id: int | None = None,
     ) -> None:
         prev = self._pending.get(user_id)
         if prev is not None and prev[1] is not None and prev[2] is not None:
             self._owners.pop((prev[1], prev[2]), None)
-        self._pending[user_id] = (prompt, chat_id, message_id)
+        self._pending[user_id] = (prompt, chat_id, message_id, source_message_id)
         if chat_id is not None and message_id is not None:
             self._owners[(chat_id, message_id)] = user_id
 
@@ -344,11 +345,20 @@ class PendingPrompts:
         entry = self._pending.get(user_id)
         return entry[0] if entry else None
 
-    def pop(self, user_id: int) -> str | None:
+    def _pop(self, user_id: int) -> tuple[str, int | None] | None:
         entry = self._pending.pop(user_id, None)
         if entry is not None and entry[1] is not None and entry[2] is not None:
             self._owners.pop((entry[1], entry[2]), None)
+        if entry is None:
+            return None
+        return (entry[0], entry[3])
+
+    def pop(self, user_id: int) -> str | None:
+        entry = self._pop(user_id)
         return entry[0] if entry else None
+
+    def pop_entry(self, user_id: int) -> tuple[str | None, int | None] | None:
+        return self._pop(user_id)
 
     def clear(self, user_id: int) -> None:
         self.pop(user_id)

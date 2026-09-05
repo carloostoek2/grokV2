@@ -175,6 +175,9 @@ class AiogramGateway(Bot):
             parse_mode=parse_mode,
             reply_markup=reply_markup,
             reply_to_message_id=reply_to_message_id,
+            # Paridad grok (allow_sending_without_reply=True en el reply al invocador):
+            # si el mensaje al que se responde ya no existe, no se aborta el envío.
+            allow_sending_without_reply=reply_to_message_id is not None,
         )
         return self._sent(msg)
 
@@ -196,6 +199,9 @@ class AiogramGateway(Bot):
             parse_mode=parse_mode,
             reply_markup=reply_markup,
             reply_to_message_id=reply_to_message_id,
+            # Paridad grok (allow_sending_without_reply=True en el reply al invocador):
+            # si el mensaje al que se responde ya no existe, no se aborta el envío.
+            allow_sending_without_reply=reply_to_message_id is not None,
         )
         return self._sent(msg)
 
@@ -231,6 +237,8 @@ class AiogramGateway(Bot):
             chat_id,
             items,
             reply_to_message_id=reply_to_message_id,
+            # Paridad grok (allow_sending_without_reply=True en el reply al invocador).
+            allow_sending_without_reply=reply_to_message_id is not None,
         )
         return [self._sent(msg) for msg in sent]
 

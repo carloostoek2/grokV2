@@ -178,3 +178,24 @@ async def test_transient_error_video_single_attempt_no_retry(sessions):
     assert isinstance(ev, ItemFailed)
     assert ev.reason == "Demasiadas peticiones."
     assert prov.generate_count == 1  # single-attempt: el transitorio no se reintenta
+
+
+async def test_success_sets_elapsed_in_meta(sessions):
+    """El use case de video estampa el tiempo real en el meta (paridad grok).
+
+    Mutación in-place del dict de meta: la identidad ``ev.result is result`` se
+    conserva y el sender muestra ``<b>Tiempo:</b> Ns`` en el caption del video.
+    """
+    cfg = _video_cfg()
+    sessions.save_config(USER_ID, cfg)
+    result = make_result(provider="kie", model_id="grok-imagine-video", media_type=MediaType.VIDEO)
+    prov = FakeVideoProvider(name="kie", outcomes=[result])
+    reg = make_registry(kie=prov)
+
+    events = await _run(_uc(reg, sessions), user_id=USER_ID, prompt="una escena")
+
+    ev = events[0]
+    assert isinstance(ev, ItemResult)
+    assert ev.result is result
+    assert isinstance(ev.result.meta.get("elapsed_sec"), int)
+    assert ev.result.meta["elapsed_sec"] >= 0

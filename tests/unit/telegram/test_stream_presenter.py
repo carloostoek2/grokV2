@@ -681,3 +681,58 @@ async def test_batch_multipose_item_failed_is_terminal(gateway, downloader, refs
     # sin notify aparte de ítem fallido ni media.
     assert not any("falló" in t for t in texts)
     assert gateway.calls_by_method("send_photo") == []
+
+
+# --------------------------------------------------------------------------- #
+# Reply al mensaje invocador (reply_to propagado al envío)
+# --------------------------------------------------------------------------- #
+@pytest.mark.asyncio
+async def test_single_forwards_reply_to(gateway, downloader, refs_repo):
+    ui = _ui(gateway)
+    sender = _sender(gateway, downloader, refs_repo)
+    events = _stream(_url_item())
+
+    await present_single_image(
+        ui, events, label="Generando imagen...", sender=sender, reply_to=42
+    )
+
+    photos = gateway.calls_by_method("send_photo")
+    assert len(photos) == 1
+    assert photos[0]["reply_to_message_id"] == 42
+
+
+@pytest.mark.asyncio
+async def test_video_forwards_reply_to(gateway, downloader, refs_repo):
+    ui = _ui(gateway)
+    sender = _sender(gateway, downloader, refs_repo)
+    events = _stream(_video_item())
+
+    await present_video(
+        ui, events, model_id="grok-imagine-video", prompt=PROMPT,
+        sender=sender, reply_to=42,
+    )
+
+    videos = gateway.calls_by_method("send_video")
+    assert len(videos) == 1
+    assert videos[0]["reply_to_message_id"] == 42
+
+
+@pytest.mark.asyncio
+async def test_batch_forwards_reply_to(gateway, downloader, refs_repo):
+    ui = _ui(gateway)
+    sender = _sender(gateway, downloader, refs_repo)
+    events = _stream(
+        BatchStarted(style="variables", total=1, job_id="job1"),
+        ItemStarted(index=1, total=1),
+        _url_item(index=1, total=1),
+        BatchSummary(completed=1, failed=0, total=1),
+    )
+
+    await present_batch(
+        ui, events, verb="Generando", count=1, model=MODEL,
+        sender=sender, reply_to=42,
+    )
+
+    photos = gateway.calls_by_method("send_photo")
+    assert len(photos) == 1
+    assert photos[0]["reply_to_message_id"] == 42

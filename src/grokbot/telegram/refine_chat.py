@@ -24,6 +24,7 @@ solo orquesta forma/decisiones y NUNCA loguea remotes/IDs de contenido.
 from __future__ import annotations
 
 import asyncio
+import time
 
 from grokbot.application.events import ItemResult
 from grokbot.application.refine_flow import RefineDecision, ResolveRefineUseCase
@@ -62,6 +63,7 @@ async def run_refine_flow(
     caption_prompt: bool = False,
     user_id: int,
     owner_uid: int | None = None,
+    reply_to: int | None = None,
     token: str | None = None,
     job_id: str | None = None,
     cancel_event: asyncio.Event | None = None,
@@ -69,7 +71,8 @@ async def run_refine_flow(
     """Orquesta la confirmación de refine de un resultado refinable.
 
     Devuelve la decisión resuelta (yes/no/timeout/cancelled). El caller reanuda su
-    generator al retornar.
+    generator al retornar. ``reply_to`` (message_id del invocador) se propaga a los
+    envíos de la base y de la refinada.
     """
     meta = item.result.meta or {}
     is_album = is_album_item(item)
@@ -82,7 +85,7 @@ async def run_refine_flow(
             ui, item, prefix,
             delete_status=False, save_ref=True,
             caption_model=caption_model, caption_prompt=caption_prompt,
-            owner_uid=owner_uid,
+            owner_uid=owner_uid, reply_to=reply_to,
         )
         if base is None:
             refine_uc.drop(token)
@@ -93,7 +96,7 @@ async def run_refine_flow(
             ui, item, prefix,
             reply_markup=kb, delete_status=False, save_ref=True,
             caption_model=caption_model, caption_prompt=caption_prompt,
-            owner_uid=owner_uid,
+            owner_uid=owner_uid, reply_to=reply_to,
         )
         if base is None:
             refine_uc.drop(token)
@@ -140,8 +143,14 @@ async def run_refine_flow(
             reply_markup=cancel_job_keyboard(job_id) if job_id else None,
         )
 
+    # El 2º stage cronometra su propio tiempo (paridad grok bot.py:4407-4411) y lo
+    # escribe en el meta de la refinada para que su caption muestre el tiempo real.
+    started = time.monotonic()
     try:
         refined = await refine_uc.refine(item.request, list(meta.get("comfyui_remotes") or []))
+        # ``meta=None`` (que el sender tolera con ``or {}``) no debe falsear un error.
+        if refined.meta is not None:
+            refined.meta["elapsed_sec"] = int(time.monotonic() - started)
     except Exception as exc:  # noqa: BLE001 — todo error se traduce user-safe
         message = _user_safe_message(exc)
         if status_id is not None:
@@ -175,7 +184,7 @@ async def run_refine_flow(
         ui, refined_item, prefix,
         delete_status=delete_status, save_ref=True,
         caption_model=caption_model, caption_prompt=caption_prompt,
-        owner_uid=owner_uid,
+        owner_uid=owner_uid, reply_to=reply_to,
     )
     if refined_sent is None:
         # La refinada no se pudo enviar: reportar, restaurar la base a su estado final.

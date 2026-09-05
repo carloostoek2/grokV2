@@ -141,6 +141,7 @@ class ResultSender:
         reply_markup=None,
         save_ref: bool = True,
         owner_uid: int | None = None,
+        reply_to: int | None = None,
     ) -> SentItem | None:
         """Enviar el resultado de IMAGEN del ítem (single/álbum/multi-URL).
 
@@ -148,6 +149,8 @@ class ResultSender:
         error user-safe). ``status_id``/``delete_status`` controlan el status del
         flujo (paridad grok: batch edita, single borra). ``owner_uid`` (R8) es el
         user que corrió el flujo; se persiste en el ref para scopear Regenerar.
+        ``reply_to`` (message_id del invocador) hace que la foto/álbum responda al
+        mensaje que la pidió (paridad grok ``reply_to_message_id=message.message_id``).
         """
         result = item.result
         meta = result.meta or {}
@@ -164,7 +167,7 @@ class ResultSender:
                 status_id=status_id, delete_status=delete_status,
                 caption_model=caption_model, caption_prompt=caption_prompt,
                 reply_markup=reply_markup, save_ref=save_ref,
-                owner_uid=owner,
+                owner_uid=owner, reply_to=reply_to,
             )
 
         urls = meta.get("urls") or ([result.remote_url] if result.remote_url else [])
@@ -184,7 +187,8 @@ class ResultSender:
             )
             kb = image_regenerate_keyboard() if reply_markup is None else reply_markup
             sent = await ui.send_photo(
-                data, filename=_GENERATED_FILENAME, caption=caption, reply_markup=kb
+                data, filename=_GENERATED_FILENAME, caption=caption, reply_markup=kb,
+                reply_to_message_id=reply_to,
             )
             if save_ref:
                 self._save_image_ref(ui.chat_id, sent, meta, item, index=meta.get("index", 0), owner_uid=owner)
@@ -204,7 +208,8 @@ class ResultSender:
             )
             kb = image_regenerate_keyboard() if reply_markup is None else reply_markup
             sent = await ui.send_photo(
-                data, filename=_GENERATED_FILENAME, caption=caption, reply_markup=kb
+                data, filename=_GENERATED_FILENAME, caption=caption, reply_markup=kb,
+                reply_to_message_id=reply_to,
             )
             sent_all.append(sent)
             if save_ref:
@@ -226,12 +231,15 @@ class ResultSender:
         delete_status: bool = True,
         caption_model: dict | None = None,
         owner_uid: int | None = None,
+        reply_to: int | None = None,
     ) -> SentItem | None:
         """Enviar el resultado de VIDEO (local ComfyUI o URL remota).
 
         Video remoto > tope de Telegram → fallback de texto con la URL y el
         warning (grok bot.py 5402-5407); nunca se reenvía por otro medio.
         ``owner_uid`` (R8): user que corrió el flujo, persistido en el ref.
+        ``reply_to`` (message_id del invocador) hace que el video responda al
+        mensaje que lo pidió (decisión grokV2: imagen y video responden).
         """
         result = item.result
         meta = result.meta or {}
@@ -254,6 +262,7 @@ class ResultSender:
                 sent = await ui.send_video(
                     data, filename=_GENERATED_VIDEO_FILENAME,
                     caption=caption, reply_markup=image_regenerate_keyboard(),
+                    reply_to_message_id=reply_to,
                 )
             except TelegramBadRequest:
                 # C9c/R10: Telegram rechaza el video local (códec/formato o >
@@ -307,7 +316,8 @@ class ResultSender:
 
         try:
             sent = await ui.send_video(
-                data, filename=_GENERATED_VIDEO_FILENAME, caption=caption
+                data, filename=_GENERATED_VIDEO_FILENAME, caption=caption,
+                reply_to_message_id=reply_to,
             )
         except TelegramBadRequest:
             # R10: la Bot API rechaza el envío (códec/duración) pese a estar bajo
@@ -336,6 +346,7 @@ class ResultSender:
         reply_markup,
         save_ref: bool,
         owner_uid: int | None,
+        reply_to: int | None = None,
     ) -> SentItem | None:
         meta = item.result.meta or {}
         elapsed = meta.get("elapsed_sec")
@@ -352,7 +363,8 @@ class ResultSender:
             )
             kb = image_regenerate_keyboard() if reply_markup is None else reply_markup
             sent = await ui.send_photo(
-                data, filename=_COMFYUI_FILENAME, caption=caption, reply_markup=kb
+                data, filename=_COMFYUI_FILENAME, caption=caption, reply_markup=kb,
+                reply_to_message_id=reply_to,
             )
             if save_ref:
                 self._refs.save(
@@ -387,7 +399,7 @@ class ResultSender:
             if status_id is not None:
                 await ui.edit_text(status_id, _ERR_NO_ALBUM, reply_markup=None)
             return None
-        sent_group = await ui.send_media_group(media)
+        sent_group = await ui.send_media_group(media, reply_to_message_id=reply_to)
         if save_ref and sent_group:
             self._refs.save(
                 ui.chat_id, sent_group[0].message_id,

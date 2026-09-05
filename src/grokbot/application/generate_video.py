@@ -8,6 +8,7 @@ imagen es un seam de caller y termina sin llamar a ``generate``.
 
 from __future__ import annotations
 
+import time
 from collections.abc import AsyncIterator
 
 from grokbot.application.events import ItemFailed, ItemResult
@@ -91,6 +92,10 @@ class GenerateVideoUseCase:
             )
             return
 
+        # Video single-attempt: el cronómetro envuelve la llamada al provider
+        # (paridad grok bot.py:5140/5160) y el elapsed se escribe en el meta del
+        # resultado para que el sender lo muestre en el caption.
+        started = time.monotonic()
         try:
             result = await res.provider.generate(request, source_image=source_image)
         except ProviderError as err:
@@ -112,4 +117,9 @@ class GenerateVideoUseCase:
             )
             return
 
+        # Mutación in-place del dict mutable de meta (preserva identidad del
+        # GenerationResult que tests y sender esperan). ``meta=None`` (que el sender
+        # tolera) se deja sin marcar → caption con "…".
+        if result.meta is not None:
+            result.meta["elapsed_sec"] = int(time.monotonic() - started)
         yield ItemResult(result=result, prompt=prompt, index=index, total=total)

@@ -124,12 +124,14 @@ async def present_single_image(
     refine_uc: "ResolveRefineUseCase | None" = None,
     job: "Job | None" = None,
     job_manager: "JobManager | None" = None,
+    reply_to: int | None = None,
 ) -> None:
     """Presenta un stream single de imagen (text/reply/edit/regen).
 
     Crea el status ``label`` cuando no se reutiliza uno del confirm. Si el ítem
     es refinable (``refine_uc.offer``) corre el refine 2-stage; el generator queda
-    suspendido durante la decisión y se reanuda al volver (R1).
+    suspendido durante la decisión y se reanuda al volver (R1). ``reply_to``
+    (message_id del invocador) se propaga al envío de la imagen/refinada.
     """
     if status_id is None:
         sent = await ui.send_text(label, reply_markup=_job_markup(job, job_manager))
@@ -174,6 +176,7 @@ async def present_single_image(
                         if job is not None and job_manager is not None
                         else None
                     ),
+                    reply_to=reply_to,
                 )
                 return
             await sender.send_image(
@@ -183,6 +186,7 @@ async def present_single_image(
                 caption_model=caption_model,
                 caption_prompt=caption_prompt,
                 owner_uid=user_id,
+                reply_to=reply_to,
             )
             return
 
@@ -202,12 +206,14 @@ async def present_video(
     status_id: int | None = None,
     delete_status: bool = True,
     user_id: int | None = None,
+    reply_to: int | None = None,
 ) -> None:
     """Presenta un stream single de video (grok_video / ComfyUI video).
 
     El status arranca con el mensaje de video (o reusa el del confirm). Un
     ``ItemFailed`` con ``terminal=False`` igual finaliza (O3: sin reintentos de
     presentación para video). ``user_id`` (R8) se persiste como owner del ref.
+    ``reply_to`` (message_id del invocador) se propaga al envío del video.
     """
     if status_id is None:
         sent = await ui.send_text(video_start_message(model_id, prompt))
@@ -225,6 +231,7 @@ async def present_video(
                     delete_status=delete_status,
                     caption_model=caption_model,
                     owner_uid=user_id,
+                    reply_to=reply_to,
                 )
             else:
                 await sender.send_image(
@@ -233,6 +240,7 @@ async def present_video(
                     delete_status=delete_status,
                     caption_model=caption_model,
                     owner_uid=user_id,
+                    reply_to=reply_to,
                 )
             return
 
@@ -274,6 +282,7 @@ async def present_batch(
     cfg: "UserConfig | None" = None,
     user_id: int | None = None,
     job_manager: "JobManager | None" = None,
+    reply_to: int | None = None,
 ) -> None:
     """Presenta un batch de variables/var/multipose sobre UN status message.
 
@@ -378,6 +387,7 @@ async def present_batch(
                         if job_manager is not None and job is not None
                         else None
                     ),
+                    reply_to=reply_to,
                 )
             else:
                 await sender.send_image(
@@ -387,6 +397,7 @@ async def present_batch(
                     caption_model=model,
                     caption_prompt=True,
                     owner_uid=user_id,
+                    reply_to=reply_to,
                 )
             continue
 

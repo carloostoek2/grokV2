@@ -123,6 +123,7 @@ async def _run_variables_batch(
         cfg=cfg,
         user_id=uid,
         job_manager=deps.job_manager,
+        reply_to=message.message_id,
     )
 
 
@@ -165,6 +166,7 @@ async def _run_var_batch(
         cfg=cfg,
         user_id=uid,
         job_manager=deps.job_manager,
+        reply_to=message.message_id,
     )
 
 

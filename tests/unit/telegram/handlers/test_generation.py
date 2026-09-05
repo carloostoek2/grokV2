@@ -62,7 +62,10 @@ async def test_text_grok_confirm_and_yes():
     deps = await _cb(deps, callback_query("confirm:yes", message_id=mid))
     edits = deps.gateway.calls_by_method("edit_message_text")
     assert edits[-1]["text"].startswith("Generando imagen con Grok Imagine (Kie.ai • Alta calidad)...")
-    assert deps.gateway.calls_by_method("send_photo"), "esperaba el resultado en photo"
+    photos = deps.gateway.calls_by_method("send_photo")
+    assert photos, "esperaba el resultado en photo"
+    # la foto responde al prompt ORIGINAL del usuario (message_id=1), no al confirm.
+    assert photos[-1]["reply_to_message_id"] == 1
     # el prompt pendiente ya fue consumido
     assert deps.pending.get(_UID) is None
 
@@ -136,7 +139,10 @@ async def test_text_seedream_direct():
     deps = await _msg(deps, text_message("un gato rojo"))
     sends = deps.gateway.calls_by_method("send_message")
     assert sends[-1]["text"].startswith("Generando imagen con Seedream 5.0...")
-    assert deps.gateway.calls_by_method("send_photo"), "esperaba el resultado en photo"
+    photos = deps.gateway.calls_by_method("send_photo")
+    assert photos, "esperaba el resultado en photo"
+    # la foto responde al texto que la invocó (message_id=1).
+    assert photos[-1]["reply_to_message_id"] == 1
 
 
 async def test_photo_caption_edit_job_downloads_source():
@@ -155,7 +161,10 @@ async def test_photo_caption_edit_job_downloads_source():
     assert status["text"].startswith("Editando imagen con Seedream 5.0...")
     data = flat_callback_data(status["reply_markup"])
     assert data and data[0].startswith("cancel_job:"), "job edit lleva cancel_job:<id>"
-    assert deps.gateway.calls_by_method("send_photo")
+    photos = deps.gateway.calls_by_method("send_photo")
+    assert photos
+    # la edición por foto responde a la foto original (message_id=5).
+    assert photos[-1]["reply_to_message_id"] == 5
 
 
 async def test_photo_caption_edit_source_fetch_failure_degrades():
@@ -219,7 +228,10 @@ async def test_reply_to_kie_photo_uses_ref_without_download():
     deps = await _msg(deps, reply_text)
     methods = [c["method"] for c in deps.gateway.calls]
     assert "get_file_bytes" not in methods, "reply a imagen kie del bot no re-descarga"
-    assert deps.gateway.calls_by_method("send_photo"), "esperaba el resultado en photo"
+    photos = deps.gateway.calls_by_method("send_photo")
+    assert photos, "esperaba el resultado en photo"
+    # el texto que responde a la foto edita y la foto nueva responde a ese texto (id=6).
+    assert photos[-1]["reply_to_message_id"] == 6
 
 
 async def test_regen_valid_context():
@@ -234,7 +246,10 @@ async def test_regen_valid_context():
     deps = await _cb(deps, callback_query("regen", message_id=7000, message=ref_photo))
     sends = deps.gateway.calls_by_method("send_message")
     assert any(s["text"].startswith("Regenerando imagen con Seedream 5.0...") for s in sends)
-    assert deps.gateway.calls_by_method("send_photo")
+    photos = deps.gateway.calls_by_method("send_photo")
+    assert photos
+    # la regenerada responde al mensaje de la imagen previa (el del botón, id=7000).
+    assert photos[-1]["reply_to_message_id"] == 7000
     # el job regen se cerró
     assert deps.job_manager.active_jobs(_UID) == ()
 
@@ -439,7 +454,10 @@ async def test_album_grok_edits_sequentially():
     assert f"Editando 2/3 imágenes con {_ALBUM_LABEL}..." in edits
     assert f"Editando 3/3 imágenes con {_ALBUM_LABEL}..." in edits
     assert edits[-1] == "Completadas 3/3 imágenes."
-    assert len(deps.gateway.calls_by_method("send_photo")) == 3
+    photos = deps.gateway.calls_by_method("send_photo")
+    assert len(photos) == 3
+    # cada foto del álbum editado responde a la primera foto del álbum (ancla, id=101).
+    assert all(p["reply_to_message_id"] == 101 for p in photos)
     assert deps.job_manager.active_jobs(_UID) == ()
 
 

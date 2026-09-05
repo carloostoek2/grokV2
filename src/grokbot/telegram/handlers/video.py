@@ -88,13 +88,15 @@ async def run_video_generation(
     status_id: int | None = None,
     status_text: str | None = None,
     delete_status: bool = True,
+    reply_to: int | None = None,
 ) -> None:
     """Corre la generación de video y presenta el resultado (single-attempt).
 
     ``status_id`` permite reusar un mensaje ya editado (confirm de grok_video);
     si es ``None`` se crea el status con el texto de arranque apropiado
     (texto vs imagen a video). Devuelve cuando el flujo termina; un
-    ``ItemFailed`` (aun ``terminal=False``) finaliza (O3).
+    ``ItemFailed`` (aun ``terminal=False``) finaliza (O3). ``reply_to`` fija el
+    mensaje al que responde el video (default: el mensaje que lo invocó).
     """
     ui = ChatUI.for_message(deps.gateway, message)
     sender = make_sender(deps)
@@ -127,6 +129,7 @@ async def run_video_generation(
         status_id=status_id,
         delete_status=delete_status,
         user_id=uid,
+        reply_to=reply_to if reply_to is not None else message.message_id,
     )
 
 

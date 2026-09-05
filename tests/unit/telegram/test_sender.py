@@ -472,3 +472,98 @@ async def test_downloader_error_edits_status_user_safe(gateway, downloader, refs
     edits = gateway.calls_by_method("edit_message_text")
     assert edits[-1]["text"] == "No se pudo descargar el archivo (URL no permitida)."
     assert edits[-1]["reply_markup"] is None
+
+
+# --------------------------------------------------------------------------- #
+# Reply al mensaje invocador + tiempo real en el caption
+# --------------------------------------------------------------------------- #
+@pytest.mark.asyncio
+async def test_send_image_single_url_replies_to_invoker(gateway, downloader, refs_repo):
+    ui = ChatUI(gateway, CHAT_ID)
+    sender = _make_sender(gateway, downloader, refs_repo)
+    item = _item(urls=[URL_1], remote_url=URL_1, meta={"download_allowlist": "xai"})
+
+    await sender.send_image(ui, item, "Imagen", reply_to=42)
+
+    photos = gateway.calls_by_method("send_photo")
+    assert len(photos) == 1
+    assert photos[0]["reply_to_message_id"] == 42
+
+
+@pytest.mark.asyncio
+async def test_send_image_multi_url_replies_to_invoker(gateway, downloader, refs_repo):
+    ui = ChatUI(gateway, CHAT_ID)
+    sender = _make_sender(gateway, downloader, refs_repo)
+    item = _item(provider="kie", urls=[URL_1, URL_2], remote_url=URL_1, meta={})
+
+    await sender.send_image(ui, item, "Prompt", reply_to=42)
+
+    photos = gateway.calls_by_method("send_photo")
+    assert len(photos) == 2
+    assert all(p["reply_to_message_id"] == 42 for p in photos)
+
+
+@pytest.mark.asyncio
+async def test_send_image_local_single_and_album_reply(tmp_path, gateway, downloader, refs_repo):
+    ui = ChatUI(gateway, CHAT_ID)
+    sender = _make_sender(gateway, downloader, refs_repo)
+    img = tmp_path / "out.png"
+    img.write_bytes(b"png-bytes")
+
+    # local single → photo con reply.
+    single = _item(provider="comfyui", file_paths=[str(img)], meta={"comfyui_remotes": ["/w.png"]})
+    await sender.send_image(ui, single, "Edit", reply_to=42)
+    photos = gateway.calls_by_method("send_photo")
+    assert photos[-1]["reply_to_message_id"] == 42
+
+    # álbum local → media_group con reply (en el group, no por ítem).
+    p1 = tmp_path / "a.png"
+    p2 = tmp_path / "b.png"
+    p1.write_bytes(b"a")
+    p2.write_bytes(b"b")
+    album = _item(provider="comfyui", file_paths=[str(p1), str(p2)], meta={})
+    await sender.send_image(ui, album, "Edit", reply_to=42)
+    groups = gateway.calls_by_method("send_media_group")
+    assert groups[-1]["reply_to_message_id"] == 42
+
+
+@pytest.mark.asyncio
+async def test_send_image_default_no_reply(gateway, downloader, refs_repo):
+    ui = ChatUI(gateway, CHAT_ID)
+    sender = _make_sender(gateway, downloader, refs_repo)
+    item = _item(urls=[URL_1], remote_url=URL_1, meta={"download_allowlist": "xai"})
+
+    await sender.send_image(ui, item, "Imagen")
+
+    photos = gateway.calls_by_method("send_photo")
+    assert photos[0]["reply_to_message_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_send_video_replies_to_invoker(gateway, downloader, refs_repo):
+    ui = ChatUI(gateway, CHAT_ID)
+    sender = _make_sender(gateway, downloader, refs_repo)
+    item = _item(
+        media_type=MediaType.VIDEO,
+        remote_url=XAI_URL,
+        meta={"urls": [XAI_URL], "download_allowlist": "xai"},
+    )
+
+    await sender.send_video(ui, item, "Prompt", reply_to=42)
+
+    videos = gateway.calls_by_method("send_video")
+    assert len(videos) == 1
+    assert videos[0]["reply_to_message_id"] == 42
+
+
+@pytest.mark.asyncio
+async def test_caption_shows_real_elapsed_when_present(gateway, downloader, refs_repo):
+    """Parte A del lado sender: con ``meta["elapsed_sec"]`` el caption muestra el tiempo."""
+    ui = ChatUI(gateway, CHAT_ID)
+    sender = _make_sender(gateway, downloader, refs_repo)
+    item = _item(urls=[URL_1], remote_url=URL_1, meta={"elapsed_sec": 45})
+
+    await sender.send_image(ui, item, "Imagen")
+
+    photos = gateway.calls_by_method("send_photo")
+    assert photos[0]["caption"] == "<b>Imagen:</b> 45s"

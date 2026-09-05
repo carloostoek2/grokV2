@@ -123,13 +123,26 @@ async def test_variables_reply_to_photo_edit():
     assert any(t.startswith("🎲 <b>Variables</b>: editando 0/2 imágenes con Seedream 5.0...") for t in texts)
 
 
+async def test_variables_batch_photos_reply_to_command():
+    """Las fotos de un batch responden al mensaje del comando que las invocó."""
+    deps = make_deps()
+    _use_seedream(deps)
+    deps = await _msg(deps, text_message("/variables 2"))
+    photos = deps.gateway.calls_by_method("send_photo")
+    assert photos, "esperaba las fotos del batch"
+    assert all(p["reply_to_message_id"] == 1 for p in photos)
+
+
 async def test_var_fixed_prompt_text():
     deps = make_deps()
     _use_seedream(deps)
     deps = await _msg(deps, text_message("/var de pie, frontal, elegante"))
     texts = _texts(deps)
     assert any(t.startswith("🎲 <b>Var</b>: generando 0/1 imágenes con Seedream 5.0...") for t in texts)
-    assert deps.gateway.calls_by_method("send_photo")
+    photos = deps.gateway.calls_by_method("send_photo")
+    assert photos
+    # la foto del /var responde al mensaje del comando (message_id=1).
+    assert photos[-1]["reply_to_message_id"] == 1
 
 
 async def test_var_short_prompt_validation():

@@ -179,6 +179,49 @@ async def test_single_yes_base_kb_refining_refine_and_delete_base(tmp_path, gate
     assert ref is not None and ref["provider"] == "comfyui"
 
 
+@pytest.mark.asyncio
+async def test_single_yes_refined_shows_elapsed_and_reply_to(tmp_path, gateway, refs_repo):
+    """La refinada cronometra su propio 2º stage y base/refinada responden al ancla.
+
+    ``run_refine_flow`` mide el refine y estampa ``elapsed_sec`` en el meta del
+    resultado refinado (paridad grok bot.py:4407-4411), así su caption ya no da
+    ``…``; y propaga ``reply_to`` (message_id del invocador) a la base y refinada.
+    """
+    downloader = object()
+    sender = ResultSender(gateway=gateway, downloader=downloader, refs=refs_repo)  # type: ignore[arg-type]
+    provider = _provider(tmp_path)
+    refine_uc = ResolveRefineUseCase(provider=provider, timeout=10.0)
+    token = refine_uc.register(user_id=USER_ID, job_id=None)
+    item = _item(tmp_path)
+    ui = ChatUI(gateway, CHAT_ID)
+    status = await ui.send_text("Editando imagen...")
+
+    _schedule_decision(refine_uc, token, "yes")
+    decision = await run_refine_flow(
+        ui,
+        item=item,
+        sender=sender,
+        refine_uc=refine_uc,
+        prefix="Edit",
+        status_id=status.message_id,
+        delete_status=True,
+        user_id=USER_ID,
+        token=token,
+        reply_to=42,
+    )
+
+    assert decision == RefineDecision.yes
+    photos = gateway.calls_by_method("send_photo")
+    assert len(photos) == 2  # base + refinada
+    # base y refinada responden al mensaje que invocó el flujo.
+    assert photos[0]["reply_to_message_id"] == 42
+    assert photos[1]["reply_to_message_id"] == 42
+    # la refinada muestra el tiempo REAL del 2º stage (no "…").
+    refined_caption = photos[1]["caption"]
+    assert "<b>Tiempo:</b> " in refined_caption
+    assert "<b>Tiempo:</b> …" not in refined_caption
+
+
 # --------------------------------------------------------------------------- #
 # single: no / timeout → base final con regen kb
 # --------------------------------------------------------------------------- #

@@ -184,10 +184,13 @@ async def handle_text(message: types.Message, deps: BotDeps) -> None:
             reply_markup=confirmation_keyboard(),
         )
         # C4: el pendiente queda atado a este mensaje concreto (chat/message_id)
-        # y a su dueño; en grupos otro usuario no puede consumirlo.
+        # y a su dueño; en grupos otro usuario no puede consumirlo. El
+        # ``source_message_id`` recuerda el texto original del usuario para que la
+        # imagen resultante responda a ESE mensaje (no al de confirmación).
         deps.pending.set(
             message.from_user.id, prompt,
             chat_id=message.chat.id, message_id=sent.message_id,
+            source_message_id=message.message_id,
         )
         return
     await _run_single_image(deps, message, cfg, prompt, uid=message.from_user.id, prefix="Prompt")
@@ -453,6 +456,7 @@ async def _process_album_edit(
                     sent = await make_sender(deps).send_image(
                         ui, ev, "Edit", status_id=status_id,
                         delete_status=False, owner_uid=uid,
+                        reply_to=anchor_message.message_id,
                     )
                     if sent is None:
                         # send_image ya editó el status con el error user-safe (R6/M2)
@@ -548,7 +552,14 @@ async def handle_confirm_yes(callback: types.CallbackQuery, deps: BotDeps) -> No
         await ui.edit_text(message_id, _NO_PENDING, reply_markup=None)
         await answer_callback(deps.gateway, callback)
         return
-    prompt = deps.pending.pop(uid)
+    entry = deps.pending.pop_entry(uid)
+    prompt = entry[0] if entry else None
+    if prompt is None:
+        await ui.edit_text(message_id, _NO_PENDING, reply_markup=None)
+        await answer_callback(deps.gateway, callback)
+        return
+    # El reply va al mensaje ORIGINAL del usuario (prompt), no al de confirmación.
+    reply_to = entry[1] if entry[1] is not None else callback.message.message_id
     cfg = deps.sessions.get_config(uid)
     model = model_display(cfg)
     if cfg.model == "grok_video":
@@ -557,7 +568,7 @@ async def handle_confirm_yes(callback: types.CallbackQuery, deps: BotDeps) -> No
         await answer_callback(deps.gateway, callback)
         await run_video_generation(
             deps, callback.message, uid=uid, cfg=cfg, prompt=prompt,
-            prefix="Prompt", status_id=message_id,
+            prefix="Prompt", status_id=message_id, reply_to=reply_to,
         )
         return
     await ui.edit_text(
@@ -568,7 +579,7 @@ async def handle_confirm_yes(callback: types.CallbackQuery, deps: BotDeps) -> No
     await answer_callback(deps.gateway, callback)
     await _run_single_image(
         deps, callback.message, cfg, prompt, uid=uid,
-        prefix="Prompt", status_id=message_id,
+        prefix="Prompt", status_id=message_id, reply_to=reply_to,
     )
 
 
@@ -719,6 +730,7 @@ async def _run_single_image(
     delete_status: bool = True,
     cancel_text: str = _EDIT_CANCEL_TEXT,
     job=None,
+    reply_to: int | None = None,
 ) -> None:
     ui = _chat_ui(deps, message)
     model = model_display(cfg)
@@ -746,6 +758,10 @@ async def _run_single_image(
         refine_uc=deps.refine_uc,
         job=job,
         job_manager=deps.job_manager if job is not None else None,
+        # El reply apunta al mensaje que invocó el flujo (texto/foto/`callback.message`
+        # en regen), salvo cuando el caller fijó un ``reply_to`` explícito (confirm-yes,
+        # que responde al prompt original del usuario).
+        reply_to=reply_to if reply_to is not None else message.message_id,
     )
 
 
