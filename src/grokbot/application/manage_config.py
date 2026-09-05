@@ -13,7 +13,6 @@ from dataclasses import dataclass, replace
 
 from grokbot.domain.catalog import MODELS, VALID_GROK_IMAGINE_PROVIDERS, VALID_GROK_IMAGINE_VARIANTS
 from grokbot.domain.user_config import (
-    VALID_COMFYUI_LORAS,
     VALID_COMFYUI_MODELS,
     VALID_VIDEO_ASPECT_RATIOS,
     VALID_VIDEO_DURATIONS,
@@ -32,10 +31,10 @@ _VALID_VIDEO_FIELDS = {
     "mode": VALID_VIDEO_MODES,
 }
 
+# ComfyUI se configura por flujo: solo el id de flujo (``model``) es editable.
+# ``lora``/``refine`` quedaron dormidos (no se ofrecen ni se aceptan).
 _VALID_COMFYUI_FIELDS = {
     "model": VALID_COMFYUI_MODELS,
-    "lora": VALID_COMFYUI_LORAS,
-    "refine": ("0", "1"),
 }
 
 
@@ -128,7 +127,7 @@ class UpdateUserConfigUseCase:
     # -- comfyui ------------------------------------------------------------
 
     def set_comfyui(self, user_id: int, **field) -> ConfigResult:
-        """Cambiar UN campo ComfyUI por llamada (``model=``, ``lora=``, ``refine=``)."""
+        """Cambiar el flujo ComfyUI (``model=<id de flujo>``). lora/refine dormidos."""
         if len(field) != 1:
             return ConfigResult(ok=False, changed=False, field="comfyui", value=field)
         (name, value), = field.items()

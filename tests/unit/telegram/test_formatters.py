@@ -49,10 +49,11 @@ def test_append_prompt_to_caption_no_prompt_returns_caption():
 
 
 def test_format_model_caption_comfyui():
-    model = {"comfyui_model": "krea2", "comfyui_lora": "none", "name": "ComfyUI"}
+    # El caption muestra el FLUJO (Grok Style), sin fila de LoRA (dormido).
+    model = {"comfyui_model": "grok_style"}
     out = f.format_model_caption(model, None, prompt="perro")
-    assert "<b>Modelo:</b> Krea 2" in out
-    assert "<b>LoRA:</b> Sin LoRA" in out
+    assert "<b>Modelo:</b> Grok Style" in out
+    assert "<b>LoRA:</b>" not in out
     assert "<b>Tiempo:</b> …" in out
     assert "<b>Prompt:</b> perro" in out
 
@@ -101,12 +102,12 @@ def test_model_display_grok_video_with_replicate_images():
 def test_model_display_comfyui():
     cfg = UserConfig(
         model="comfyui",
-        comfyui=ComfyUIConfig(model="krea2", lora="lightning", refine="1"),
+        comfyui=ComfyUIConfig(model="grok_style"),
     )
     m = f.model_display(cfg)
-    assert m["name"] == "ComfyUI (krea2 • lora lightning)"
-    assert m["comfyui_model"] == "krea2"
-    assert m["comfyui_lora"] == "lightning"
+    assert m["name"] == "Grok Style"
+    assert m["comfyui_model"] == "grok_style"
+    assert "Grok Style" in m["desc"]
 
 
 def test_validate_prompt_rules():
@@ -165,6 +166,5 @@ def test_multipose_summary_numbers_combos():
 def test_labels_constants_transcribed():
     assert f.VIDEO_MODEL_LABELS["grok-imagine-video"] == "Base"
     assert f.VIDEO_MODE_LABELS["spicy"] == "Spicy"
-    assert f.COMFYUI_CAPTION_MODEL_LABELS["krea2"] == "Krea 2"
-    assert f.COMFYUI_CAPTION_LORA_LABELS["multipose_batch"] == "Multi-pose ×5 (variables)"
+    assert f.COMFYUI_FLOW_LABELS["grok_style"] == "Grok Style"
     assert f.LIST_LABELS["poses"] == "Poses"

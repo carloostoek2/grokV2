@@ -35,37 +35,21 @@ VALID_VIDEO_MODELS = ("grok-imagine-video", "grok-imagine-video-1.5")
 VALID_VIDEO_MODES = ("fun", "normal", "spicy")
 
 # --- ComfyUI config constants. ---
-DEFAULT_COMFYUI_MODEL = "krea2"
+# ComfyUI se maneja por FLUJOS: cada flujo es un workflow API-format de ComfyUI
+# con su modelo/LoRA horneados en los nodos (un archivo por flujo en
+# ``providers/comfyui/workflows/templates/``). ``ComfyUIConfig.model`` guarda el
+# **id de flujo**; al seleccionar un flujo se manda ese workflow, sin elegir
+# modelo/LoRA por separado. Para añadir un flujo: 1) registrar aquí su (id,
+# nombre) y 2) dejar caer el template ``<id>.json`` (con ``_meta``).
+COMFYUI_FLOWS = (("grok_style", "Grok Style"),)
+DEFAULT_COMFYUI_MODEL = COMFYUI_FLOWS[0][0]
+VALID_COMFYUI_MODELS = tuple(_id for _id, _label in COMFYUI_FLOWS)
+COMFYUI_FLOW_LABELS = dict(COMFYUI_FLOWS)
+# ``lora``/``refine`` quedaron dormidos tras el slice HTTP/WS: el LoRA forma
+# parte del workflow y refine no se ofrece. Se conservan en la config persistida
+# por compat (from_record/to_record) pero no participan en la resolución.
 DEFAULT_COMFYUI_LORA = "none"
 DEFAULT_COMFYUI_REFINE = "1"  # "1" = final refine ON (JSON parity: str "0"/"1")
-VALID_COMFYUI_MODELS = (
-    "qwen",
-    "qwen_aio",
-    "krea2",
-    "krea2_raw",
-    "krea2_moody",
-    "wan_i2v",
-    "minimax_i2v",
-)
-VALID_COMFYUI_LORAS = (
-    "none",
-    "lightning",
-    "krea_nsfw",
-    "krea_snapshot",
-    "krea_both",
-    "krea_reddit",
-    "lightx2v",
-    "dr34ml4y",
-    "multiangle",
-    "multiangle_batch",
-    "multipose_batch",
-    "krea_edit",
-    "krea_edit_nsfw",
-    "krea_edit_snapshot",
-    "krea_edit_both",
-    "krea_snofs",
-    "qwen_snofs",
-)
 
 IDLE_STATE = "IDLE"
 AWAITING_SOURCE = "AWAITING_SOURCE"
@@ -195,7 +179,12 @@ class VideoConfig:
 
 @dataclass(frozen=True)
 class ComfyUIConfig:
-    """Persisted per-user ComfyUI model/lora/refine configuration."""
+    """Persisted per-user ComfyUI **flow** selection.
+
+    ``model`` es el id de flujo (p. ej. ``"grok_style"``); el workflow de ese
+    flujo trae su modelo/LoRA horneados. ``lora``/``refine`` quedan dormidos
+    (persistidos por compat; no participan en la resolución).
+    """
 
     model: str = DEFAULT_COMFYUI_MODEL
     lora: str = DEFAULT_COMFYUI_LORA
@@ -205,16 +194,15 @@ class ComfyUIConfig:
     def from_record(cls, rec: Mapping) -> "ComfyUIConfig":
         """Build from a plain-key mapping; obsolete/invalid values fall back.
 
-        Mirrors grok ``sessions.get_comfyui_config`` (e.g. retired ``realvisxl``
-        model -> default ``krea2``).
+        Cualquier valor legacy (retired ``realvisxl``, ``krea2``/``qwen``/
+        ``wan_i2v``/... del catálogo anterior) no está en ``VALID_COMFYUI_MODELS``
+        → cae al flujo default. ``lora`` se normaliza a ``"none"`` (dormido).
         """
         model = rec.get("model", DEFAULT_COMFYUI_MODEL)
         if model not in VALID_COMFYUI_MODELS:
             model = DEFAULT_COMFYUI_MODEL
 
-        lora = rec.get("lora", DEFAULT_COMFYUI_LORA)
-        if lora not in VALID_COMFYUI_LORAS:
-            lora = DEFAULT_COMFYUI_LORA
+        lora = DEFAULT_COMFYUI_LORA  # dormido: el LoRA vive en el workflow.
 
         refine = rec.get("refine", DEFAULT_COMFYUI_REFINE)
         if refine not in ("0", "1"):

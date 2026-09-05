@@ -74,34 +74,26 @@ def test_config_variant_keyboard():
     assert rows[1][0].text == "✅ Alta calidad"
 
 
-def test_config_comfyui_keyboard_model_and_lora_rows():
-    cfg = ComfyUIConfig(model="krea2", lora="none", refine="1")
+def test_config_comfyui_keyboard_lists_only_flow():
+    cfg = ComfyUIConfig(model="grok_style")
     data = flat_callback_data(kb.config_comfyui_keyboard(cfg))
-    assert "cfg:comfyui:model:qwen" in data
-    assert "cfg:comfyui:model:wan_i2v" in data
-    # krea2 no expone lightning (pertenece a qwen); sí krea_nsfw.
-    assert "cfg:comfyui:lora:lightning" not in data
-    assert "cfg:comfyui:lora:krea_nsfw" in data
-    # multipose_batch NO pertenece a krea2.
-    assert "cfg:comfyui:lora:multipose_batch" not in data
-    assert "cfg:comfyui:refine:0" in data  # toggle ON → data OFF
-    rows = kb.config_comfyui_keyboard(cfg).inline_keyboard
-    refine_text = [b.text for r in rows for b in r if b.callback_data and "refine" in b.callback_data][0]
-    assert refine_text == "✨ Refinar: ON"
+    # Un solo flujo (Grok Style) + navegación; sin modelo/LoRA/refine legacy.
+    assert data == ["cfg:comfyui:flow:grok_style", "cfg:back:model", "cfg:close"]
 
 
-def test_config_comfyui_qwen_exposes_lightning_lora():
-    cfg = ComfyUIConfig(model="qwen", lora="none", refine="1")
-    data = flat_callback_data(kb.config_comfyui_keyboard(cfg))
-    assert "cfg:comfyui:model:qwen" in data
-    assert "cfg:comfyui:lora:lightning" in data
-
-
-def test_config_comfyui_wan_lora_label_override():
-    cfg = ComfyUIConfig(model="wan_i2v", lora="none", refine="1")
+def test_config_comfyui_has_no_legacy_model_lora_refine_rows():
+    cfg = ComfyUIConfig(model="grok_style")
     rows = kb.config_comfyui_keyboard(cfg).inline_keyboard
     labels = [b.text for row in rows for b in row]
-    assert "✅ Full (calidad, 40 pasos)" in labels
+    assert labels[0] == "✅ Grok Style"
+    for row in rows:
+        for b in row:
+            if b.callback_data is None:
+                continue
+            assert not b.callback_data.startswith("cfg:comfyui:model:")
+            assert not b.callback_data.startswith("cfg:comfyui:lora:")
+            assert not b.callback_data.startswith("cfg:comfyui:refine:")
+    assert not any("Refinar" in b.text for row in rows for b in row)
 
 
 def test_config_video_keyboard_kie_includes_modes():

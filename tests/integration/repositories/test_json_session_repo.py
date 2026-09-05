@@ -32,7 +32,7 @@ def canonical_record() -> dict:
         "video_resolution": "720p",
         "video_model": "grok-imagine-video",
         "video_mode": "normal",
-        "comfyui_model": "krea2",
+        "comfyui_model": "grok_style",
         "comfyui_lora": "none",
         "comfyui_refine": "1",
         "_extra_user_key": "keep",
@@ -83,7 +83,7 @@ def test_get_config_loads_real_shape(tmp_path):
     assert config.video.aspect_ratio == "16:9"
     assert config.video.resolution == "720p"
     assert config.video.model == "grok-imagine-video"
-    assert config.comfyui.model == "krea2"
+    assert config.comfyui.model == "grok_style"
     assert config.comfyui.lora == "none"
     assert config.comfyui.refine == "1"
     assert config.source_path == "/tmp/anon/sources/111.jpg"
@@ -99,7 +99,7 @@ def test_save_config_preserves_extra_keys(tmp_path):
     raw = json.loads(path.read_text(encoding="utf-8"))[str(UID)]
     assert raw["model"] == "seedream"
     assert raw["_extra_user_key"] == "keep"  # merge no destructivo (extra keys)
-    assert raw["comfyui_model"] == "krea2"
+    assert raw["comfyui_model"] == "grok_style"
 
 
 def test_legacy_video_hourly_timestamps_purged_on_first_load(tmp_path):
@@ -128,6 +128,20 @@ def test_legacy_grok_provider_migrates_and_is_dropped_on_save(tmp_path):
     raw = json.loads(path.read_text(encoding="utf-8"))[str(UID)]
     assert "grok_provider" not in raw
     assert raw["grok_imagine_provider"] == "xai"
+
+
+def test_legacy_comfyui_flow_model_migrates_to_default(tmp_path):
+    """Un comfyui_model del catálogo anterior normaliza al flujo default (grok_style)."""
+    path = tmp_path / "sessions.json"
+    rec = canonical_record()
+    rec["comfyui_model"] = "krea2_moody"
+    write(path, {str(UID): rec})
+    repo = JsonSessionRepository(path)
+    config = repo.get_config(UID)
+    assert config.comfyui.model == "grok_style"
+    repo.save_config(UID, config)
+    raw = json.loads(path.read_text(encoding="utf-8"))[str(UID)]
+    assert raw["comfyui_model"] == "grok_style"
 
 
 def test_canonical_wins_over_legacy_when_both_present(tmp_path):

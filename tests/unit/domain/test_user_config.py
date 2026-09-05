@@ -19,7 +19,7 @@ REAL_GROK_SESSION_REC = {
     "video_model": "grok-imagine-video",
     "video_mode": "normal",
     "video_hourly_timestamps": [],
-    "comfyui_model": "krea2_moody",
+    "comfyui_model": "grok_style",
     "comfyui_lora": "none",
     "comfyui_refine": "0",
 }
@@ -35,7 +35,7 @@ def test_defaults_mirror_default_session_record():
     assert uc.video.resolution == "720p"
     assert uc.video.model == "grok-imagine-video"
     assert uc.video.mode == "normal"
-    assert uc.comfyui.model == "krea2"
+    assert uc.comfyui.model == "grok_style"
     assert uc.comfyui.lora == "none"
     assert uc.comfyui.refine == "1"
     assert uc.source_path is None
@@ -100,8 +100,10 @@ def test_comfyui_refine_preserved_as_str():
 
 
 def test_obsolete_comfyui_model_falls_back():
-    uc = UserConfig.from_record({"comfyui_model": "realvisxl"})
-    assert uc.comfyui.model == "krea2"
+    # realvisxl y los ids del catálogo anterior (krea2/qwen/wan_i2v/...) caen al flujo default.
+    for legacy in ("realvisxl", "krea2", "krea2_moody", "qwen", "wan_i2v"):
+        uc = UserConfig.from_record({"comfyui_model": legacy})
+        assert uc.comfyui.model == "grok_style"
 
 
 def test_unknown_keys_ignored():
@@ -149,7 +151,7 @@ def test_real_grok_session_record_loads_without_loss():
     assert uc.video.resolution == "480p"
     assert uc.video.model == "grok-imagine-video"
     assert uc.video.mode == "normal"
-    assert uc.comfyui.model == "krea2_moody"
+    assert uc.comfyui.model == "grok_style"
     assert uc.comfyui.refine == "0"
     assert uc.comfyui.refine_enabled is False
     assert uc.grok_imagine_provider == "kie"
@@ -163,6 +165,6 @@ def test_video_config_and_comfyui_config_standalone():
                                   "model": "grok-imagine-video-1.5", "mode": "fun"})
     assert vc.to_record() == {"duration": 15, "aspect_ratio": "3:2", "resolution": "480p",
                               "model": "grok-imagine-video-1.5", "mode": "fun"}
-    cc = ComfyUIConfig.from_record({"model": "wan_i2v", "lora": "lightx2v", "refine": "1"})
-    assert cc.to_record() == {"model": "wan_i2v", "lora": "lightx2v", "refine": "1"}
+    cc = ComfyUIConfig.from_record({"model": "grok_style", "lora": "none", "refine": "1"})
+    assert cc.to_record() == {"model": "grok_style", "lora": "none", "refine": "1"}
     assert cc.refine_enabled is True

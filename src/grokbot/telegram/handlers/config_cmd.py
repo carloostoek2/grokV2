@@ -27,6 +27,7 @@ from grokbot.domain.catalog import (
     resolve_grok_config,
 )
 from grokbot.domain.user_config import (
+    COMFYUI_FLOW_LABELS,
     VALID_VIDEO_ASPECT_RATIOS,
     VALID_VIDEO_DURATIONS,
     VALID_VIDEO_MODELS,
@@ -38,10 +39,8 @@ from grokbot.domain.user_config import (
 from grokbot.telegram.chat_ui import ChatUI
 from grokbot.telegram.deps import BotDeps
 from grokbot.telegram.formatters import (
-    COMFYUI_CONFIG_MODEL_LABELS,
     VIDEO_MODEL_LABELS,
     VIDEO_MODE_LABELS,
-    comfyui_config_lora_label,
     prov_label,
 )
 from grokbot.telegram.fsm_states import ConfigStates
@@ -135,20 +134,11 @@ def _video_screen_text(cfg, *, updated: bool = False, aspect_reset_msg: str | No
 def _comfyui_screen_text(cfg, *, updated: bool = False) -> str:
     cc = cfg.comfyui
     header = "Configuración actualizada ✅\n" if updated else "Configuración de ComfyUI (GPU propia):\n"
-    model_label = COMFYUI_CONFIG_MODEL_LABELS.get(cc.model, cc.model)
-    lora_label = comfyui_config_lora_label(cc.model, cc.lora)
-    refine_label = "ON ✨" if cc.refine == "1" else "OFF"
-    hint = (
-        "\nVideo: envía una foto + prompt (o responde a una foto) para generar el video."
-        if cc.model == "wan_i2v"
-        else ""
-    )
+    flow_name = COMFYUI_FLOW_LABELS.get(cc.model, cc.model)
     return (
         f"{header}"
-        f"<b>Modelo:</b> {model_label}\n"
-        f"<b>LoRA:</b> {lora_label}\n"
-        f"<b>Refinar:</b> {refine_label}\n\n"
-        f"Elige el modelo y el LoRA:{hint}"
+        f"<b>Flujo:</b> {flow_name}\n\n"
+        "Elige el flujo: cada uno trae su modelo y LoRA configurados en la GPU."
     )
 
 
@@ -560,36 +550,25 @@ async def handle_cfg_comfyui(callback: types.CallbackQuery, state: FSMContext, d
     ):
         return
     parts = callback.data.split(":")
-    if len(parts) != 4 or parts[2] not in ("model", "lora", "refine"):
+    if len(parts) != 4 or parts[2] != "flow":
         await answer_callback(deps.gateway, callback, "Opción inválida.", show_alert=True)
         return
-    kind, value = parts[2], parts[3]
+    flow_id = parts[3]
     gateway = deps.gateway
     uid = callback.from_user.id
     cfg = deps.sessions.get_config(uid)
-    current = getattr(cfg.comfyui, kind)
-    if value == current:
-        await answer_callback(gateway, callback, "Ya está activa esa opción.")
+    if flow_id == cfg.comfyui.model:
+        await answer_callback(gateway, callback, "Ya está activo ese flujo.")
         return
-    result = deps.update_config.set_comfyui(uid, **{kind: value})
+    result = deps.update_config.set_comfyui(uid, model=flow_id)
     if not result.ok:
-        msg = {
-            "model": "Modelo no disponible.",
-            "lora": "LoRA no disponible.",
-            "refine": "Opción inválida.",
-        }[kind]
-        await answer_callback(gateway, callback, msg, show_alert=True)
+        await answer_callback(gateway, callback, "Flujo no disponible.", show_alert=True)
         return
     deps.update_config.set_model(uid, "comfyui")
     await _show_configure_screen(callback.message, state, deps, "comfyui", uid=uid, updated=True)
     new_cfg = deps.sessions.get_config(uid)
-    if kind == "refine":
-        label = "ON ✨" if value == "1" else "OFF"
-    elif kind == "lora":
-        label = value
-    else:
-        label = new_cfg.comfyui.model
-    await answer_callback(gateway, callback, f"ComfyUI {kind}: {label}")
+    label = COMFYUI_FLOW_LABELS.get(new_cfg.comfyui.model, new_cfg.comfyui.model)
+    await answer_callback(gateway, callback, f"ComfyUI flujo: {label}")
 
 
 async def handle_cfg_back_model(callback: types.CallbackQuery, state: FSMContext, deps: BotDeps) -> None:

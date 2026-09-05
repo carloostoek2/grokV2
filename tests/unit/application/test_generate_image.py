@@ -179,11 +179,11 @@ async def test_generic_exception_reason_never_reprs(sessions):
     assert "Intenta de nuevo más tarde" in ev.reason
 
 
-async def test_comfyui_params_model_lora_refine_in_request(sessions):
+async def test_comfyui_params_flow_id_in_request(sessions):
     cfg = replace(
         UserConfig.defaults(),
         model="comfyui",
-        comfyui=ComfyUIConfig(model="krea2", lora="lightning", refine="0"),
+        comfyui=ComfyUIConfig(model="grok_style"),
     )
     sessions.save_config(USER_ID, cfg)
     prov = FakeComfyuiProvider(
@@ -196,9 +196,10 @@ async def test_comfyui_params_model_lora_refine_in_request(sessions):
     request, _ = prov.calls[0]
     assert request.provider == "comfyui"
     assert request.media_type is MediaType.IMAGE
-    assert request.params["model"] == "krea2"
-    assert request.params["lora"] == "lightning"
-    assert request.params["refine"] == "0"
+    # El request lleva el id de flujo; lora/refine quedaron dormidos (no viajan).
+    assert request.params["model"] == "grok_style"
+    assert "lora" not in request.params
+    assert "refine" not in request.params
 
 
 async def test_comfyui_prompts_multipose_in_request(sessions):

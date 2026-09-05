@@ -32,7 +32,7 @@ def build_video_request(
     no tiene campo ``video_model``; los providers lo leen de ``model_id``). Para
     ComfyUI se pasan model/lora en ``params`` para el guard ``supports()``.
     """
-    params = {"model": cfg.comfyui.model, "lora": cfg.comfyui.lora} if res.name == "comfyui" else {}
+    params = {"model": cfg.comfyui.model} if res.name == "comfyui" else {}
     return GenerationRequest(
         provider=res.name,
         model_id=res.model_id,

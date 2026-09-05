@@ -176,10 +176,11 @@ def test_set_comfyui_model_valid_persists(sessions):
     sessions.save_config(USER_ID, _cfg())
     uc = _uc(sessions)
 
-    res = uc.set_comfyui(USER_ID, model="qwen")
+    # Único flujo registrado (grok_style, default): seteárselo es no-op válido.
+    res = uc.set_comfyui(USER_ID, model="grok_style")
 
-    assert res.ok is True and res.changed is True
-    assert sessions.saved[-1][1].comfyui.model == "qwen"
+    assert res.ok is True and res.changed is False
+    assert sessions.saved[-1][1].comfyui.model == "grok_style"
 
 
 def test_set_comfyui_invalid_model_and_lora(sessions):
@@ -195,30 +196,28 @@ def test_set_comfyui_invalid_model_and_lora(sessions):
     assert len(sessions.saved) == 1  # solo el baseline
 
 
-def test_set_comfyui_refine_valid_invalid(sessions):
+def test_set_comfyui_dormant_fields_rejected(sessions):
+    """lora/refine quedaron dormidos: setearlos se rechaza (no se ofrecen)."""
     sessions.save_config(USER_ID, _cfg())
     uc = _uc(sessions)
 
-    ok = uc.set_comfyui(USER_ID, refine="0")
-    assert ok.ok is True and ok.changed is True
-    assert sessions.saved[-1][1].comfyui.refine == "0"
-
-    bad = uc.set_comfyui(USER_ID, refine="2")
-    assert bad.ok is False and bad.changed is False
-    assert len(sessions.saved) == 2
+    for field in ({"refine": "0"}, {"refine": "2"}, {"lora": "none"}):
+        res = uc.set_comfyui(USER_ID, **field)
+        assert res.ok is False and res.changed is False
+    assert len(sessions.saved) == 1  # solo el baseline
 
 
 def test_save_uses_seeded_fake_repo_persistence(sessions):
-    """El get→replace→save persiste y un segundo set no pisa el anterior."""
+    """El get→replace→save persiste; un no-op no pisa ni añade un save."""
     sessions.save_config(USER_ID, _cfg())
     uc = _uc(sessions)
     uc.set_model(USER_ID, "comfyui")
-    uc.set_comfyui(USER_ID, model="qwen")
     cfg = sessions.get_config(USER_ID)
     assert cfg.model == "comfyui"
-    assert cfg.comfyui.model == "qwen"
-    # baseline + model + comfyui = 3 saves.
-    assert len(sessions.saved) == 3
+    assert cfg.comfyui.model == "grok_style"  # flujo default
+    # Setear el mismo flujo (único registrado) no añade save.
+    uc.set_comfyui(USER_ID, model="grok_style")
+    assert len(sessions.saved) == 2  # baseline + model
 
 
 def test_saved_records_are_distinct_copies():

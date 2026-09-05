@@ -133,5 +133,15 @@
       "clip": ["3", 0]
     },
     "class_type": "LoraLoader"
+  },
+  "_meta": {
+    "id": "grok_style",
+    "name": "Grok Style",
+    "media_type": "image",
+    "positive_node": "4",
+    "negative_node": "27",
+    "seed_nodes": ["1", "17"],
+    "save_nodes": ["19"],
+    "supports_source": false
   }
 }

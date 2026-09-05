@@ -28,12 +28,12 @@ _GENERIC_ERROR_MSG = "Error en la generación. Intenta de nuevo más tarde."
 # --- Helpers puros -----------------------------------------------------------
 
 def _comfy_params(cfg: UserConfig, prompts: list[str] | None) -> dict:
-    """Parámetros ComfyUI (model/lora/refine) + ``prompts`` multipose si aplica."""
-    params = {
-        "model": cfg.comfyui.model,
-        "lora": cfg.comfyui.lora,
-        "refine": cfg.comfyui.refine,
-    }
+    """Parámetros ComfyUI: el id de flujo (``cfg.comfyui.model``).
+
+    El modelo/LoRA del flujo los define su workflow; lora/refine quedaron
+    dormidos. ``prompts`` multipose ya no aplica (sin flujo qwen).
+    """
+    params = {"model": cfg.comfyui.model}
     if prompts:
         params["prompts"] = list(prompts)
     return params

@@ -20,7 +20,11 @@ from grokbot.domain.catalog import (
     MODELS,
     resolve_grok_config,
 )
-from grokbot.domain.user_config import UserConfig, video_provider_for_config
+from grokbot.domain.user_config import (
+    COMFYUI_FLOW_LABELS,
+    UserConfig,
+    video_provider_for_config,
+)
 
 # Telegram text limits (bot.py:73-75).
 TELEGRAM_MAX_CAPTION_LEN = 1024
@@ -44,66 +48,10 @@ VIDEO_MODE_LABELS = {
     "spicy": "Spicy",
 }
 
-# Captions de modelos ComfyUI (bot.py:315-323).
-COMFYUI_CAPTION_MODEL_LABELS = {
-    "qwen": "Qwen-Image-Edit 2511",
-    "qwen_aio": "Qwen AIO v23 (Rápido)",
-    "krea2": "Krea 2",
-    "krea2_raw": "Krea 2 RAW",
-    "krea2_moody": "Moody (Krea 2 Mix)",
-    "wan_i2v": "Wan 2.2",
-    "minimax_i2v": "MiniMax H3",
-}
-# Captions de LoRAs ComfyUI (bot.py:324-342).
-COMFYUI_CAPTION_LORA_LABELS = {
-    "none": "Sin LoRA",
-    "lightning": "Lightning 4 pasos",
-    "multiangle": "Multi-ángulo (auto)",
-    "multiangle_batch": "Multi-ángulo ×5 (auto)",
-    "multipose_batch": "Multi-pose ×5 (variables)",
-    "krea_nsfw": "NSFW V4",
-    "krea_snapshot": "Realistic Snapshot",
-    "krea_both": "NSFW V4 + Realistic Snapshot",
-    "krea_reddit": "Reddit (textura + phone)",
-    "krea_snofs": "SNOFS v1.3D",
-    "qwen_snofs": "SNOFS v1.3",
-    "krea_edit": "✏️ Editar (Identity)",
-    "krea_edit_nsfw": "✏️ Editar + NSFW",
-    "krea_edit_snapshot": "✏️ Editar + Snapshot",
-    "krea_edit_both": "✏️ Editar + NSFW + Snapshot",
-    "lightx2v": "lightx2v (rápido)",
-    "dr34ml4y": "DR34ML4Y (All-In-One NSFW)",
-}
-
-# Labels del panel /config ComfyUI (config_flow.py:125-152).
-COMFYUI_CONFIG_MODEL_LABELS = {
-    "qwen": "Qwen-Image-Edit 2511",
-    "qwen_aio": "Qwen AIO v23 (Rápido)",
-    "krea2": "Krea 2 (Turbo)",
-    "krea2_raw": "Krea 2 (RAW)",
-    "krea2_moody": "Moody (Krea 2 Mix)",
-    "wan_i2v": "Wan 2.2 (video)",
-    "minimax_i2v": "MiniMax H3 (video)",
-}
-COMFYUI_CONFIG_LORA_LABELS = {
-    "none": "Sin LoRA",
-    "lightning": "Lightning 4 pasos",
-    "krea_nsfw": "Krea2 NSFW V4",
-    "krea_snapshot": "Realistic Snapshot",
-    "krea_both": "NSFW V4 + Realistic Snapshot",
-    "krea_reddit": "Reddit (textura + phone)",
-    "krea_snofs": "SNOFS v1.3D",
-    "qwen_snofs": "SNOFS v1.3",
-    "krea_edit": "✏️ Editar (Identity Edit)",
-    "krea_edit_nsfw": "✏️ Editar + NSFW V4",
-    "krea_edit_snapshot": "✏️ Editar + Snapshot",
-    "krea_edit_both": "✏️ Editar + NSFW + Snapshot",
-    "lightx2v": "Rápido (lightx2v)",
-    "dr34ml4y": "DR34ML4Y (All-In-One NSFW)",
-    "multiangle": "🎲 Multi-ángulo (auto)",
-    "multiangle_batch": "🎲 Multi-ángulo ×5 (auto)",
-    "multipose_batch": "🎲 Multi-pose ×5 (variables)",
-}
+# Labels de ComfyUI viven en ``domain.user_config.COMFYUI_FLOW_LABELS``
+# (id de flujo → nombre). Cada flujo = un workflow API-format con su modelo/LoRA
+# horneados; no hay modelo/LoRA separados ni LoRAs que mostrar (lora/refine
+# quedaron dormidos tras el slice HTTP/WS).
 
 # Bandeja de warning para enlaces temporales (bot.py:264-266). Se muestra junto
 # a la URL de recuperación de un video no enviable por Telegram (R10, privado).
@@ -119,23 +67,6 @@ def escape(text: str) -> str:
 def prov_label(prov: str) -> str:
     """Label corto de proveedor (bot.py:247-248)."""
     return {"xai": "xAI", "replicate": "Replicate", "kie": "Kie.ai"}.get(prov, prov)
-
-
-def comfyui_config_lora_label(model: str, key: str) -> str:
-    """Label de LoRA en el panel /config, con overrides de wan_i2v (config_flow 173-181)."""
-    if model == "wan_i2v":
-        if key == "none":
-            return "Full (calidad, 40 pasos)"
-        if key == "lightx2v":
-            return "Rápido (lightx2v, 4×)"
-        if key == "dr34ml4y":
-            return "DR34ML4Y (posiciones NSFW, 24 pasos)"
-    return COMFYUI_CONFIG_LORA_LABELS.get(key, key)
-
-
-def caption_lora_label(key: str) -> str:
-    """Label de LoRA en captions de resultados (bot.py:324-342)."""
-    return COMFYUI_CAPTION_LORA_LABELS.get(key, key)
 
 
 def format_elapsed(sec: int | float | None) -> str:
@@ -179,15 +110,17 @@ def append_prompt_to_caption(caption: str, prompt: str) -> str:
 def format_model_caption(
     model: dict, elapsed_sec: int | None, prompt: str | None = None
 ) -> str:
-    """Caption con Modelo / LoRA (ComfyUI) / tiempo + prompt (bot.py:380-400)."""
+    """Caption de modelo + tiempo + prompt (bot.py:380-400).
+
+    ComfyUI muestra el **flujo** (``comfyui_model`` = id de flujo → nombre de
+    ``domain.COMFYUI_FLOW_LABELS``); sin fila de LoRA (el LoRA vive en el
+    workflow, no es configurable).
+    """
     cm = model.get("comfyui_model")
     if cm:
-        mlabel = COMFYUI_CAPTION_MODEL_LABELS.get(cm, cm) or "?"
-        cl = model.get("comfyui_lora")
-        llabel = COMFYUI_CAPTION_LORA_LABELS.get(cl, cl) or "Sin LoRA"
+        mlabel = COMFYUI_FLOW_LABELS.get(cm, cm) or "?"
         body = (
             f"<b>Modelo:</b> {escape(mlabel)}\n"
-            f"<b>LoRA:</b> {escape(llabel)}\n"
             f"<b>Tiempo:</b> {format_elapsed(elapsed_sec)}"
         )
     else:
@@ -256,11 +189,11 @@ def model_display(cfg: UserConfig) -> dict:
         return m
     if cfg.model == "comfyui":
         m = dict(base)
-        m["comfyui_model"] = cfg.comfyui.model
-        m["comfyui_lora"] = cfg.comfyui.lora
-        m["comfyui_refine"] = cfg.comfyui.refine
-        m["name"] = f"ComfyUI ({cfg.comfyui.model} • lora {cfg.comfyui.lora})"
-        m["desc"] = f"ComfyUI en la GPU — modelo {cfg.comfyui.model}, LoRA {cfg.comfyui.lora}"
+        flow = cfg.comfyui.model
+        flow_name = COMFYUI_FLOW_LABELS.get(flow, flow)
+        m["comfyui_model"] = flow
+        m["name"] = flow_name
+        m["desc"] = f"Imagen en tu GPU (ComfyUI) — flujo {flow_name}."
         return m
     return base
 

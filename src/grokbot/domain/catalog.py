@@ -44,7 +44,7 @@ MODELS: dict[str, dict] = {
         "key": "comfyui",
         "id": "comfyui",
         "name": "ComfyUI (GPU propia)",
-        "desc": "Generación/edición con ComfyUI en la GPU de Vast: Krea 2 / Moody (imagen) y Wan 2.2 (video)",
+        "desc": "Imagen con ComfyUI en tu GPU — por flujos (hoy: Grok Style)",
         "provider": "comfyui",
     },
 }

@@ -13,6 +13,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from grokbot.domain.catalog import GROK_IMAGINE_VARIANTS, MODELS, resolve_grok_config
 from grokbot.domain.user_config import (
+    COMFYUI_FLOW_LABELS,
     VALID_VIDEO_ASPECT_RATIOS,
     VALID_VIDEO_DURATIONS,
     VALID_VIDEO_MODES,
@@ -23,10 +24,8 @@ from grokbot.domain.user_config import (
     kie_video_aspect_ratios,
 )
 from grokbot.telegram.formatters import (
-    COMFYUI_CONFIG_MODEL_LABELS,
     VIDEO_MODEL_LABELS,
     VIDEO_MODE_LABELS,
-    comfyui_config_lora_label,
     prov_label,
 )
 
@@ -143,53 +142,21 @@ def config_variant_keyboard(cfg: UserConfig) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-# LoRAs válidos por modelo ComfyUI (config_flow.py:153-170).
-_COMFYUI_LORAS_BY_MODEL = {
-    "qwen": ("none", "lightning", "qwen_snofs", "multiangle", "multiangle_batch", "multipose_batch"),
-    "qwen_aio": ("none",),
-    "krea2": (
-        "none", "krea_nsfw", "krea_snapshot", "krea_both", "krea_reddit", "krea_snofs",
-        "krea_edit", "krea_edit_nsfw", "krea_edit_snapshot", "krea_edit_both",
-    ),
-    "krea2_raw": (
-        "none", "krea_nsfw", "krea_snapshot", "krea_both", "krea_reddit", "krea_snofs",
-        "krea_edit", "krea_edit_nsfw", "krea_edit_snapshot", "krea_edit_both",
-    ),
-    "krea2_moody": (
-        "none", "krea_nsfw", "krea_snapshot", "krea_both", "krea_reddit", "krea_snofs",
-        "krea_edit", "krea_edit_nsfw", "krea_edit_snapshot", "krea_edit_both",
-    ),
-    "wan_i2v": ("none", "lightx2v", "dr34ml4y"),
-    "minimax_i2v": ("none",),
-}
-
-
 def config_comfyui_keyboard(cfg: ComfyUIConfig) -> InlineKeyboardMarkup:
-    """Pantalla ComfyUI: modelo + LoRAs válidas + toggle refine."""
+    """Pantalla ComfyUI: un botón por **flujo** (por nombre).
+
+    Cada flujo trae su modelo/LoRA en el workflow; no hay selectores de
+    modelo/LoRA/refine (dormidos tras el slice HTTP/WS).
+    """
     rows = []
-    for k in ("qwen", "qwen_aio", "krea2", "krea2_raw", "krea2_moody", "wan_i2v", "minimax_i2v"):
-        mark = "✅ " if k == cfg.model else "• "
+    for flow_id, flow_name in COMFYUI_FLOW_LABELS.items():
+        mark = "✅ " if flow_id == cfg.model else "• "
         rows.append([
             InlineKeyboardButton(
-                text=f"{mark}{COMFYUI_CONFIG_MODEL_LABELS.get(k, k)}",
-                callback_data=f"cfg:comfyui:model:{k}",
+                text=f"{mark}{flow_name}",
+                callback_data=f"cfg:comfyui:flow:{flow_id}",
             )
         ])
-    for k in _COMFYUI_LORAS_BY_MODEL.get(cfg.model, ("none",)):
-        mark = "✅ " if k == cfg.lora else "• "
-        rows.append([
-            InlineKeyboardButton(
-                text=f"{mark}{comfyui_config_lora_label(cfg.model, k)}",
-                callback_data=f"cfg:comfyui:lora:{k}",
-            )
-        ])
-    refine_on = cfg.refine == "1"
-    rows.append([
-        InlineKeyboardButton(
-            text=("✨ Refinar: ON" if refine_on else "✨ Refinar: OFF"),
-            callback_data=f"cfg:comfyui:refine:{'0' if refine_on else '1'}",
-        )
-    ])
     rows.append([InlineKeyboardButton(text="← Modelo", callback_data="cfg:back:model")])
     rows.append([InlineKeyboardButton(text="Cerrar", callback_data="cfg:close")])
     return InlineKeyboardMarkup(inline_keyboard=rows)

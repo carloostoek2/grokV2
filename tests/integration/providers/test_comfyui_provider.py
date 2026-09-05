@@ -156,9 +156,10 @@ async def test_missing_template_combo_raises(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_m2_video_request_with_image_model_raises(tmp_path):
+async def test_m2_video_request_with_image_flow_raises(tmp_path):
     prov = _provider(FakeTransport("box"), tmp_path)
-    req = _req(media_type=MediaType.VIDEO, params={"model": "krea2", "lora": "none"})
+    # grok_style es un flujo de imagen: un request VIDEO es un seam del caller.
+    req = _req(media_type=MediaType.VIDEO, params={"model": "grok_style"})
 
     with pytest.raises(ProviderInputError) as exc:
         await prov.generate(req, source_image=PNG_1x1)
@@ -189,11 +190,12 @@ async def test_m1_invalid_model_or_lora_raises_before_transport(params, tmp_path
 async def test_supports_routing(tmp_path):
     prov = _provider(FakeTransport("box"), tmp_path)
 
-    # Only template-backed combos are supported (v1: krea2/none image).
-    assert prov.supports(_req(media_type=MediaType.IMAGE, params={"model": "krea2", "lora": "none"}))
-    assert not prov.supports(_req(media_type=MediaType.IMAGE, params={"model": "qwen", "lora": "none"}))
-    assert not prov.supports(_req(media_type=MediaType.VIDEO, params={"model": "krea2", "lora": "none"}))
-    assert not prov.supports(_req(media_type=MediaType.VIDEO, params={"model": "wan_i2v", "lora": "none"}))
+    # Solo los flujos con template son soportados (v1: grok_style / imagen).
+    assert prov.supports(_req(media_type=MediaType.IMAGE))  # default grok_style
+    assert prov.supports(_req(media_type=MediaType.IMAGE, params={"model": "grok_style"}))
+    assert not prov.supports(_req(media_type=MediaType.IMAGE, params={"model": "qwen"}))
+    assert not prov.supports(_req(media_type=MediaType.VIDEO, params={"model": "grok_style"}))  # flujo de imagen
+    assert not prov.supports(_req(media_type=MediaType.VIDEO, params={"model": "wan_i2v"}))
     assert not prov.supports(
         GenerationRequest(provider="xai", model_id="x", media_type=MediaType.IMAGE, prompt="x")
     )

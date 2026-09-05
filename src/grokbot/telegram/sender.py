@@ -99,7 +99,7 @@ def is_album_item(item: ItemResult) -> bool:
 def caption_model_from_request(item: ItemResult) -> dict | None:
     """Reconstruir un dict de modelo para el caption desde ``ItemResult.request``.
 
-    Devuelve keys ``comfyui_model``/``comfyui_lora`` para resultados ComfyUI (el
+    Devuelve la key ``comfyui_model`` (id de flujo) para resultados ComfyUI (el
     formato que espera ``formatters.format_model_caption``); None para el resto
     (el caption muestra el prefijo/variante).
     """
@@ -108,10 +108,9 @@ def caption_model_from_request(item: ItemResult) -> dict | None:
         return None
     params = req.params or {}
     model = params.get("model")
-    lora = params.get("lora")
     if model is None:
         return None
-    return {"comfyui_model": model, "comfyui_lora": lora or "none"}
+    return {"comfyui_model": model}
 
 
 class ResultSender:
