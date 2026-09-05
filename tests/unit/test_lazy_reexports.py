@@ -101,7 +101,8 @@ def test_repositories_lazy_no_arrastra_json_repos_ni_rompe_api():
         + (
             "from grokbot.repositories import ("
             "JsonSessionRepository, JsonVariablesRepository, "
-            "JsonGenerationRefsRepository, write_json_atomic)\n"
+            "JsonGenerationRefsRepository, write_json_atomic, "
+            "IntegrateRefsRepository, DiskIntegrateRefsRepository)\n"
             "print('repositories api ok')\n"
         )
     )

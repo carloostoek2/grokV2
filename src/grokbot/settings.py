@@ -62,6 +62,10 @@ class Settings(BaseSettings):
     def sources_dir(self) -> Path:
         return self.data_dir / "sources"
 
+    @property
+    def integrate_refs_dir(self) -> Path:
+        return self.data_dir / "integrate_refs"
+
     @field_validator("allowed_telegram_ids", "variables_admin_ids", mode="before")
     @classmethod
     def _parse_id_set(cls, v: object) -> object:

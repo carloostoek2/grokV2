@@ -91,7 +91,7 @@ def test_comfyui_port_int(monkeypatch):
 
 
 def test_data_dir_default_and_derived_paths(monkeypatch):
-    """D1: GROK_DATA_DIR absent -> Path('data') and 4 derived repo paths."""
+    """D1: GROK_DATA_DIR absent -> Path('data') and derived repo paths."""
     _set_required(monkeypatch)
     settings = Settings()
     assert settings.data_dir == Path("data")
@@ -100,6 +100,7 @@ def test_data_dir_default_and_derived_paths(monkeypatch):
     assert settings.generation_refs_file == Path("data") / "generation_refs.json"
     assert settings.packages_dir == Path("data") / "variables_packages"
     assert settings.sources_dir == Path("data") / "sources"
+    assert settings.integrate_refs_dir == Path("data") / "integrate_refs"
 
 
 def test_data_dir_env_override(monkeypatch):
@@ -111,6 +112,7 @@ def test_data_dir_env_override(monkeypatch):
     assert settings.sessions_file == Path("/tmp/grokdata") / "sessions.json"
     assert settings.packages_dir == Path("/tmp/grokdata") / "variables_packages"
     assert settings.sources_dir == Path("/tmp/grokdata") / "sources"
+    assert settings.integrate_refs_dir == Path("/tmp/grokdata") / "integrate_refs"
 
 
 def test_import_does_not_instantiate(monkeypatch):

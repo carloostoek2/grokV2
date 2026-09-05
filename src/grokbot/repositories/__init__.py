@@ -19,12 +19,14 @@ __all__ = [
     "VariablesRepository",
     "GenerationRefsRepository",
     "SourceFacesRepository",
+    "IntegrateRefsRepository",
     "write_json_atomic",
     "JsonSessionRepository",
     "JsonVariablesRepository",
     "DEFAULT_LISTS",
     "JsonGenerationRefsRepository",
     "DiskSourceFacesRepository",
+    "DiskIntegrateRefsRepository",
 ]
 
 # Mapa nombre público → submódulo que lo define (carga lazy bajo demanda).
@@ -34,12 +36,14 @@ _SOURCES = {
         "VariablesRepository",
         "GenerationRefsRepository",
         "SourceFacesRepository",
+        "IntegrateRefsRepository",
         "write_json_atomic",
     ],
     "grokbot.repositories.json_session_repo": ["JsonSessionRepository"],
     "grokbot.repositories.json_variables_repo": ["JsonVariablesRepository", "DEFAULT_LISTS"],
     "grokbot.repositories.generation_refs_repo": ["JsonGenerationRefsRepository"],
     "grokbot.repositories.disk_source_faces": ["DiskSourceFacesRepository"],
+    "grokbot.repositories.disk_integrate_refs": ["DiskIntegrateRefsRepository"],
 }
 _NAMES = {name: mod for mod, names in _SOURCES.items() for name in names}
 
