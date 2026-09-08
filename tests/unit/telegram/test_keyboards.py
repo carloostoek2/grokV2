@@ -83,6 +83,7 @@ def test_config_comfyui_keyboard_lists_only_flow():
         "cfg:comfyui:flow:donut_face",
         "cfg:comfyui:flow:agil_solo",
         "cfg:comfyui:flow:agil_nsfw",
+        "cfg:comfyui:flow:agil_moody",
         "cfg:back:model",
         "cfg:close",
     ]

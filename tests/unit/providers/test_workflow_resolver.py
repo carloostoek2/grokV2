@@ -18,7 +18,7 @@ def test_get_flow_grok_style_returns_flow():
 
 def test_flows_returns_registered_flows():
     ids = {f.id for f in flows()}
-    assert ids == {"grok_style", "donut_face", "agil_solo", "agil_nsfw"}
+    assert ids == {"grok_style", "donut_face", "agil_solo", "agil_nsfw", "agil_moody"}
 
 
 def test_get_flow_donut_face():

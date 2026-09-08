@@ -46,6 +46,7 @@ COMFYUI_FLOWS = (
     ("donut_face", "Donut Face"),
     ("agil_solo", "Ágil solo"),
     ("agil_nsfw", "Ágil NSFW"),
+    ("agil_moody", "Ágil Moody"),
 )
 DEFAULT_COMFYUI_MODEL = COMFYUI_FLOWS[0][0]
 VALID_COMFYUI_MODELS = tuple(_id for _id, _label in COMFYUI_FLOWS)
