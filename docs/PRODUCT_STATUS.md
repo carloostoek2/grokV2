@@ -2,7 +2,7 @@
 
 > Fuente única de estado del producto `grokbot` (@grokV2). Arquitectura objetivo:
 > `docs/SPEC_REFACTOR.md`. Fecha de consolidación: 2026-09-05.
-> HEAD verificado: `622ee5e` — suite completa **659 passed** · baseline `grok/**` intacto.
+> HEAD verificado: `622ee5e` + fix Replicate i2i — suite completa **682 passed** · baseline `grok/**` intacto.
 > Wave de hardening R8/R9/R10 + smoke live + deploy (2026-09-04) cerrados (detalle §3/§5) y
 > **wave-2/R4 cerrada 2026-09-05**: los **9 flujos** que degradaban D8 ya NO degradan —
 > operan con copy byte-parity de grok (§2/§3). `D8_COMMANDS == ()`. **Deploy: grokV2 corre
@@ -195,6 +195,15 @@ tests offline NO lo veían**: los fakes de telegram construyen el mensaje del pa
 simulan el mensaje del bot (from_user = bot). Suite **521 passed**. Tras el fix el owner
 validó en vivo el recorrido completo de §4.3 y reportó **todo ok** (36 updates manejados,
 0 errores). Registro completo en el residual registry.
+
+**Replicate i2i — hallazgo 2026-09-06:** la conexión con la API está sana (token válido,
+`POST /v1/predictions` 201). Face Swap y Seedream t2i llegan bien. La edición de foto con
+Grok Imagine vía Replicate fallaba: el provider enviaba un `BytesIO` **sin nombre**, el SDK
+lo codificaba como `application/octet-stream` (`.bin`) y el modelo respondía
+`Invalid image format '.bin'`. Eso se envolvía como error transitorio y el retry de imagen
+disparaba predicciones extra + HTTP 429. Fix: buffer con extensión según magic bytes
+(paridad grok `image_data.name`) y `ModelError` de predicción mapeado a
+`ProviderGenerationError` (terminal, sin retry). Aplica al reiniciar `grok-bot.service`.
 
 ---
 

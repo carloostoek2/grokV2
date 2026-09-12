@@ -20,11 +20,14 @@ from grokbot.domain.generation import (
 )
 from grokbot.providers.base import (
     DEFAULT_IMAGE_ASPECT_RATIO,
+    ProviderAuthenticationError,
     ProviderError,
     ProviderGenerationError,
     ProviderInputError,
+    ProviderRateLimitError,
     ProviderUnavailableError,
     bytes_to_data_uri,
+    detect_image_mime,
 )
 
 _SEEDREAM_ID = MODELS["seedream"]["id"]
@@ -47,6 +50,49 @@ def _replicate_kind(model_id: str) -> str:
     if model_id.startswith(_GROK_REPLICATE_PREFIX):
         return "grok"
     return "other"
+
+
+def _named_image_buffer(data: bytes) -> io.BytesIO:
+    """Wrap image bytes so Replicate infers jpeg/png/webp, not ``application/octet-stream``.
+
+    The SDK's ``base64_encode_file`` guesses MIME from ``file.name``. A nameless
+    ``BytesIO`` becomes ``.bin``, which Grok Imagine rejects (``Invalid image
+    format '.bin'``). grok/bot.py sets ``image_data.name = "image.jpg"`` on the
+    Telegram download; we set the extension from magic bytes instead.
+    """
+    _mime, ext = detect_image_mime(data)
+    buf = io.BytesIO(data)
+    buf.name = f"image.{ext}"
+    return buf
+
+
+def _wrap_run_error(exc: Exception, *, user_message: str) -> ProviderError:
+    """Map SDK/network exceptions to the typed provider hierarchy (R8).
+
+    A failed *prediction* (``ModelError``, duck-typed via ``.prediction``) is
+    terminal: retrying invalid-input failures created extra 429s. HTTP 429 stays
+    retryable; 401/403 is auth; everything else stays transient unavailable.
+    """
+    status = getattr(exc, "status", None)
+    if status == 429:
+        return ProviderRateLimitError(
+            f"Replicate rate-limited: {type(exc).__name__}",
+            user_message=user_message,
+        )
+    if status in (401, 403):
+        return ProviderAuthenticationError(
+            f"Replicate auth failed: {type(exc).__name__}",
+            user_message=user_message,
+        )
+    if getattr(exc, "prediction", None) is not None:
+        return ProviderGenerationError(
+            f"Replicate prediction failed: {type(exc).__name__}",
+            user_message=user_message,
+        )
+    return ProviderUnavailableError(
+        f"Replicate run failed: {type(exc).__name__}",
+        user_message=user_message,
+    )
 
 
 def _normalize_output_urls(output) -> list[str]:
@@ -107,7 +153,7 @@ class ReplicateProvider:
                 input_data["image_input"] = [bytes_to_data_uri(source_image)]
                 input_data["size"] = "2K"
             else:
-                input_data["image"] = io.BytesIO(source_image)
+                input_data["image"] = _named_image_buffer(source_image)
                 extra_kwargs["file_encoding_strategy"] = "base64"
         elif kind == "grok":
             input_data["aspect_ratio"] = request.aspect_ratio or DEFAULT_IMAGE_ASPECT_RATIO
@@ -119,9 +165,9 @@ class ReplicateProvider:
             )
         except ProviderError:
             raise
-        except Exception as exc:  # network/SDK errors -> transient unavailable
-            raise ProviderUnavailableError(
-                f"Replicate run failed: {exc}",
+        except Exception as exc:
+            raise _wrap_run_error(
+                exc,
                 user_message="Error en la generación. Intenta de nuevo más tarde.",
             ) from exc
 
@@ -155,8 +201,8 @@ class ReplicateProvider:
         """
         client = self._resolve_client()
         input_data = {
-            "swap_image": io.BytesIO(swap_image),
-            "input_image": io.BytesIO(input_image),
+            "swap_image": _named_image_buffer(swap_image),
+            "input_image": _named_image_buffer(input_image),
         }
         try:
             output = await asyncio.to_thread(
@@ -168,9 +214,9 @@ class ReplicateProvider:
             )
         except ProviderError:
             raise
-        except Exception as exc:  # network/SDK errors -> transient unavailable
-            raise ProviderUnavailableError(
-                f"Replicate face swap failed: {exc}",
+        except Exception as exc:
+            raise _wrap_run_error(
+                exc,
                 user_message="Error en el face swap. Intenta de nuevo más tarde.",
             ) from exc
 

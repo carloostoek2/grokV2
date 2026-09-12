@@ -5,9 +5,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from grokbot.domain.catalog import MODELS
+from grokbot.providers.base import (
+    ProviderGenerationError,
+    ProviderRateLimitError,
+    ProviderUnavailableError,
+)
 from grokbot.providers.replicate_provider import (
+    _named_image_buffer,
     _normalize_output_urls,
     _replicate_kind,
+    _wrap_run_error,
 )
 
 
@@ -40,6 +47,35 @@ def test_normalize_list_of_mixed():
 def test_normalize_none_and_empty():
     assert _normalize_output_urls(None) == []
     assert _normalize_output_urls([]) == []
+
+
+def test_named_image_buffer_sets_extension_from_magic():
+    png = _named_image_buffer(b"\x89PNG\r\n\x1a\n" + b"\x00" * 8)
+    jpeg = _named_image_buffer(b"\xff\xd8\xff\xe0" + b"\x00" * 8)
+    webp = _named_image_buffer(b"RIFF" + b"\x00" * 4 + b"WEBP" + b"\x00" * 4)
+    assert png.name == "image.png"
+    assert jpeg.name == "image.jpg"
+    assert webp.name == "image.webp"
+    assert png.getvalue().startswith(b"\x89PNG")
+
+
+def test_wrap_run_error_prediction_vs_network():
+    class _Pred(Exception):
+        prediction = object()
+
+    class _Limited(Exception):
+        status = 429
+
+    user = "safe"
+    gen = _wrap_run_error(_Pred("bad"), user_message=user)
+    assert isinstance(gen, ProviderGenerationError)
+    assert gen.retryable is False
+    assert gen.user_message == user
+    limited = _wrap_run_error(_Limited("slow"), user_message=user)
+    assert isinstance(limited, ProviderRateLimitError)
+    net = _wrap_run_error(RuntimeError("boom"), user_message=user)
+    assert isinstance(net, ProviderUnavailableError)
+    assert net.retryable is True
 
 
 def test_kind_seedream_faceswap_grok_other():

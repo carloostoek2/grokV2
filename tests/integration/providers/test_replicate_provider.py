@@ -13,8 +13,10 @@ from grokbot.domain.generation import (
     MediaType,
 )
 from grokbot.providers.base import (
+    ProviderAuthenticationError,
     ProviderGenerationError,
     ProviderInputError,
+    ProviderRateLimitError,
     ProviderUnavailableError,
 )
 from grokbot.providers.replicate_provider import ReplicateProvider
@@ -75,6 +77,21 @@ async def test_grok_t2i_uses_request_aspect_ratio_when_set():
 
 
 @pytest.mark.asyncio
+async def test_grok_i2i_names_buffer_from_magic_bytes():
+    """Replicate infers MIME from file.name; a nameless BytesIO becomes .bin."""
+    client = FakeClient()
+    prov = ReplicateProvider(API_TOKEN, client=client)
+    png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
+    await prov.generate(_req("grok"), source_image=png)
+    model_id, input_data, kwargs = client.calls[0]
+    assert model_id == GROK_REPLICATE_ID
+    assert isinstance(input_data["image"], io.BytesIO)
+    assert input_data["image"].name == "image.png"
+    assert kwargs == {"file_encoding_strategy": "base64"}
+    assert "aspect_ratio" not in input_data
+
+
+@pytest.mark.asyncio
 async def test_seedream_t2i_has_no_aspect_ratio():
     client = FakeClient()
     prov = ReplicateProvider(API_TOKEN, client=client)
@@ -107,6 +124,8 @@ async def test_swap_face_sends_two_bytesio_without_prompt():
     assert kwargs == {"file_encoding_strategy": "base64", "wait": 60}
     assert isinstance(input_data["swap_image"], io.BytesIO)
     assert isinstance(input_data["input_image"], io.BytesIO)
+    assert input_data["swap_image"].name == "image.jpg"
+    assert input_data["input_image"].name == "image.jpg"
     assert "prompt" not in input_data
     assert "image" not in input_data
 
@@ -160,11 +179,54 @@ class _FailingClient:
         raise self._exc
 
 
+class _ModelError(Exception):
+    """Duck-type of replicate.exceptions.ModelError (has ``prediction``)."""
+
+    def __init__(self, message: str):
+        super().__init__(message)
+        self.prediction = object()
+
+
+class _HttpError(Exception):
+    """Duck-type of replicate.exceptions.ReplicateError (has ``status``)."""
+
+    def __init__(self, status: int):
+        super().__init__(f"http {status}")
+        self.status = status
+
+
 @pytest.mark.asyncio
 async def test_sdk_exception_maps_to_unavailable():
     prov = ReplicateProvider(API_TOKEN, client=_FailingClient(RuntimeError("boom")))
     with pytest.raises(ProviderUnavailableError):
         await prov.generate(_req("grok"))
+
+
+@pytest.mark.asyncio
+async def test_prediction_failure_maps_to_generation_error_not_retryable():
+    prov = ReplicateProvider(
+        API_TOKEN,
+        client=_FailingClient(_ModelError("Invalid image format '.bin'")),
+    )
+    with pytest.raises(ProviderGenerationError) as excinfo:
+        await prov.generate(_req("grok"))
+    assert excinfo.value.retryable is False
+
+
+@pytest.mark.asyncio
+async def test_http_429_maps_to_rate_limit():
+    prov = ReplicateProvider(API_TOKEN, client=_FailingClient(_HttpError(429)))
+    with pytest.raises(ProviderRateLimitError) as excinfo:
+        await prov.generate(_req("grok"))
+    assert excinfo.value.retryable is True
+
+
+@pytest.mark.asyncio
+async def test_http_401_maps_to_auth_error():
+    prov = ReplicateProvider(API_TOKEN, client=_FailingClient(_HttpError(401)))
+    with pytest.raises(ProviderAuthenticationError) as excinfo:
+        await prov.generate(_req("grok"))
+    assert excinfo.value.retryable is False
 
 
 @pytest.mark.asyncio
