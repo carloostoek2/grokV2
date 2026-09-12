@@ -9,6 +9,8 @@ build/
 
 # Environment
 .env
+.env.*
+!.env.example
 
 # Coverage
 .coverage
