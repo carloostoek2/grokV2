@@ -199,3 +199,27 @@ def test_provider_accessor():
     assert reg.provider("kie").available is False
     assert reg.provider("nonexistent") is None
     assert reg.is_available("nonexistent") is False
+
+
+def test_image_nano_banana_routes_to_kie_by_default():
+    reg = _registry()
+    cfg = _cfg(model="nano_banana")
+
+    res = reg.resolve_image(cfg)
+
+    assert res.name == "kie"
+    assert res.model_id == "nano-banana-2"
+
+
+def test_image_nano_banana_routes_to_replicate_pro():
+    reg = _registry()
+    cfg = _cfg(
+        model="nano_banana",
+        nano_banana_provider="replicate",
+        nano_banana_variant="pro",
+    )
+
+    res = reg.resolve_image(cfg)
+
+    assert res.name == "replicate"
+    assert res.model_id.startswith("google/nano-banana-pro:")

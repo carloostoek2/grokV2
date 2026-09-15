@@ -24,7 +24,9 @@ from aiogram.fsm.context import FSMContext
 from grokbot.domain.catalog import (
     GROK_IMAGINE_VARIANTS,
     MODELS,
+    NANO_BANANA_VARIANTS,
     resolve_grok_config,
+    resolve_nano_banana_config,
 )
 from grokbot.domain.user_config import (
     COMFYUI_FLOW_LABELS,
@@ -63,8 +65,12 @@ _DENY_PRIVATE_TEXT = "La configuración solo está disponible en chats privados.
 # Copy de pantallas (transcrito de config_flow.py 222-386)
 # --------------------------------------------------------------------------- #
 def _provider_screen_text(cfg, model_key: str) -> str:
-    res = resolve_grok_config(cfg.grok_imagine_provider, cfg.grok_imagine_variant)
-    model_label = "Grok Imagine" if model_key == "grok" else "Grok Imagine Video"
+    if model_key == "nano_banana":
+        res = resolve_nano_banana_config(cfg.nano_banana_provider, cfg.nano_banana_variant)
+        model_label = "Nano Banana"
+    else:
+        res = resolve_grok_config(cfg.grok_imagine_provider, cfg.grok_imagine_variant)
+        model_label = "Grok Imagine" if model_key == "grok" else "Grok Imagine Video"
     return (
         f"Configuración de <b>{model_label}</b> — proveedor.\n\n"
         f"Actual: <b>{prov_label(res['provider'])}</b>\n\n"
@@ -73,16 +79,29 @@ def _provider_screen_text(cfg, model_key: str) -> str:
     )
 
 
-def _variant_screen_text(cfg, *, updated: bool = False) -> str:
-    res = resolve_grok_config(cfg.grok_imagine_provider, cfg.grok_imagine_variant)
-    spec = GROK_IMAGINE_VARIANTS[res["variant"]]
-    prefix = "✅ Configuración de Grok Imagine actualizada y guardada.\n\n" if updated else ""
+def _variant_screen_text(cfg, *, updated: bool = False, model_key: str = "grok") -> str:
+    if model_key == "nano_banana":
+        res = resolve_nano_banana_config(cfg.nano_banana_provider, cfg.nano_banana_variant)
+        spec = NANO_BANANA_VARIANTS[res["variant"]]
+        title = "Nano Banana"
+        choice = "variante"
+        prefix = (
+            "✅ Configuración de Nano Banana actualizada y guardada.\n\n" if updated else ""
+        )
+    else:
+        res = resolve_grok_config(cfg.grok_imagine_provider, cfg.grok_imagine_variant)
+        spec = GROK_IMAGINE_VARIANTS[res["variant"]]
+        title = "Grok Imagine"
+        choice = "nivel de calidad"
+        prefix = (
+            "✅ Configuración de Grok Imagine actualizada y guardada.\n\n" if updated else ""
+        )
     return (
         f"{prefix}"
-        "Configuración de <b>Grok Imagine</b> — nivel de calidad.\n\n"
+        f"Configuración de <b>{title}</b> — {choice}.\n\n"
         f"Actual: <b>{prov_label(res['provider'])} • {spec['label']}</b>\n"
         f"<i>{spec['desc']}</i>\n\n"
-        "Elige nivel de calidad. El cambio se guarda inmediatamente."
+        f"Elige {choice}. El cambio se guarda inmediatamente."
     )
 
 
@@ -235,7 +254,7 @@ async def _show_provider_screen(target: types.Message, state: FSMContext, deps: 
     await ui.edit_text(
         target.message_id,
         _provider_screen_text(cfg, model_key),
-        reply_markup=config_provider_keyboard(cfg),
+        reply_markup=config_provider_keyboard(cfg, model_key=model_key),
     )
 
 
@@ -257,8 +276,15 @@ async def _show_configure_screen(
     if model_key == "grok":
         await ui.edit_text(
             target.message_id,
-            _variant_screen_text(cfg, updated=updated),
-            reply_markup=config_variant_keyboard(cfg),
+            _variant_screen_text(cfg, updated=updated, model_key="grok"),
+            reply_markup=config_variant_keyboard(cfg, model_key="grok"),
+        )
+        return
+    if model_key == "nano_banana":
+        await ui.edit_text(
+            target.message_id,
+            _variant_screen_text(cfg, updated=updated, model_key="nano_banana"),
+            reply_markup=config_variant_keyboard(cfg, model_key="nano_banana"),
         )
         return
     if model_key == "grok_video":
@@ -313,8 +339,25 @@ async def cmd_imaginess(message: types.Message, state: FSMContext, deps: BotDeps
     await state.update_data(config_model="grok")
     await state.set_state(ConfigStates.configure)
     sent = await ui.send_text(
-        _variant_screen_text(cfg),
-        reply_markup=config_variant_keyboard(cfg),
+        _variant_screen_text(cfg, model_key="grok"),
+        reply_markup=config_variant_keyboard(cfg, model_key="grok"),
+    )
+    await state.update_data(config_message_id=sent.message_id)
+
+
+async def cmd_nano(message: types.Message, state: FSMContext, deps: BotDeps) -> None:
+    """/nano e /nanobanana: activa Nano Banana y muestra variante/proveedor."""
+    if await _reject_non_private_message(message, deps):
+        return
+    uid = message.from_user.id
+    deps.update_config.set_model(uid, "nano_banana")
+    cfg = deps.sessions.get_config(uid)
+    ui = ChatUI.for_message(deps.gateway, message)
+    await state.update_data(config_model="nano_banana")
+    await state.set_state(ConfigStates.configure)
+    sent = await ui.send_text(
+        _variant_screen_text(cfg, model_key="nano_banana"),
+        reply_markup=config_variant_keyboard(cfg, model_key="nano_banana"),
     )
     await state.update_data(config_message_id=sent.message_id)
 
@@ -352,7 +395,7 @@ async def handle_cfg_model(callback: types.CallbackQuery, state: FSMContext, dep
     same_model = cfg.model == model_key
     if not same_model:
         deps.update_config.set_model(uid, model_key)
-    if model_key in ("grok", "grok_video"):
+    if model_key in ("grok", "grok_video", "nano_banana"):
         await _show_provider_screen(callback.message, state, deps, model_key, uid=uid)
         await answer_callback(deps.gateway, callback, f"Modelo: {MODELS[model_key]['name']}")
         return
@@ -369,17 +412,39 @@ async def handle_cfg_provider(callback: types.CallbackQuery, state: FSMContext, 
     if await _reject_stale_callback(
         callback, state, deps,
         allowed_states=(ConfigStates.select_provider,),
-        required_config_models=("grok", "grok_video"),
+        required_config_models=("grok", "grok_video", "nano_banana"),
     ):
         return
     prov = callback.data.split(":", 2)[2]
-    if prov not in ("xai", "replicate", "kie"):
-        await answer_callback(deps.gateway, callback, "Proveedor no disponible.", show_alert=True)
-        return
     data = await state.get_data()
     model_key = data.get("config_model")
     uid = callback.from_user.id
     cfg = deps.sessions.get_config(uid)
+
+    if model_key == "nano_banana":
+        if prov not in ("kie", "replicate"):
+            await answer_callback(deps.gateway, callback, "Proveedor no disponible.", show_alert=True)
+            return
+        prior = resolve_nano_banana_config(
+            cfg.nano_banana_provider, cfg.nano_banana_variant
+        )["provider"]
+        if prov == prior:
+            await _show_configure_screen(callback.message, state, deps, model_key, uid=uid)
+            await answer_callback(deps.gateway, callback, "Ya está activo ese proveedor.")
+            return
+        deps.update_config.set_nano_banana_provider(uid, prov)
+        deps.update_config.set_model(uid, "nano_banana")
+        await _show_configure_screen(callback.message, state, deps, model_key, uid=uid)
+        new_cfg = deps.sessions.get_config(uid)
+        resolved = resolve_nano_banana_config(
+            new_cfg.nano_banana_provider, new_cfg.nano_banana_variant
+        )
+        await answer_callback(deps.gateway, callback, f"Proveedor: {prov_label(resolved['provider'])}")
+        return
+
+    if prov not in ("xai", "replicate", "kie"):
+        await answer_callback(deps.gateway, callback, "Proveedor no disponible.", show_alert=True)
+        return
     prior = resolve_grok_config(cfg.grok_imagine_provider, cfg.grok_imagine_variant)["provider"]
     if prov == prior:
         await _show_configure_screen(callback.message, state, deps, model_key, uid=uid)
@@ -409,15 +474,45 @@ async def handle_cfg_variant(callback: types.CallbackQuery, state: FSMContext, d
     if await _reject_stale_callback(
         callback, state, deps,
         allowed_states=(ConfigStates.configure,),
-        required_config_models=("grok",),
+        required_config_models=("grok", "nano_banana"),
     ):
         return
     var = callback.data.split(":", 2)[2]
+    data = await state.get_data()
+    model_key = data.get("config_model", "grok")
+    uid = callback.from_user.id
+    cfg = deps.sessions.get_config(uid)
+
+    if model_key == "nano_banana":
+        if var not in NANO_BANANA_VARIANTS:
+            await answer_callback(deps.gateway, callback, "Opción inválida.", show_alert=True)
+            return
+        prior = resolve_nano_banana_config(
+            cfg.nano_banana_provider, cfg.nano_banana_variant
+        )["variant"]
+        if var == prior:
+            await answer_callback(deps.gateway, callback, "Ya está activa esa configuración.")
+            return
+        deps.update_config.set_nano_banana_variant(uid, var)
+        deps.update_config.set_model(uid, "nano_banana")
+        await _show_configure_screen(
+            callback.message, state, deps, "nano_banana", uid=uid, updated=True
+        )
+        new_cfg = deps.sessions.get_config(uid)
+        resolved = resolve_nano_banana_config(
+            new_cfg.nano_banana_provider, new_cfg.nano_banana_variant
+        )
+        await answer_callback(
+            deps.gateway,
+            callback,
+            f"Nano Banana: {prov_label(resolved['provider'])} • "
+            f"{NANO_BANANA_VARIANTS[resolved['variant']]['label']}",
+        )
+        return
+
     if var not in GROK_IMAGINE_VARIANTS:
         await answer_callback(deps.gateway, callback, "Opción inválida.", show_alert=True)
         return
-    uid = callback.from_user.id
-    cfg = deps.sessions.get_config(uid)
     prior = resolve_grok_config(cfg.grok_imagine_provider, cfg.grok_imagine_variant)["variant"]
     if var == prior:
         await answer_callback(deps.gateway, callback, "Ya está activa esa configuración.")
@@ -592,9 +687,9 @@ async def handle_cfg_back_provider(callback: types.CallbackQuery, state: FSMCont
     data = await state.get_data()
     uid = callback.from_user.id
     model_key = data.get("config_model")
-    if model_key not in ("grok", "grok_video"):
+    if model_key not in ("grok", "grok_video", "nano_banana"):
         model_key = deps.sessions.get_config(uid).model
-    if model_key not in ("grok", "grok_video"):
+    if model_key not in ("grok", "grok_video", "nano_banana"):
         await answer_callback(deps.gateway, callback, _DESYNC_TEXT, show_alert=True)
         return
     await _show_provider_screen(callback.message, state, deps, model_key, uid=uid)
@@ -621,6 +716,7 @@ async def handle_cfg_close(callback: types.CallbackQuery, state: FSMContext, dep
 def register_config(dp: Dispatcher, deps: BotDeps) -> None:
     dp.message.register(partial(cmd_config, deps=deps), Command("config", "model"))
     dp.message.register(partial(cmd_imaginess, deps=deps), Command("imagine", "imaginess"))
+    dp.message.register(partial(cmd_nano, deps=deps), Command("nano", "nanobanana"))
     dp.message.register(partial(cmd_video, deps=deps), Command("video"))
     dp.callback_query.register(partial(handle_cfg_back_model, deps=deps), lambda c: c.data == "cfg:back:model")
     dp.callback_query.register(partial(handle_cfg_back_provider, deps=deps), lambda c: c.data == "cfg:back:provider")
@@ -636,6 +732,7 @@ __all__ = [
     "register_config",
     "cmd_config",
     "cmd_imaginess",
+    "cmd_nano",
     "cmd_video",
     "_variant_screen_text",
     "_video_screen_text",

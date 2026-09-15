@@ -11,7 +11,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
-from grokbot.domain.catalog import MODELS, VALID_GROK_IMAGINE_PROVIDERS, VALID_GROK_IMAGINE_VARIANTS
+from grokbot.domain.catalog import (
+    MODELS,
+    VALID_GROK_IMAGINE_PROVIDERS,
+    VALID_GROK_IMAGINE_VARIANTS,
+    VALID_NANO_BANANA_PROVIDERS,
+    VALID_NANO_BANANA_VARIANTS,
+)
 from grokbot.domain.user_config import (
     VALID_COMFYUI_MODELS,
     VALID_VIDEO_ASPECT_RATIOS,
@@ -79,6 +85,22 @@ class UpdateUserConfigUseCase:
             field="grok_imagine_variant",
             value=variant,
             valid=VALID_GROK_IMAGINE_VARIANTS,
+        )
+
+    def set_nano_banana_provider(self, user_id: int, provider: str) -> ConfigResult:
+        return self._set_top(
+            user_id,
+            field="nano_banana_provider",
+            value=provider,
+            valid=VALID_NANO_BANANA_PROVIDERS,
+        )
+
+    def set_nano_banana_variant(self, user_id: int, variant: str) -> ConfigResult:
+        return self._set_top(
+            user_id,
+            field="nano_banana_variant",
+            value=variant,
+            valid=VALID_NANO_BANANA_VARIANTS,
         )
 
     def _set_top(self, user_id: int, *, field: str, value: str, valid: tuple) -> ConfigResult:

@@ -19,7 +19,7 @@ from dataclasses import replace
 
 from aiogram import types
 
-from grokbot.domain.catalog import DEFAULT_MODEL, MODELS, resolve_grok_config
+from grokbot.domain.catalog import DEFAULT_MODEL, MODELS, resolve_grok_config, resolve_nano_banana_config
 from grokbot.domain.generation import KieTaskRef
 from grokbot.domain.user_config import UserConfig
 from grokbot.telegram.deps import BotDeps
@@ -189,6 +189,10 @@ def effective_image_provider(cfg: UserConfig) -> str:
     """
     if cfg.model == "grok":
         return resolve_grok_config(cfg.grok_imagine_provider, cfg.grok_imagine_variant)["provider"]
+    if cfg.model == "nano_banana":
+        return resolve_nano_banana_config(
+            cfg.nano_banana_provider, cfg.nano_banana_variant
+        )["provider"]
     if cfg.model in ("seedream", "faceswap"):
         return "replicate"
     if cfg.model == "comfyui":
@@ -232,6 +236,13 @@ def cfg_override_from_regen(cfg: UserConfig, regen: dict) -> UserConfig:
             cfg = replace(cfg, grok_imagine_provider=prov)
         if var and var != cfg.grok_imagine_variant:
             cfg = replace(cfg, grok_imagine_variant=var)
+    if key == "nano_banana":
+        prov = regen.get("nano_banana_provider")
+        var = regen.get("nano_banana_variant")
+        if prov and prov != cfg.nano_banana_provider:
+            cfg = replace(cfg, nano_banana_provider=prov)
+        if var and var != cfg.nano_banana_variant:
+            cfg = replace(cfg, nano_banana_variant=var)
     return cfg
 
 

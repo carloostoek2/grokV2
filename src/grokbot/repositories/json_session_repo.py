@@ -19,6 +19,8 @@ from grokbot.domain.catalog import (
     DEFAULT_GROK_IMAGINE_PROVIDER,
     DEFAULT_GROK_IMAGINE_VARIANT,
     DEFAULT_MODEL,
+    DEFAULT_NANO_BANANA_PROVIDER,
+    DEFAULT_NANO_BANANA_VARIANT,
 )
 from grokbot.domain.user_config import (
     DEFAULT_COMFYUI_LORA,
@@ -115,6 +117,12 @@ class JsonSessionRepository:
             changed = True
         if "grok_imagine_variant" not in rec:
             rec["grok_imagine_variant"] = DEFAULT_GROK_IMAGINE_VARIANT
+            changed = True
+        if "nano_banana_provider" not in rec:
+            rec["nano_banana_provider"] = DEFAULT_NANO_BANANA_PROVIDER
+            changed = True
+        if "nano_banana_variant" not in rec:
+            rec["nano_banana_variant"] = DEFAULT_NANO_BANANA_VARIANT
             changed = True
         if "video_duration" not in rec:
             rec["video_duration"] = DEFAULT_VIDEO_DURATION

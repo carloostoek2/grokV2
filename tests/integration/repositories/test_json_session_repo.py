@@ -27,6 +27,8 @@ def canonical_record() -> dict:
         "model": "grok",
         "grok_imagine_provider": "kie",
         "grok_imagine_variant": "quality",
+        "nano_banana_provider": "kie",
+        "nano_banana_variant": "banana2",
         "video_duration": 5,
         "video_aspect_ratio": "16:9",
         "video_resolution": "720p",

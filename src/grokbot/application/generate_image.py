@@ -53,6 +53,13 @@ def build_image_request(
     no se resuelve acá — D2: 0 descargas en use cases).
     """
     params = _comfy_params(cfg, prompts) if res.name == "comfyui" else {}
+    if cfg.model == "nano_banana":
+        from grokbot.domain.catalog import resolve_nano_banana_config
+
+        nb = resolve_nano_banana_config(cfg.nano_banana_provider, cfg.nano_banana_variant)
+        if nb["default_resolution"]:
+            params = {**params, "resolution": nb["default_resolution"]}
+        params = {**params, "output_format": "png"}
     return GenerationRequest(
         provider=res.name,
         model_id=res.model_id,
@@ -92,6 +99,9 @@ def _build_image_regen_context(
     if cfg.model == "grok":
         ctx["imagine_provider"] = cfg.grok_imagine_provider
         ctx["imagine_variant"] = cfg.grok_imagine_variant
+    if cfg.model == "nano_banana":
+        ctx["nano_banana_provider"] = cfg.nano_banana_provider
+        ctx["nano_banana_variant"] = cfg.nano_banana_variant
     if source_file_id:
         ctx["source_file_id"] = source_file_id
     if isinstance(source, KieTaskRef):
