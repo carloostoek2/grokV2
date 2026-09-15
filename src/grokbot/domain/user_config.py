@@ -16,9 +16,13 @@ from grokbot.domain.catalog import (
     DEFAULT_GROK_IMAGINE_PROVIDER,
     DEFAULT_GROK_IMAGINE_VARIANT,
     DEFAULT_MODEL,
+    DEFAULT_NANO_BANANA_PROVIDER,
+    DEFAULT_NANO_BANANA_VARIANT,
     VALID_GROK_IMAGINE_PROVIDERS,
     VALID_GROK_IMAGINE_VARIANTS,
     VALID_MODELS,
+    VALID_NANO_BANANA_PROVIDERS,
+    VALID_NANO_BANANA_VARIANTS,
     resolve_grok_config,
 )
 
@@ -234,6 +238,8 @@ class UserConfig:
     model: str = DEFAULT_MODEL
     grok_imagine_provider: str = DEFAULT_GROK_IMAGINE_PROVIDER
     grok_imagine_variant: str = DEFAULT_GROK_IMAGINE_VARIANT
+    nano_banana_provider: str = DEFAULT_NANO_BANANA_PROVIDER
+    nano_banana_variant: str = DEFAULT_NANO_BANANA_VARIANT
     video: VideoConfig = VideoConfig()
     comfyui: ComfyUIConfig = ComfyUIConfig()
     source_path: str | None = None
@@ -262,6 +268,13 @@ class UserConfig:
         if variant not in VALID_GROK_IMAGINE_VARIANTS:
             variant = DEFAULT_GROK_IMAGINE_VARIANT
 
+        nb_provider = rec.get("nano_banana_provider", DEFAULT_NANO_BANANA_PROVIDER)
+        if nb_provider not in VALID_NANO_BANANA_PROVIDERS:
+            nb_provider = DEFAULT_NANO_BANANA_PROVIDER
+        nb_variant = rec.get("nano_banana_variant", DEFAULT_NANO_BANANA_VARIANT)
+        if nb_variant not in VALID_NANO_BANANA_VARIANTS:
+            nb_variant = DEFAULT_NANO_BANANA_VARIANT
+
         video = VideoConfig.from_record(_prefix_group(rec, "video_"))
         comfyui = ComfyUIConfig.from_record(_prefix_group(rec, "comfyui_"))
 
@@ -279,6 +292,8 @@ class UserConfig:
             model=model,
             grok_imagine_provider=provider,
             grok_imagine_variant=variant,
+            nano_banana_provider=nb_provider,
+            nano_banana_variant=nb_variant,
             video=video,
             comfyui=comfyui,
             source_path=source_path,
@@ -295,6 +310,8 @@ class UserConfig:
             "model": self.model,
             "grok_imagine_provider": self.grok_imagine_provider,
             "grok_imagine_variant": self.grok_imagine_variant,
+            "nano_banana_provider": self.nano_banana_provider,
+            "nano_banana_variant": self.nano_banana_variant,
             "video_duration": self.video.duration,
             "video_aspect_ratio": self.video.aspect_ratio,
             "video_resolution": self.video.resolution,

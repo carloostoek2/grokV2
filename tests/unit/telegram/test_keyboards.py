@@ -47,7 +47,7 @@ def test_refine_keyboards():
 def test_config_model_keyboard_default_marks_grok():
     cfg = UserConfig.defaults()
     data = flat_callback_data(kb.config_model_keyboard(cfg))
-    for key in ("grok", "seedream", "faceswap", "grok_video", "comfyui"):
+    for key in ("grok", "nano_banana", "seedream", "faceswap", "grok_video", "comfyui"):
         assert f"cfg:model:{key}" in data
     assert data[-1] == "cfg:close"
     # Label del modelo activo incluye la variante resuelta.
@@ -165,3 +165,22 @@ def test_packages_keyboards():
         "var:packs",
         "var:pack:back",
     ]
+
+
+def test_config_provider_keyboard_nano_banana_only_kie_replicate():
+    cfg = UserConfig.defaults()
+    data = flat_callback_data(kb.config_provider_keyboard(cfg, model_key="nano_banana"))
+    assert data[:2] == ["cfg:provider:kie", "cfg:provider:replicate"]
+    assert "cfg:provider:xai" not in data
+
+
+def test_config_variant_keyboard_nano_banana():
+    cfg = UserConfig.defaults()
+    data = flat_callback_data(kb.config_variant_keyboard(cfg, model_key="nano_banana"))
+    assert data[:3] == [
+        "cfg:variant:classic",
+        "cfg:variant:banana2",
+        "cfg:variant:pro",
+    ]
+    rows = kb.config_variant_keyboard(cfg, model_key="nano_banana").inline_keyboard
+    assert rows[1][0].text == "✅ Nano Banana 2"

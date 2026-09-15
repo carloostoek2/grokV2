@@ -30,6 +30,8 @@ def test_defaults_mirror_default_session_record():
     assert uc.model == "grok"
     assert uc.grok_imagine_provider == "kie"
     assert uc.grok_imagine_variant == "quality"
+    assert uc.nano_banana_provider == "kie"
+    assert uc.nano_banana_variant == "banana2"
     assert uc.video.duration == 5
     assert uc.video.aspect_ratio == "16:9"
     assert uc.video.resolution == "720p"
@@ -124,7 +126,12 @@ def test_unknown_keys_ignored():
 def test_round_trip_canonical_record():
     rec = dict(REAL_GROK_SESSION_REC)
     del rec["video_hourly_timestamps"]
-    assert UserConfig.from_record(rec).to_record() == rec
+    # New Nano Banana keys are filled with defaults on round-trip.
+    out = UserConfig.from_record(rec).to_record()
+    expected = dict(rec)
+    expected["nano_banana_provider"] = "kie"
+    expected["nano_banana_variant"] = "banana2"
+    assert out == expected
 
 
 def test_round_trip_awaiting_source_state_and_source_path():
@@ -168,3 +175,14 @@ def test_video_config_and_comfyui_config_standalone():
     cc = ComfyUIConfig.from_record({"model": "grok_style", "lora": "none", "refine": "1"})
     assert cc.to_record() == {"model": "grok_style", "lora": "none", "refine": "1"}
     assert cc.refine_enabled is True
+
+
+def test_nano_banana_invalid_falls_back():
+    uc = UserConfig.from_record(
+        {"nano_banana_provider": "xai", "nano_banana_variant": "ultra"}
+    )
+    assert uc.nano_banana_provider == "kie"
+    assert uc.nano_banana_variant == "banana2"
+    rec = uc.to_record()
+    assert rec["nano_banana_provider"] == "kie"
+    assert rec["nano_banana_variant"] == "banana2"

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from grokbot.domain.catalog import MODELS, resolve_grok_config
+from grokbot.domain.catalog import MODELS, resolve_grok_config, resolve_nano_banana_config
 from grokbot.domain.generation import MediaType
 from grokbot.domain.user_config import UserConfig
 from grokbot.providers.base import ProviderInputError, ProviderNotConfiguredError
@@ -64,6 +64,11 @@ class ProviderRegistry:
     def resolve_image(self, cfg: UserConfig) -> ProviderResolution:
         if cfg.model == "grok":
             resolved = resolve_grok_config(cfg.grok_imagine_provider, cfg.grok_imagine_variant)
+            return self._resolve(resolved["provider"], resolved["id"])
+        if cfg.model == "nano_banana":
+            resolved = resolve_nano_banana_config(
+                cfg.nano_banana_provider, cfg.nano_banana_variant
+            )
             return self._resolve(resolved["provider"], resolved["id"])
         if cfg.model in _IMAGE_ONLY_GENERATORS:
             return self._resolve("replicate", MODELS[cfg.model]["id"])

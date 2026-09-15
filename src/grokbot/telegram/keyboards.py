@@ -11,7 +11,13 @@ from __future__ import annotations
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from grokbot.domain.catalog import GROK_IMAGINE_VARIANTS, MODELS, resolve_grok_config
+from grokbot.domain.catalog import (
+    GROK_IMAGINE_VARIANTS,
+    MODELS,
+    NANO_BANANA_VARIANTS,
+    resolve_grok_config,
+    resolve_nano_banana_config,
+)
 from grokbot.domain.user_config import (
     COMFYUI_FLOW_LABELS,
     VALID_VIDEO_ASPECT_RATIOS,
@@ -93,13 +99,20 @@ def refining_keyboard() -> InlineKeyboardMarkup:
 # ---------------------------------------------------------------------------
 
 def config_model_keyboard(cfg: UserConfig) -> InlineKeyboardMarkup:
-    """Pantalla de modelo (5 modelos) con marca de selección."""
+    """Pantalla de modelo con marca de selección."""
     buttons = []
     for key, m in MODELS.items():
         if key == "grok":
             res = resolve_grok_config(cfg.grok_imagine_provider, cfg.grok_imagine_variant)
             suffix = f"{prov_label(res['provider'])} • {GROK_IMAGINE_VARIANTS[res['variant']]['label']}"
             label = f"{'✅ ' if cfg.model == key else ''}Grok Imagine ({suffix})"
+        elif key == "nano_banana":
+            res = resolve_nano_banana_config(cfg.nano_banana_provider, cfg.nano_banana_variant)
+            suffix = (
+                f"{prov_label(res['provider'])} • "
+                f"{NANO_BANANA_VARIANTS[res['variant']]['label']}"
+            )
+            label = f"{'✅ ' if cfg.model == key else ''}Nano Banana ({suffix})"
         else:
             label = f"{'✅ ' if cfg.model == key else ''}{m['name']}"
         buttons.append([InlineKeyboardButton(text=label, callback_data=f"cfg:model:{key}")])
@@ -107,12 +120,19 @@ def config_model_keyboard(cfg: UserConfig) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def config_provider_keyboard(cfg: UserConfig) -> InlineKeyboardMarkup:
-    """Pantalla de proveedor de Grok Imagine (kie/xai/replicate)."""
-    res = resolve_grok_config(cfg.grok_imagine_provider, cfg.grok_imagine_variant)
+def config_provider_keyboard(
+    cfg: UserConfig, *, model_key: str = "grok"
+) -> InlineKeyboardMarkup:
+    """Pantalla de proveedor (Grok: kie/xai/replicate; Nano Banana: kie/replicate)."""
+    if model_key == "nano_banana":
+        res = resolve_nano_banana_config(cfg.nano_banana_provider, cfg.nano_banana_variant)
+        providers = ("kie", "replicate")
+    else:
+        res = resolve_grok_config(cfg.grok_imagine_provider, cfg.grok_imagine_variant)
+        providers = ("kie", "xai", "replicate")
     current = res["provider"]
     buttons = []
-    for prov in ("kie", "xai", "replicate"):
+    for prov in providers:
         prefix = "✅ " if prov == current else ""
         buttons.append([
             InlineKeyboardButton(
@@ -125,11 +145,18 @@ def config_provider_keyboard(cfg: UserConfig) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def config_variant_keyboard(cfg: UserConfig) -> InlineKeyboardMarkup:
-    """Pantalla de nivel de calidad (standard/quality)."""
-    res = resolve_grok_config(cfg.grok_imagine_provider, cfg.grok_imagine_variant)
+def config_variant_keyboard(
+    cfg: UserConfig, *, model_key: str = "grok"
+) -> InlineKeyboardMarkup:
+    """Pantalla de variante (Grok Imagine calidad / Nano Banana familia)."""
+    if model_key == "nano_banana":
+        res = resolve_nano_banana_config(cfg.nano_banana_provider, cfg.nano_banana_variant)
+        variants = NANO_BANANA_VARIANTS
+    else:
+        res = resolve_grok_config(cfg.grok_imagine_provider, cfg.grok_imagine_variant)
+        variants = GROK_IMAGINE_VARIANTS
     buttons = []
-    for var, spec in GROK_IMAGINE_VARIANTS.items():
+    for var, spec in variants.items():
         prefix = "✅ " if var == res["variant"] else ""
         buttons.append([
             InlineKeyboardButton(

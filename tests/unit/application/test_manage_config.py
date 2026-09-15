@@ -229,3 +229,19 @@ def test_saved_records_are_distinct_copies():
     uc.set_model(USER_ID, "seedream")
     assert original.model == "grok"  # no se mutó
     assert sessions.saved[0][1] is not sessions.saved[1][1]
+
+
+def test_set_nano_banana_provider_and_variant(sessions):
+    sessions.save_config(USER_ID, _cfg())
+    uc = _uc(sessions)
+
+    res = uc.set_nano_banana_provider(USER_ID, "replicate")
+    assert res.ok is True and res.changed is True
+    assert sessions.saved[-1][1].nano_banana_provider == "replicate"
+
+    res2 = uc.set_nano_banana_variant(USER_ID, "pro")
+    assert res2.ok is True and res2.changed is True
+    assert sessions.saved[-1][1].nano_banana_variant == "pro"
+
+    bad = uc.set_nano_banana_provider(USER_ID, "xai")
+    assert bad.ok is False

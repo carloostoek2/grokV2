@@ -18,7 +18,9 @@ from grokbot.domain.catalog import (
     DEFAULT_MODEL,
     GROK_IMAGINE_VARIANTS,
     MODELS,
+    NANO_BANANA_VARIANTS,
     resolve_grok_config,
+    resolve_nano_banana_config,
 )
 from grokbot.domain.user_config import (
     COMFYUI_FLOW_LABELS,
@@ -170,6 +172,23 @@ def model_display(cfg: UserConfig) -> dict:
         )
         m["imagine_provider"] = res["provider"]
         m["imagine_variant"] = res["variant"]
+        return m
+    if cfg.model == "nano_banana":
+        res = resolve_nano_banana_config(cfg.nano_banana_provider, cfg.nano_banana_variant)
+        m = dict(base)
+        m["provider"] = res["provider"]
+        m["id"] = res["id"]
+        m["name"] = (
+            f"Nano Banana ({prov_label(res['provider'])} • "
+            f"{NANO_BANANA_VARIANTS[res['variant']]['label']})"
+        )
+        m["desc"] = (
+            f"Google Nano Banana — {prov_label(res['provider'])} • "
+            f"{NANO_BANANA_VARIANTS[res['variant']]['label']}: "
+            f"{NANO_BANANA_VARIANTS[res['variant']]['desc']}"
+        )
+        m["nano_banana_provider"] = res["provider"]
+        m["nano_banana_variant"] = res["variant"]
         return m
     if cfg.model == "grok_video":
         m = dict(base)

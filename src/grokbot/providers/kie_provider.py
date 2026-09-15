@@ -17,6 +17,7 @@ import urllib.parse
 
 import aiohttp
 
+from grokbot.domain.catalog import is_kie_nano_banana_model
 from grokbot.domain.generation import (
     GenerationRequest,
     GenerationResult,
@@ -54,6 +55,8 @@ KIE_IMAGE_I2I = "grok-imagine/image-to-image"
 KIE_VIDEO_T2V = "grok-imagine/text-to-video"
 KIE_VIDEO_I2V = "grok-imagine/image-to-video"
 KIE_VIDEO_15_I2V = "grok-imagine-video-1-5-preview"
+KIE_NANO_BANANA_CLASSIC = "google/nano-banana"
+KIE_NANO_BANANA_CLASSIC_EDIT = "google/nano-banana-edit"
 
 # Kie.ai result/upload CDN hosts (grok bot.py:180-187).
 KIE_DOWNLOAD_HOSTS = frozenset(
@@ -138,6 +141,52 @@ def _kie_poll_error_is_transient(http_status: int, api_code: int | None = None) 
     return http_status >= 500
 
 
+
+def _nano_banana_image_payload(
+    *,
+    prompt: str,
+    model_id: str,
+    image_url: str | None,
+    aspect_ratio: str | None,
+    resolution: str | None,
+    output_format: str = "png",
+) -> tuple[str, dict]:
+    """Build (slug, input) for Kie Nano Banana t2i/i2i without touching Imagine.
+
+    Classic uses ``google/nano-banana`` (t2i) or ``google/nano-banana-edit``
+    (i2i with ``image_urls``). Banana 2 / Pro use the same slug for both modes
+    with ``image_input`` (docs: nanobanana2 / nano-banana-pro).
+    """
+    aspect = aspect_ratio or DEFAULT_IMAGE_ASPECT_RATIO
+    fmt = output_format if output_format in ("png", "jpg", "jpeg") else "png"
+    if model_id in (KIE_NANO_BANANA_CLASSIC, KIE_NANO_BANANA_CLASSIC_EDIT):
+        if image_url:
+            return KIE_NANO_BANANA_CLASSIC_EDIT, {
+                "prompt": prompt,
+                "image_urls": [image_url],
+                "output_format": "jpeg" if fmt == "jpg" else fmt,
+            }
+        return KIE_NANO_BANANA_CLASSIC, {
+            "prompt": prompt,
+            "aspect_ratio": aspect,
+            "output_format": "jpeg" if fmt == "jpg" else fmt,
+            "nsfw_checker": False,
+        }
+    # banana2 / pro
+    input_data: dict = {
+        "prompt": prompt,
+        "aspect_ratio": aspect,
+        "output_format": "jpg" if fmt == "jpeg" else fmt,
+    }
+    if resolution in ("1K", "2K", "4K"):
+        input_data["resolution"] = resolution
+    if image_url:
+        input_data["image_input"] = [image_url]
+    else:
+        input_data["image_input"] = []
+    return model_id, input_data
+
+
 # ---------------------------------------------------------------------------
 # Provider
 # ---------------------------------------------------------------------------
@@ -199,6 +248,67 @@ class KieProvider:
         request: GenerationRequest,
         source_image: bytes | None,
     ) -> GenerationResult:
+        # Nano Banana must NOT reuse Grok Imagine i2i (image_urls / enable_pro).
+        if is_kie_nano_banana_model(request.model_id):
+            return await self._generate_nano_banana_image(request, source_image)
+        return await self._generate_imagine_image(request, source_image)
+
+    async def _generate_nano_banana_image(
+        self,
+        request: GenerationRequest,
+        source_image: bytes | None,
+    ) -> GenerationResult:
+        """Kie Nano Banana t2i/i2i (image_input / classic edit slug)."""
+        resolution = request.params.get("resolution")
+        output_format = request.params.get("output_format", "png")
+        async with aiohttp.ClientSession(timeout=_KIE_REQUEST_TIMEOUT) as session:
+            image_url = None
+            if isinstance(request.source, KieTaskRef):
+                source_url, ref_err = await self._get_result_url_at_index(
+                    session, request.source.task_id, request.source.index
+                )
+                if ref_err:
+                    raise ref_err
+                image_url = source_url
+            elif source_image is not None:
+                size_err = validate_image_for_i2v(source_image)
+                if size_err:
+                    raise ProviderInputError(size_err, user_message=size_err)
+                image_url = await self._upload_image(session, source_image)
+
+            model_slug, input_data = _nano_banana_image_payload(
+                prompt=request.prompt,
+                model_id=request.model_id,
+                image_url=image_url,
+                aspect_ratio=request.aspect_ratio,
+                resolution=resolution,
+                output_format=output_format,
+            )
+            task_id = await self._create_task(session, model_slug, input_data)
+            urls = await self._poll_task(
+                session, task_id, prompt=request.prompt, max_poll_sec=IMAGE_MAX_POLL_SEC
+            )
+            return GenerationResult(
+                provider="kie",
+                model_id=request.model_id,
+                media_type=MediaType.IMAGE,
+                remote_url=urls[0],
+                meta={
+                    "urls": urls,
+                    "task_id": task_id,
+                    "index": 0,
+                    "provider": "kie",
+                    "download_allowlist": "kie",
+                    "kie_slug": model_slug,
+                },
+            )
+
+    async def _generate_imagine_image(
+        self,
+        request: GenerationRequest,
+        source_image: bytes | None,
+    ) -> GenerationResult:
+        """Grok Imagine t2i/i2i on Kie (unchanged: image_urls / enable_pro)."""
         async with aiohttp.ClientSession(timeout=_KIE_REQUEST_TIMEOUT) as session:
             if isinstance(request.source, KieTaskRef):
                 source_url, ref_err = await self._get_result_url_at_index(

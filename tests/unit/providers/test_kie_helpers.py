@@ -5,6 +5,8 @@ from __future__ import annotations
 from grokbot.providers.kie_provider import (
     KIE_BASE_VIDEO_ASPECT_RATIOS,
     KIE_15_VIDEO_ASPECT_RATIOS,
+    KIE_NANO_BANANA_CLASSIC,
+    KIE_NANO_BANANA_CLASSIC_EDIT,
     KIE_VIDEO_15_I2V,
     KIE_VIDEO_I2V,
     KIE_VIDEO_T2V,
@@ -13,6 +15,7 @@ from grokbot.providers.kie_provider import (
     _kie_map_duration,
     _kie_poll_error_is_transient,
     _kie_video_slug,
+    _nano_banana_image_payload,
     _sanitize_kie_fail_log,
 )
 
@@ -89,3 +92,71 @@ def test_poll_error_is_transient():
     assert not _kie_poll_error_is_transient(200)
     assert not _kie_poll_error_is_transient(200, api_code=400)
     assert not _kie_poll_error_is_transient(400)
+
+
+def test_nano_banana2_t2i_payload_uses_image_input_empty():
+    slug, payload = _nano_banana_image_payload(
+        prompt="a cat",
+        model_id="nano-banana-2",
+        image_url=None,
+        aspect_ratio="9:16",
+        resolution="1K",
+    )
+    assert slug == "nano-banana-2"
+    assert payload["prompt"] == "a cat"
+    assert payload["image_input"] == []
+    assert payload["aspect_ratio"] == "9:16"
+    assert payload["resolution"] == "1K"
+    assert "enable_pro" not in payload
+    assert "image_urls" not in payload
+
+
+def test_nano_banana2_i2i_payload_image_input():
+    slug, payload = _nano_banana_image_payload(
+        prompt="edit me",
+        model_id="nano-banana-2",
+        image_url="https://tempfile.aiquickdraw.com/x.png",
+        aspect_ratio="1:1",
+        resolution="2K",
+    )
+    assert slug == "nano-banana-2"
+    assert payload["image_input"] == ["https://tempfile.aiquickdraw.com/x.png"]
+    assert "image_urls" not in payload
+
+
+def test_nano_banana_pro_payload():
+    slug, payload = _nano_banana_image_payload(
+        prompt="pro",
+        model_id="nano-banana-pro",
+        image_url=None,
+        aspect_ratio=None,
+        resolution="4K",
+        output_format="jpg",
+    )
+    assert slug == "nano-banana-pro"
+    assert payload["resolution"] == "4K"
+    assert payload["output_format"] == "jpg"
+
+
+def test_nano_banana_classic_t2i_and_edit_slug():
+    slug, payload = _nano_banana_image_payload(
+        prompt="classic",
+        model_id=KIE_NANO_BANANA_CLASSIC,
+        image_url=None,
+        aspect_ratio="1:1",
+        resolution=None,
+    )
+    assert slug == KIE_NANO_BANANA_CLASSIC
+    assert "image_input" not in payload
+    assert payload["aspect_ratio"] == "1:1"
+
+    slug_e, payload_e = _nano_banana_image_payload(
+        prompt="edit",
+        model_id=KIE_NANO_BANANA_CLASSIC,
+        image_url="https://file.aiquickdraw.com/a.png",
+        aspect_ratio=None,
+        resolution=None,
+    )
+    assert slug_e == KIE_NANO_BANANA_CLASSIC_EDIT
+    assert payload_e["image_urls"] == ["https://file.aiquickdraw.com/a.png"]
+    assert "image_input" not in payload_e

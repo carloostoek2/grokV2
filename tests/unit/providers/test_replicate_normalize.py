@@ -10,8 +10,10 @@ from grokbot.providers.base import (
     ProviderRateLimitError,
     ProviderUnavailableError,
 )
+from grokbot.domain.generation import GenerationRequest, MediaType
 from grokbot.providers.replicate_provider import (
     _named_image_buffer,
+    _nano_banana_replicate_input,
     _normalize_output_urls,
     _replicate_kind,
     _wrap_run_error,
@@ -84,3 +86,33 @@ def test_kind_seedream_faceswap_grok_other():
     assert _replicate_kind("xai/grok-imagine-image-quality") == "grok"
     assert _replicate_kind("xai/grok-imagine-image") == "grok"
     assert _replicate_kind("some/other-model") == "other"
+
+
+def test_kind_nano_banana_pinned_and_unpinned():
+    assert _replicate_kind(MODELS["nano_banana"]["replicate_id"]) == "nano_banana"
+    assert _replicate_kind("google/nano-banana-2:deadbeef") == "nano_banana"
+    assert _replicate_kind("google/nano-banana-pro:abc") == "nano_banana"
+    assert _replicate_kind("google/nano-banana:abc") == "nano_banana"
+    assert _replicate_kind("xai/grok-imagine-image") != "nano_banana"
+
+
+def test_nano_banana_replicate_input_t2i_i2i():
+    req = GenerationRequest(
+        provider="replicate",
+        model_id=MODELS["nano_banana"]["replicate_id"],
+        media_type=MediaType.IMAGE,
+        prompt="hola",
+        aspect_ratio="1:1",
+        params={"resolution": "1K", "output_format": "png"},
+    )
+    t2i = _nano_banana_replicate_input(req, None)
+    assert t2i["prompt"] == "hola"
+    assert t2i["image_input"] == []
+    assert t2i["aspect_ratio"] == "1:1"
+    assert t2i["resolution"] == "1K"
+    assert "image" not in t2i
+
+    i2i = _nano_banana_replicate_input(req, b"\xff\xd8\xff")
+    assert len(i2i["image_input"]) == 1
+    assert i2i["image_input"][0].startswith("data:")
+    assert "aspect_ratio" not in i2i
