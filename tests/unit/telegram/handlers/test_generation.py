@@ -419,6 +419,7 @@ async def test_photo_no_caption_while_awaiting_reminds():
 # Álbumes / media groups → colección + edición secuencial (Task 3)
 # --------------------------------------------------------------------------- #
 _ALBUM_LABEL = "Grok Imagine (Kie.ai • Alta calidad)"
+_NANO_ALBUM_LABEL = "Nano Banana (Kie.ai • Nano Banana 2)"
 
 
 async def _feed_album(deps, n: int, *, group: str = "album-1", caption_on: int | None = 1,
@@ -461,6 +462,32 @@ async def test_album_grok_edits_sequentially():
     assert deps.job_manager.active_jobs(_UID) == ()
 
 
+async def test_album_nano_banana_edits_sequentially():
+    """Álbum con Nano Banana (default Kie/banana2) usa el mismo drain secuencial que Grok."""
+    deps = make_deps()
+    deps.update_config.set_model(_UID, "nano_banana")
+    deps.album.delay = 0.05
+    deps = await _feed_album(deps, 3, group="album-nb", file_prefix="FAKE:alb_nb")
+    await _wait_until(lambda: any(
+        c["text"] == "Completadas 3/3 imágenes."
+        for c in deps.gateway.calls_by_method("edit_message_text")
+    ))
+    sends = deps.gateway.calls_by_method("send_message")
+    status = sends[0]
+    assert status["text"] == f"Editando 0/3 imágenes con {_NANO_ALBUM_LABEL}..."
+    data = flat_callback_data(status["reply_markup"])
+    assert data and data[0].startswith("cancel_job:"), "status de álbum lleva cancel_job:<id>"
+    edits = [c["text"] for c in deps.gateway.calls_by_method("edit_message_text")]
+    assert f"Editando 1/3 imágenes con {_NANO_ALBUM_LABEL}..." in edits
+    assert f"Editando 2/3 imágenes con {_NANO_ALBUM_LABEL}..." in edits
+    assert f"Editando 3/3 imágenes con {_NANO_ALBUM_LABEL}..." in edits
+    assert edits[-1] == "Completadas 3/3 imágenes."
+    photos = deps.gateway.calls_by_method("send_photo")
+    assert len(photos) == 3
+    assert all(p["reply_to_message_id"] == 101 for p in photos)
+    assert deps.job_manager.active_jobs(_UID) == ()
+
+
 async def test_album_no_caption_shows_hint():
     deps = make_deps()
     deps.album.delay = 0.05
@@ -492,11 +519,12 @@ async def test_album_too_many_photos_errors():
 
 
 async def test_album_non_grok_model_silent():
+    """seedream/comfyui/grok_video siguen en silencio; nano_banana ya no está excluido."""
     deps = make_deps()
     deps.update_config.set_model(_UID, "seedream")
     deps.album.delay = 0.05
     deps = await _feed_album(deps, 3, caption_on=1)
-    # Sin tarea de drain (handle_album no agenda nada para no-grok): asserts directos.
+    # Sin tarea de drain (handle_album no agenda nada fuera de grok/nano_banana): asserts directos.
     assert deps.gateway.calls_by_method("send_message") == []
     assert deps.gateway.calls_by_method("send_photo") == []
 

@@ -14,7 +14,7 @@ Rutea los updates aiogram de generación a los use cases con copy exacto de grok
 * foto sin caption → awaiting-ref guarda la referencia; faceswap delega en
   faceswap.handle_faceswap_photo; resto → hint de editar/video (grok 2895-2928).
 * álbum → awaiting-ref agenda integrate_ref.drain_integrate_ref_album (final-wins,
-  A1); faceswap agenda faceswap.drain_faceswap_album; grok → _drain_grok_album.
+  A1); faceswap agenda faceswap.drain_faceswap_album; grok/nano_banana → _drain_grok_album.
 * reply texto→foto → faceswap responde reply-not-used solo si el reply es foto;
   resto → edit sin job (KieTaskRef o download por gateway); video si
   grok_video (grok 2934-3061).
@@ -277,7 +277,7 @@ async def handle_photo_no_caption(message: types.Message, deps: BotDeps) -> None
 
 
 async def handle_album(message: types.Message, deps: BotDeps) -> None:
-    """Media group → colección efímera y edición/drain secuencial (grok/faceswap)."""
+    """Media group → colección efímera y edición/drain secuencial (grok/nano_banana/faceswap)."""
     uid = message.from_user.id
     key = (message.chat.id, message.media_group_id)
     # A2/A1: álbum en awaiting-ref → drain que guarda la ÚLTIMA foto (final-wins,
@@ -293,8 +293,10 @@ async def handle_album(message: types.Message, deps: BotDeps) -> None:
         if deps.album.add(key, message):
             asyncio.create_task(faceswap_handlers.drain_faceswap_album(deps, key, message))
         return
-    if cfg.model != "grok":
-        return  # paridad grok 3088-3089: seedream/comfyui/grok_video en silencio
+    # Album edit path: Grok Imagine + Nano Banana (same sequential UX).
+    # seedream/comfyui/grok_video remain silent (parity grok 3088-3089).
+    if cfg.model not in ("grok", "nano_banana"):
+        return
     if deps.album.add(key, message):
         asyncio.create_task(_drain_grok_album(deps, key))
 
@@ -365,10 +367,11 @@ async def _process_album_edit(
 
     NO reutiliza ``present_single_image``: necesita continuar por foto editando un
     UNICO status con cancel cooperativo y terminales byte-parity. Álbum solo llega
-    con ``cfg.model == "grok"`` (sin refine). A2 (Item 2): la rama no-integrate
-    mantiene los labels SIN sufijo ``({backend})``. La rama integrate (R4 Item 3)
-    transcribe el copy de grok CON sufijo ``({backend})`` (A6: en la práctica
-    ``backend == "xAI"`` por el prereq del use case).
+    con ``cfg.model`` en ``("grok", "nano_banana")`` (sin refine). A2 (Item 2): la
+    rama no-integrate mantiene los labels SIN sufijo ``({backend})``. La rama
+    integrate (R4 Item 3) transcribe el copy de grok CON sufijo ``({backend})``
+    (A6: en la práctica ``backend == "xAI"`` por el prereq del use case; Nano
+    Banana no usa integrate).
     """
     uid = anchor_message.from_user.id
     ui = _chat_ui(deps, anchor_message)
