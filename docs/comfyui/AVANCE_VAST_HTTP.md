@@ -1,3 +1,5 @@
+> **Update:** runtime source of truth for API graphs is now on Vast (`api_workflows/{flow_id}.json`, SSH fetch). See [REMOTE_API_WORKFLOWS.md](./REMOTE_API_WORKFLOWS.md). Embed `templates/` remains the offline fallback.
+
 # ComfyUI en grokV2 — integración por API HTTP/WS (avance y estado)
 
 Fecha: 2026-09-05 · Slice `aa65651` → `e5ead0e` (rama `master`).

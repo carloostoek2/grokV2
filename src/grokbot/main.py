@@ -93,6 +93,9 @@ def _build_providers(
             settings.comfyui_port,
             remote_port=settings.comfyui_remote_port,
             tunnel_local_port=settings.comfyui_tunnel_local_port,
+            workflow_source=settings.comfyui_workflow_source,
+            workflows_dir=settings.comfyui_workflows_dir,
+            workflow_cache_ttl=settings.comfyui_workflow_cache_ttl,
         ),
     )
 

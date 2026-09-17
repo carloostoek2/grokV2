@@ -16,12 +16,15 @@ stays dormant. Preconditions and user-safe copy mirror the former SSH provider.
 
 from __future__ import annotations
 
+import logging
 import os
 import random
 import time
 import uuid
 from pathlib import Path
 from typing import Callable
+
+logger = logging.getLogger(__name__)
 
 from grokbot.domain.generation import GenerationRequest, GenerationResult, MediaType
 from grokbot.domain.user_config import DEFAULT_COMFYUI_MODEL
@@ -32,7 +35,12 @@ from grokbot.providers.base import (
 )
 from grokbot.providers.comfyui.client import ComfyApiClient
 from grokbot.providers.comfyui.transport import SshLocalForward, TunnelConfig
-from grokbot.providers.comfyui.workflows.resolver import Flow, get_flow, render
+from grokbot.providers.comfyui.workflows.resolver import (
+    Flow,
+    configure_workflow_source,
+    get_flow,
+    render,
+)
 
 _COMFY_IMAGE_TIMEOUT = 600
 _COMFY_VIDEO_TIMEOUT = 1500
@@ -72,6 +80,9 @@ class ComfyUIProvider:
         *,
         remote_port: int = 18188,
         tunnel_local_port: int = 0,
+        workflow_source: str = "remote",
+        workflows_dir: str = "/workspace/ComfyUI/user/default/api_workflows",
+        workflow_cache_ttl: float = 45.0,
         transport: SshLocalForward | None = None,
         client_factory: Callable[[str], ComfyApiClient] | None = None,
         tmpdir: str | Path | None = None,
@@ -84,6 +95,14 @@ class ComfyUIProvider:
                 remote_port=int(remote_port or 18188),
                 local_port=int(tunnel_local_port or 0),
             )
+        )
+        # Source-of-truth for API graphs: Vast api_workflows/ (SSH) with embed fallback.
+        configure_workflow_source(
+            source=workflow_source,
+            host=host or "",
+            ssh_port=int(port or 22),
+            workflows_dir=workflows_dir,
+            cache_ttl=workflow_cache_ttl,
         )
         self._client_factory = client_factory or (lambda url: ComfyApiClient(url))
         self._tmpdir = Path(tmpdir) if tmpdir is not None else _DEFAULT_TMPDIR
@@ -120,6 +139,12 @@ class ComfyUIProvider:
                 "Flujo de ComfyUI no disponible.",
                 user_message=_COMBO_UNAVAILABLE_MSG,
             )
+        logger.info(
+            "ComfyUI flow resolved id=%s origin=%s file=%s",
+            flow.id,
+            flow.origin,
+            flow.file,
+        )
         return flow
 
     async def _download_outputs(

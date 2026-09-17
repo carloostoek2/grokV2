@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     # and the LOCAL port the tunnel binds (0 = pick a free ephemeral port).
     comfyui_remote_port: int = 18188
     comfyui_tunnel_local_port: int = 0
+    # Workflow graph source: remote (SSH-cat API JSON on Vast) or embed (repo templates/).
+    # remote is the product default; embed is for offline/tests. Missing remote file
+    # falls back to embed with a warning.
+    comfyui_workflow_source: str = "remote"
+    comfyui_workflows_dir: str = "/workspace/ComfyUI/user/default/api_workflows"
+    comfyui_workflow_cache_ttl: float = 45.0
 
     # Telegram user ID allowlists. blank/whitespace -> None (open bot); None too.
     allowed_telegram_ids: Annotated[set[int] | None, NoDecode] = None

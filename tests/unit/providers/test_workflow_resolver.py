@@ -2,8 +2,20 @@
 
 from __future__ import annotations
 
+import json
+import logging
+
+import pytest
+
 from grokbot.domain.generation import MediaType
-from grokbot.providers.comfyui.workflows.resolver import flows, get_flow, render
+from grokbot.providers.comfyui.workflows import resolver as resolver_mod
+from grokbot.providers.comfyui.workflows.resolver import (
+    configure_workflow_source,
+    flows,
+    get_flow,
+    render,
+    reset_workflow_source,
+)
 
 
 def test_get_flow_grok_style_returns_flow():
@@ -175,3 +187,143 @@ def test_render_agil_moody_patches_prompt_and_seednode():
     assert all("_meta" not in node for node in graph.values())
     assert flow.graph["627"]["inputs"]["text"] == ""
     assert flow.graph["851"]["inputs"]["seed"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Remote workflow source (Vast SSH / injected fetch) + embed fallback
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _reset_workflow_source_after_each():
+    """Keep remote config from leaking across tests."""
+    yield
+    reset_workflow_source()
+    resolver_mod._remote_cache.clear()
+
+
+def _minimal_agil_moody_payload(*, unet_name: str = "REMOTE_UNET.safetensors") -> dict:
+    """Small API-format graph compatible with agil_moody _meta (prompt/seed/save)."""
+    return {
+        "_meta": {
+            "id": "agil_moody",
+            "name": "Ágil Moody",
+            "media_type": "image",
+            "positive_node": "627",
+            "seed_nodes": ["851"],
+            "save_nodes": ["732"],
+            "supports_source": False,
+        },
+        "627": {"inputs": {"text": "", "clip": ["x", 0]}, "class_type": "CLIPTextEncode"},
+        "851": {"inputs": {"seed": 0}, "class_type": "SeedNode"},
+        "732": {
+            "inputs": {"filename_prefix": "grokbot/comfyui", "images": ["y", 0]},
+            "class_type": "SaveImage",
+        },
+        "761": {
+            "inputs": {"unet_name": unet_name, "weight_dtype": "default"},
+            "class_type": "UNETLoader",
+        },
+    }
+
+
+def test_remote_load_uses_injected_fetch_and_sets_origin():
+    payload = _minimal_agil_moody_payload()
+    calls = {"n": 0}
+
+    def fetch(flow_id: str) -> str | None:
+        calls["n"] += 1
+        assert flow_id == "agil_moody"
+        return json.dumps(payload)
+
+    configure_workflow_source(
+        source="remote",
+        host="vast.example",
+        workflows_dir="/workspace/ComfyUI/user/default/api_workflows",
+        cache_ttl=60,
+        fetch=fetch,
+    )
+    flow = get_flow("agil_moody")
+    assert flow is not None
+    assert flow.origin == "remote"
+    assert flow.graph["761"]["inputs"]["unet_name"] == "REMOTE_UNET.safetensors"
+    # Cache hit: second call must not re-fetch.
+    flow2 = get_flow("agil_moody")
+    assert flow2 is flow or flow2.graph["761"]["inputs"]["unet_name"] == "REMOTE_UNET.safetensors"
+    assert calls["n"] == 1
+    graph = render(flow, "hola remoto", lambda: 99)
+    assert graph["627"]["inputs"]["text"] == "hola remoto"
+    assert graph["851"]["inputs"]["seed"] == 99
+    assert "_meta" not in graph
+
+
+def test_remote_missing_falls_back_to_embed(caplog):
+    def fetch(flow_id: str) -> str | None:
+        return None
+
+    configure_workflow_source(
+        source="remote",
+        host="vast.example",
+        cache_ttl=30,
+        fetch=fetch,
+    )
+    with caplog.at_level(logging.WARNING):
+        flow = get_flow("agil_moody")
+    assert flow is not None
+    assert flow.origin == "embed"
+    # Embed template keeps the platform Moody UNET pin from the repo.
+    assert "Moody-Krea-Mix" in flow.graph["761"]["inputs"]["unet_name"]
+    assert any("falling back to embed" in r.message for r in caplog.records)
+
+
+def test_embed_source_ignores_remote_fetch():
+    def fetch(flow_id: str) -> str | None:
+        raise AssertionError("fetch must not be called in embed mode")
+
+    configure_workflow_source(
+        source="embed",
+        host="vast.example",
+        fetch=fetch,
+    )
+    flow = get_flow("agil_moody")
+    assert flow is not None
+    assert flow.origin == "embed"
+
+
+def test_remote_cache_expires_and_refetches():
+    payloads = [
+        _minimal_agil_moody_payload(unet_name="FIRST.safetensors"),
+        _minimal_agil_moody_payload(unet_name="SECOND.safetensors"),
+    ]
+    calls = {"n": 0}
+
+    def fetch(flow_id: str) -> str | None:
+        idx = min(calls["n"], len(payloads) - 1)
+        calls["n"] += 1
+        return json.dumps(payloads[idx])
+
+    configure_workflow_source(
+        source="remote",
+        host="vast.example",
+        cache_ttl=0,  # expire immediately
+        fetch=fetch,
+    )
+    f1 = get_flow("agil_moody")
+    f2 = get_flow("agil_moody")
+    assert f1 is not None and f2 is not None
+    assert f1.graph["761"]["inputs"]["unet_name"] == "FIRST.safetensors"
+    assert f2.graph["761"]["inputs"]["unet_name"] == "SECOND.safetensors"
+    assert calls["n"] == 2
+
+
+def test_remote_rejects_path_traversal_flow_id():
+    def fetch(flow_id: str) -> str | None:
+        raise AssertionError(f"must not fetch unsafe id {flow_id!r}")
+
+    configure_workflow_source(
+        source="remote",
+        host="vast.example",
+        fetch=fetch,
+    )
+    assert get_flow("../etc/passwd") is None
+    assert get_flow("agil_moody/../../x") is None
