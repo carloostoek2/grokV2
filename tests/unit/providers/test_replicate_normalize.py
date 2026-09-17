@@ -74,12 +74,17 @@ def test_wrap_run_error_prediction_vs_network():
     gen = _wrap_run_error(_Pred("bad"), user_message=user)
     assert isinstance(gen, ProviderGenerationError)
     assert gen.retryable is False
-    assert gen.user_message == user
+    assert gen.user_message == user  # UNKNOWN uses fallback
     limited = _wrap_run_error(_Limited("slow"), user_message=user)
     assert isinstance(limited, ProviderRateLimitError)
+    # Known kind (429) uses shared Spanish copy, not the fallback.
+    from grokbot.providers.error_mapping import USER_MSG_RATE_LIMIT
+
+    assert limited.user_message == USER_MSG_RATE_LIMIT
     net = _wrap_run_error(RuntimeError("boom"), user_message=user)
     assert isinstance(net, ProviderUnavailableError)
     assert net.retryable is True
+    assert net.user_message == user
 
 
 def test_kind_seedream_faceswap_grok_other():

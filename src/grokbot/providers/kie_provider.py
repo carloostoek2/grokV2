@@ -48,6 +48,11 @@ from grokbot.providers.base import (
     detect_image_mime,
     validate_image_for_i2v,
 )
+from grokbot.providers.error_mapping import (
+    classify_provider_error,
+    log_mapped_error,
+    to_provider_error,
+)
 
 KIE_BASE = "https://api.kie.ai"
 KIE_UPLOAD_BASE = "https://kieai.redpandaai.co"
@@ -446,8 +451,8 @@ class KieProvider:
                 json=body,
             ) as resp:
                 if resp.status != 200:
-                    await resp.text()
-                    self._raise_http_status(resp.status, context="subida de imagen")
+                    body = await resp.text()
+                    self._raise_http_status(resp.status, context="subida de imagen", body=body)
                 data = await resp.json()
         except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
             raise ProviderUnavailableError(
@@ -483,8 +488,8 @@ class KieProvider:
                 json=body,
             ) as resp:
                 if resp.status != 200:
-                    await resp.text()
-                    self._raise_http_status(resp.status, context="inicio de tarea")
+                    body = await resp.text()
+                    self._raise_http_status(resp.status, context="inicio de tarea", body=body)
                 data = await resp.json()
         except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
             raise ProviderUnavailableError(
@@ -546,9 +551,15 @@ class KieProvider:
                 fail_data = data.get("data") or {}
                 fail_code = fail_data.get("failCode")
                 fail_msg = _sanitize_kie_fail_log(fail_data.get("failMsg"))
-                raise ProviderGenerationError(
-                    f"Kie task failed code={fail_code} msg={fail_msg}",
-                    user_message=_USER_ERROR,
+                mapped = classify_provider_error(
+                    message=fail_msg,
+                    prediction_error=str(fail_code) if fail_code is not None else None,
+                )
+                log_mapped_error(mapped, provider="kie")
+                raise to_provider_error(
+                    mapped,
+                    technical=f"Kie task failed code={fail_code} msg={fail_msg}",
+                    fallback_user_message=_USER_ERROR,
                 )
 
             await asyncio.sleep(VIDEO_POLL_INTERVAL_SEC)
@@ -588,8 +599,8 @@ class KieProvider:
                             user_message=_POLL_USER_ERROR,
                         )
                     if poll_resp.status not in (200,):
-                        await poll_resp.text()
-                        self._raise_http_status(poll_resp.status, context="consulta de tarea")
+                        body = await poll_resp.text()
+                        self._raise_http_status(poll_resp.status, context="consulta de tarea", body=body)
                     data = await poll_resp.json()
             except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
                 if attempt < POLL_MAX_RETRIES:
@@ -658,46 +669,36 @@ class KieProvider:
             )
         return result_url, None
 
-    def _raise_http_status(self, status: int, *, context: str) -> None:
-        """Map a non-ok HTTP status to a typed, user-safe ProviderError.
+    def _raise_http_status(
+        self, status: int, *, context: str, body: str | None = None
+    ) -> None:
+        """Map a non-ok HTTP status (+ optional body) to a typed ProviderError.
 
-        D3/M3: terminal 4xx (except 404/422 handled as transient inside the poll
-        loop) surface as :class:`ProviderInputError`; only 5xx map to
-        :class:`ProviderUnavailableError` (retryable).
+        Shared :mod:`error_mapping` classifies billing / rate_limit / moderation
+        so Kie failures share the same Spanish UX as Replicate/xAI.
         """
-        if status in (401, 403):
-            raise ProviderAuthenticationError(
-                f"Kie authentication failed ({context}).",
-                user_message=_USER_ERROR,
-            )
-        if status == 429:
-            raise ProviderRateLimitError(
-                f"Kie rate limit ({context}).",
-                user_message="Demasiadas solicitudes. Intenta de nuevo en unos segundos.",
-            )
-        if 400 <= status < 500:
-            raise ProviderInputError(
-                f"Kie HTTP {status} ({context}).",
-                user_message=_USER_ERROR,
-            )
-        raise ProviderUnavailableError(
-            f"Kie HTTP {status} ({context}).",
-            user_message=_USER_ERROR,
+        mapped = classify_provider_error(status_code=status, body=body, message=context)
+        log_mapped_error(mapped, provider="kie")
+        raise to_provider_error(
+            mapped,
+            technical=f"Kie HTTP {status} ({context})",
+            status_code=status,
+            fallback_user_message=_USER_ERROR,
+            unavailable_if_unknown=status >= 500,
         )
 
-    def _raise_api_code(self, api_code: int | None) -> None:
+    def _raise_api_code(self, api_code: int | None, *, body: str | None = None) -> None:
         """Map a non-200 Kie business code to a terminal (non-retryable) error."""
-        if api_code == 429:
-            raise ProviderRateLimitError(
-                "Kie rate limit",
-                user_message="Demasiadas solicitudes. Intenta de nuevo en unos segundos.",
-            )
-        if isinstance(api_code, int) and 400 <= api_code < 500:
-            raise ProviderInputError(
-                f"Kie api code {api_code}",
-                user_message=_USER_ERROR,
-            )
-        raise ProviderGenerationError(
-            f"Kie api code {api_code}",
-            user_message=_USER_ERROR,
+        status = api_code if isinstance(api_code, int) else None
+        mapped = classify_provider_error(
+            status_code=status,
+            body=body,
+            message=f"Kie api code {api_code}",
+        )
+        log_mapped_error(mapped, provider="kie")
+        raise to_provider_error(
+            mapped,
+            technical=f"Kie api code {api_code}",
+            status_code=status,
+            fallback_user_message=_USER_ERROR,
         )

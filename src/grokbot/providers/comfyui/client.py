@@ -33,6 +33,12 @@ from grokbot.providers.base import (
     ProviderInputError,
     ProviderUnavailableError,
 )
+from grokbot.providers.error_mapping import (
+    USER_MSG_GENERIC,
+    classify_provider_error,
+    log_mapped_error,
+    to_provider_error,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +51,7 @@ _DEFAULT_POLL_INTERVAL_SEC = 2.0
 _NOT_AVAILABLE_MSG = (
     "ComfyUI no está disponible en este momento. Contacta al administrador del bot."
 )
-_GENERIC_ERR_MSG = "Error en la generación. Intenta de nuevo más tarde."
+_GENERIC_ERR_MSG = USER_MSG_GENERIC
 
 # WebSocket message types we react to (the rest are ignored).
 _WS_EXEC_ERROR = "execution_error"
@@ -350,9 +356,14 @@ class ComfyApiClient:
             if status.get("completed") or status_str == "success":
                 return
             if status_str == "error":
-                raise ProviderGenerationError(
-                    "Ejecución ComfyUI reportó error.",
-                    user_message=_GENERIC_ERR_MSG,
+                messages = status.get("messages") or []
+                detail = "; ".join(str(m) for m in messages[:3]) if messages else "error"
+                mapped = classify_provider_error(message=detail)
+                log_mapped_error(mapped, provider="comfyui")
+                raise to_provider_error(
+                    mapped,
+                    technical=f"ComfyUI run failed prompt_id={prompt_id}: {mapped.detail}",
+                    fallback_user_message=_GENERIC_ERR_MSG,
                 )
             if ws_used:
                 # WS signalled completion but the record is not terminal yet.

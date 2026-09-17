@@ -29,19 +29,24 @@ from grokbot.providers.base import (
     POLL_RETRY_BACKOFF_SEC,
     VIDEO_MAX_POLL_SEC,
     VIDEO_POLL_INTERVAL_SEC,
-    ProviderAuthenticationError,
     ProviderContentError,
     ProviderGenerationError,
     ProviderInputError,
-    ProviderRateLimitError,
     ProviderTimeoutError,
     ProviderUnavailableError,
     bytes_to_data_uri,
     validate_image_for_i2v,
 )
+from grokbot.providers.error_mapping import (
+    CONTENT_MODERATION_MSG,
+    USER_MSG_GENERIC,
+    classify_provider_error,
+    log_mapped_error,
+    to_provider_error,
+)
 
 XAI_BASE = "https://api.x.ai/v1"
-_CONTENT_MODERATION_MSG = "El contenido no cumple las políticas de moderación."
+_CONTENT_MODERATION_MSG = CONTENT_MODERATION_MSG
 _NO_REQUEST_ID_MSG = "No se pudo iniciar la generación de video. Intenta de nuevo."
 _NO_VIDEO_URL_MSG = "No se recibió URL de video. Intenta de nuevo."
 _NO_IMAGE_URL_MSG = "xAI no devolvió URL de imagen."
@@ -53,31 +58,26 @@ def _xai_http_ok(status: int) -> bool:
     return status in (200, 202)
 
 
-def _raise_for_http_status(status: int, *, context: str = "generación") -> None:
-    """Map a non-ok HTTP status to a typed, user-safe ProviderError.
+def _raise_for_http_status(
+    status: int,
+    *,
+    context: str = "generación",
+    body: str | None = None,
+) -> None:
+    """Map a non-ok HTTP status (+ optional body) to a typed ProviderError.
 
-    D3/M3: terminal 4xx responses (invalid payload, unknown model/endpoint, ...)
-    are NOT retryable — they surface as :class:`ProviderInputError`. Only 5xx /
-    transport conditions map to :class:`ProviderUnavailableError` (retryable).
+    Shared :mod:`error_mapping` classifies moderation / billing / rate_limit /
+    etc. so credits-403 and similar get clear Spanish UX instead of the generic
+    fallback. Terminal 4xx stay non-retryable; 5xx stay unavailable/retryable.
     """
-    if status in (401, 403):
-        raise ProviderAuthenticationError(
-            f"xAI authentication failed ({context}).",
-            user_message="Error en la generación. Intenta de nuevo más tarde.",
-        )
-    if status == 429:
-        raise ProviderRateLimitError(
-            f"xAI rate limit ({context}).",
-            user_message="Demasiadas solicitudes. Intenta de nuevo en unos segundos.",
-        )
-    if 400 <= status < 500:
-        raise ProviderInputError(
-            f"xAI rechazó la solicitud (HTTP {status}, {context}).",
-            user_message="Error en la generación. Intenta de nuevo más tarde.",
-        )
-    raise ProviderUnavailableError(
-        f"xAI HTTP {status} ({context}).",
-        user_message="Error en la generación. Intenta de nuevo más tarde.",
+    mapped = classify_provider_error(status_code=status, body=body, message=context)
+    log_mapped_error(mapped, provider="xai")
+    raise to_provider_error(
+        mapped,
+        technical=f"xAI HTTP {status} ({context})",
+        status_code=status,
+        fallback_user_message=USER_MSG_GENERIC,
+        unavailable_if_unknown=status >= 500,
     )
 
 
@@ -217,8 +217,8 @@ class XaiProvider:
                 f"{XAI_BASE}/videos/generations", headers=headers, json=body
             ) as resp:
                 if not _xai_http_ok(resp.status):
-                    await resp.text()
-                    _raise_for_http_status(resp.status, context="generación de video")
+                    body = await resp.text()
+                    _raise_for_http_status(resp.status, context="generación de video", body=body)
                 data = await resp.json()
 
             request_id = data.get("request_id")
@@ -278,11 +278,11 @@ class XaiProvider:
                         if attempt < POLL_MAX_RETRIES:
                             await asyncio.sleep(POLL_RETRY_BACKOFF_SEC[attempt])
                             continue
-                        await poll_resp.text()
-                        _raise_for_http_status(poll_resp.status, context="consulta de video")
+                        body = await poll_resp.text()
+                        _raise_for_http_status(poll_resp.status, context="consulta de video", body=body)
                     if not _xai_http_ok(poll_resp.status):
-                        await poll_resp.text()
-                        _raise_for_http_status(poll_resp.status, context="consulta de video")
+                        body = await poll_resp.text()
+                        _raise_for_http_status(poll_resp.status, context="consulta de video", body=body)
                     return await poll_resp.json()
             except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
                 if attempt < POLL_MAX_RETRIES:
@@ -310,8 +310,8 @@ class XaiProvider:
             async with aiohttp.ClientSession() as session:
                 async with session.post(url, headers=headers, json=body) as resp:
                     if resp.status != 200:
-                        await resp.text()
-                        _raise_for_http_status(resp.status, context=context)
+                        body = await resp.text()
+                        _raise_for_http_status(resp.status, context=context, body=body)
                     data = await resp.json()
         except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
             raise ProviderUnavailableError(

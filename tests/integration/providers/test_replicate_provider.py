@@ -204,13 +204,53 @@ async def test_sdk_exception_maps_to_unavailable():
 
 @pytest.mark.asyncio
 async def test_prediction_failure_maps_to_generation_error_not_retryable():
+    """Unknown prediction failures stay ProviderGenerationError (terminal)."""
     prov = ReplicateProvider(
         API_TOKEN,
-        client=_FailingClient(_ModelError("Invalid image format '.bin'")),
+        client=_FailingClient(_ModelError("upstream predictor crashed")),
     )
     with pytest.raises(ProviderGenerationError) as excinfo:
         await prov.generate(_req("grok"))
     assert excinfo.value.retryable is False
+
+
+@pytest.mark.asyncio
+async def test_prediction_invalid_input_maps_to_input_error():
+    """Invalid-image prediction text classifies as invalid_input (still terminal)."""
+    from grokbot.providers.error_mapping import USER_MSG_INVALID_INPUT
+
+    prov = ReplicateProvider(
+        API_TOKEN,
+        client=_FailingClient(_ModelError("Invalid image format '.bin'")),
+    )
+    with pytest.raises(ProviderInputError) as excinfo:
+        await prov.generate(_req("grok"))
+    assert excinfo.value.retryable is False
+    assert excinfo.value.user_message == USER_MSG_INVALID_INPUT
+
+
+@pytest.mark.asyncio
+async def test_prediction_sensitive_maps_to_content_error():
+    from grokbot.providers.base import ProviderContentError
+    from grokbot.providers.error_mapping import USER_MSG_MODERATION
+
+    class _SensitivePred:
+        error = (
+            "The input or output was flagged as sensitive "
+            "content by a content safety classifier (E005). "
+            "Flagged categories: sexual"
+        )
+
+    class _SensitiveModelError(Exception):
+        def __init__(self):
+            super().__init__(_SensitivePred.error)
+            self.prediction = _SensitivePred()
+
+    prov = ReplicateProvider(API_TOKEN, client=_FailingClient(_SensitiveModelError()))
+    with pytest.raises(ProviderContentError) as excinfo:
+        await prov.generate(_req("grok"))
+    assert excinfo.value.retryable is False
+    assert excinfo.value.user_message == USER_MSG_MODERATION
 
 
 @pytest.mark.asyncio
