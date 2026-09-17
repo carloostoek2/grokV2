@@ -11,7 +11,7 @@
   },
   "1": {
     "inputs": {
-      "unet_name": "Moody-Krea-Mix-v7_00002__clean_fp8.safetensors",
+      "unet_name": "Moody-Krea-Mix-v4.1G_00001__clean_nvfp4.safetensors",
       "weight_dtype": "default"
     },
     "class_type": "UNETLoader"
