@@ -19,6 +19,11 @@ from grokbot.domain.generation import (
     GenerationResult,
     MediaType,
 )
+from grokbot.domain.user_config import (
+    DEFAULT_VIDEO_ASPECT_RATIO,
+    DEFAULT_VIDEO_DURATION,
+    DEFAULT_VIDEO_RESOLUTION,
+)
 from grokbot.providers.base import (
     DEFAULT_IMAGE_ASPECT_RATIO,
     ProviderAuthenticationError,
@@ -41,21 +46,57 @@ _FACESWAP_WAIT_SEC = 60  # parity grok/bot.py:192 REPLICATE_WAIT_SEC
 def _replicate_kind(model_id: str) -> str:
     """Classify a Replicate model id for input-shape branching.
 
-    Returns ``"seedream"``, ``"faceswap"``, ``"grok"``, ``"nano_banana"`` or
-    ``"other"``. Ids are compared against the domain catalog registry (never
-    loose substring matching on the wire id beyond documented prefixes).
+    Returns ``"seedream"``, ``"faceswap"``, ``"grok"``, ``"grok_video"``,
+    ``"nano_banana"`` or ``"other"``. Ids are compared against the domain
+    catalog registry (never loose substring matching on the wire id beyond
+    documented prefixes).
     """
     if model_id == _SEEDREAM_ID:
         return "seedream"
     if model_id == _FACESWAP_ID:
         return "faceswap"
+    base = model_id.split(":", 1)[0]
+    if base.startswith("xai/grok-imagine-video"):
+        return "grok_video"
     if model_id.startswith(_GROK_REPLICATE_PREFIX):
         return "grok"
     # Pinned ids look like ``google/nano-banana-2:<hash>``.
-    base = model_id.split(":", 1)[0]
     if base.startswith(_NANO_BANANA_REPLICATE_PREFIX):
         return "nano_banana"
     return "other"
+
+
+def _grok_video_replicate_input(
+    request: GenerationRequest,
+    source_image: bytes | None,
+) -> tuple[dict, dict]:
+    """Build Replicate input (+ run kwargs) for ``xai/grok-imagine-video*``.
+
+    Returns ``(input_data, extra_kwargs)``. ``grok-imagine-video-1.5`` requires
+    an image (i2v-only on Replicate); base model supports t2v and i2v.
+    """
+    base = request.model_id.split(":", 1)[0]
+    needs_image = base == "xai/grok-imagine-video-1.5"
+    if needs_image and source_image is None:
+        raise ProviderInputError(
+            "Grok Imagine Video 1.5 en Replicate requiere una imagen (image-to-video).",
+            user_message=(
+                "Grok Imagine Video 1.5 requiere una imagen. "
+                "Envía o responde a una foto para animarla."
+            ),
+        )
+
+    input_data: dict = {
+        "prompt": request.prompt,
+        "duration": request.video_duration or DEFAULT_VIDEO_DURATION,
+        "resolution": request.video_resolution or DEFAULT_VIDEO_RESOLUTION,
+        "aspect_ratio": request.aspect_ratio or DEFAULT_VIDEO_ASPECT_RATIO,
+    }
+    extra_kwargs: dict = {}
+    if source_image is not None:
+        input_data["image"] = _named_image_buffer(source_image)
+        extra_kwargs["file_encoding_strategy"] = "base64"
+    return input_data, extra_kwargs
 
 
 def _nano_banana_replicate_input(
@@ -141,7 +182,7 @@ def _normalize_output_urls(output) -> list[str]:
 
 
 class ReplicateProvider:
-    """Replicate — implements :class:`ImageProvider` only (video falls back to xAI).
+    """Replicate — :class:`ImageProvider` + Grok Imagine :class:`VideoProvider`.
 
     ``api_token`` is required by the constructor; when no ``client`` is injected
     a default ``replicate.Client(api_token=api_token)`` is created lazily on the
@@ -157,7 +198,10 @@ class ReplicateProvider:
         return bool(self._api_token)
 
     def supports(self, request: GenerationRequest) -> bool:
-        return request.provider == "replicate" and request.media_type is MediaType.IMAGE
+        return request.provider == "replicate" and request.media_type in (
+            MediaType.IMAGE,
+            MediaType.VIDEO,
+        )
 
     def _resolve_client(self):
         if self._client is not None:
@@ -172,6 +216,9 @@ class ReplicateProvider:
         *,
         source_image: bytes | None = None,
     ) -> GenerationResult:
+        if request.media_type is MediaType.VIDEO:
+            return await self._generate_video(request, source_image)
+
         kind = _replicate_kind(request.model_id)
         if kind == "faceswap":
             raise ProviderInputError(
@@ -220,6 +267,45 @@ class ReplicateProvider:
             remote_url=urls[0],
             # Replicate assets are served by replicate.delivery CDNs; the shared
             # downloader applies no host allowlist for replicate (D4/D5).
+            meta={"urls": urls, "download_allowlist": None},
+        )
+
+    async def _generate_video(
+        self,
+        request: GenerationRequest,
+        source_image: bytes | None,
+    ) -> GenerationResult:
+        kind = _replicate_kind(request.model_id)
+        if kind != "grok_video":
+            raise ProviderInputError(
+                f"Replicate model {request.model_id!r} no genera video.",
+                user_message="El modelo seleccionado no genera video en Replicate.",
+            )
+        input_data, extra_kwargs = _grok_video_replicate_input(request, source_image)
+        client = self._resolve_client()
+        try:
+            output = await asyncio.to_thread(
+                client.run, request.model_id, input=input_data, **extra_kwargs
+            )
+        except ProviderError:
+            raise
+        except Exception as exc:
+            raise _wrap_run_error(
+                exc,
+                user_message="Error en la generación de video. Intenta de nuevo más tarde.",
+            ) from exc
+
+        urls = _normalize_output_urls(output)
+        if not urls:
+            raise ProviderGenerationError(
+                "Replicate no devolvió URL de video.",
+                user_message="Error en la generación de video. Intenta de nuevo más tarde.",
+            )
+        return GenerationResult(
+            provider="replicate",
+            model_id=request.model_id,
+            media_type=MediaType.VIDEO,
+            remote_url=urls[0],
             meta={"urls": urls, "download_allowlist": None},
         )
 

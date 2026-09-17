@@ -114,14 +114,8 @@ async def test_estado_does_not_leak_ids():
     assert str(_UID) not in text
 
 
-async def test_estado_grok_video_replicate_images_card():
-    """Open 7: grok_video con imagen vía Replicate → tarjeta byte-parity.
-
-    Cuando el lado imagen de Grok Imagine va por Replicate, el backend efectivo
-    de video es xAI (Replicate no tiene API de video) y la tarjeta muestra el
-    paréntesis "(Imágenes: Replicate; video vía xAI)" y la duración sin clamp
-    de Kie ("5s", no "5s → 6s (Kie.ai)").
-    """
+async def test_estado_grok_video_replicate_card():
+    """grok_video + Replicate → backend Replicate (incluye video) y duración sin clamp Kie."""
     deps = make_deps()
     cfg = deps.sessions.get_config(_UID)
     deps.sessions.save_config(
@@ -131,9 +125,8 @@ async def test_estado_grok_video_replicate_images_card():
     text = await _estado_text(deps)
     assert text == (
         "Estado\n\n"
-        "Modelo: Grok Imagine Video (xAI; imágenes: Replicate)\n\n"
-        "API / Backend: xAI (oficial)\n\n"
-        "(Imágenes: Replicate; video vía xAI)\n\n"
+        "Modelo: Grok Imagine Video (Replicate)\n\n"
+        "API / Backend: Replicate\n\n"
         "Video: Base, 5s, 16:9, 720p\n\n"
         "Listo para generar videos (texto o imagen a video).\n"
         "Usa /config (o /video) para configurar modelo, duración, aspecto y resolución."

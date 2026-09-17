@@ -84,7 +84,7 @@ def test_model_display_grok_default():
     assert m["imagine_variant"] == "quality"
 
 
-def test_model_display_grok_video_with_replicate_images():
+def test_model_display_grok_video_with_replicate():
     cfg = UserConfig.defaults()
     cfg = UserConfig(
         model="grok_video",
@@ -94,9 +94,8 @@ def test_model_display_grok_video_with_replicate_images():
         comfyui=ComfyUIConfig(),
     )
     m = f.model_display(cfg)
-    # Replicate no tiene video → el video efectivo es xAI; nota de imágenes vía Replicate.
-    assert m["name"] == "Grok Imagine Video (xAI; imágenes: Replicate)"
-    assert m["provider"] == "xai"
+    assert m["name"] == "Grok Imagine Video (Replicate)"
+    assert m["provider"] == "replicate"
 
 
 def test_model_display_comfyui():

@@ -98,15 +98,15 @@ def test_image_grok_video_raises_input_error():
         reg.resolve_image(_cfg(model="grok_video"))
 
 
-def test_video_grok_video_replicate_routes_to_xai():
+def test_video_grok_video_replicate_uses_replicate_slug():
     reg = _registry()
     cfg = _cfg(model="grok_video", grok_imagine_provider="replicate")
 
     res = reg.resolve_video(cfg)
 
-    assert res.name == "xai"  # replicate has no video backend (bot.py:664-669)
-    assert res.model_id == "grok-imagine-video"
-    assert isinstance(res.provider, VideoProvider)
+    assert res.name == "replicate"
+    assert res.model_id == "xai/grok-imagine-video"
+    assert isinstance(res.provider, ReplicateProvider)
 
 
 def test_video_grok_video_kie_uses_cfg_video_model():

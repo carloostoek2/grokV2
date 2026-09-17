@@ -7,11 +7,13 @@ from dataclasses import dataclass
 from grokbot.domain.catalog import MODELS
 from grokbot.providers.base import (
     ProviderGenerationError,
+    ProviderInputError,
     ProviderRateLimitError,
     ProviderUnavailableError,
 )
 from grokbot.domain.generation import GenerationRequest, MediaType
 from grokbot.providers.replicate_provider import (
+    _grok_video_replicate_input,
     _named_image_buffer,
     _nano_banana_replicate_input,
     _normalize_output_urls,
@@ -116,3 +118,46 @@ def test_nano_banana_replicate_input_t2i_i2i():
     assert len(i2i["image_input"]) == 1
     assert i2i["image_input"][0].startswith("data:")
     assert "aspect_ratio" not in i2i
+
+
+def test_kind_grok_video():
+    assert _replicate_kind("xai/grok-imagine-video") == "grok_video"
+    assert _replicate_kind("xai/grok-imagine-video-1.5") == "grok_video"
+    assert _replicate_kind("xai/grok-imagine-image") == "grok"
+
+
+def test_grok_video_input_t2v():
+    req = GenerationRequest(
+        provider="replicate",
+        model_id="xai/grok-imagine-video",
+        media_type=MediaType.VIDEO,
+        prompt="a cat walks",
+        aspect_ratio="16:9",
+        video_duration=5,
+        video_resolution="480p",
+    )
+    inp, extra = _grok_video_replicate_input(req, None)
+    assert inp["prompt"] == "a cat walks"
+    assert inp["duration"] == 5
+    assert inp["resolution"] == "480p"
+    assert inp["aspect_ratio"] == "16:9"
+    assert "image" not in inp
+    assert extra == {}
+
+
+def test_grok_video_15_requires_image():
+    req = GenerationRequest(
+        provider="replicate",
+        model_id="xai/grok-imagine-video-1.5",
+        media_type=MediaType.VIDEO,
+        prompt="animate",
+    )
+    try:
+        _grok_video_replicate_input(req, None)
+        raise AssertionError("expected ProviderInputError")
+    except ProviderInputError:
+        pass
+
+    inp, extra = _grok_video_replicate_input(req, b"\xff\xd8\xff")
+    assert "image" in inp
+    assert extra.get("file_encoding_strategy") == "base64"
