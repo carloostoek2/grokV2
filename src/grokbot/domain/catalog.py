@@ -132,6 +132,18 @@ DEFAULT_NANO_BANANA_VARIANT = "banana2"
 VALID_NANO_BANANA_PROVIDERS = ("kie", "replicate")
 VALID_NANO_BANANA_VARIANTS = ("classic", "banana2", "pro")
 
+# Replicate wire ids for Grok Imagine Video (catalog video.model → Replicate slug).
+# Unpinned like Grok Imagine image on Replicate; models exist on Replicate API.
+REPLICATE_VIDEO_IDS: dict[str, str] = {
+    "grok-imagine-video": "xai/grok-imagine-video",
+    "grok-imagine-video-1.5": "xai/grok-imagine-video-1.5",
+}
+
+
+def resolve_replicate_video_id(video_model: str) -> str:
+    """Map a session ``video.model`` id to the Replicate owner/name slug."""
+    return REPLICATE_VIDEO_IDS.get(video_model, REPLICATE_VIDEO_IDS["grok-imagine-video"])
+
 # Kie Nano Banana model slugs (t2i + classic edit). Used by KieProvider branching.
 KIE_NANO_BANANA_MODELS = frozenset(
     {

@@ -196,12 +196,8 @@ def model_display(cfg: UserConfig) -> dict:
         video_prov = video_provider_for_config(cfg)
         prov = video_prov if video_prov is not None else "xai"
         prov_name = prov_label(prov)
-        if res["provider"] == "replicate":
-            m["name"] = f"Grok Imagine Video ({prov_name}; imágenes: Replicate)"
-            m["desc"] = "Generación de video con xAI; imágenes vía Replicate"
-        else:
-            m["name"] = f"Grok Imagine Video ({prov_name})"
-            m["desc"] = f"Generación de video con Grok Imagine — {prov_name}"
+        m["name"] = f"Grok Imagine Video ({prov_name})"
+        m["desc"] = f"Generación de video con Grok Imagine — {prov_name}"
         m["provider"] = prov
         m["imagine_provider"] = res["provider"]
         m["imagine_variant"] = res["variant"]
@@ -361,8 +357,6 @@ def estado_card(cfg: UserConfig, *, integrate_ref: bool = False) -> str:
     elif model.get("key") == "grok_video":
         prov = video_provider_for_config(cfg)
         lines.append(f"API / Backend: {_ESTADO_PROV_LABELS.get(prov, prov)}\n")
-        if model.get("imagine_provider") == "replicate":
-            lines.append("(Imágenes: Replicate; video vía xAI)\n")
         model_label = VIDEO_MODEL_LABELS.get(cfg.video.model, cfg.video.model)
         dur = video_duration_display(cfg.video.duration, prov)
         lines.append(f"Video: {model_label}, {dur}, {cfg.video.aspect_ratio}, {cfg.video.resolution}\n")

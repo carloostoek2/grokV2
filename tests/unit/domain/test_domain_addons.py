@@ -56,9 +56,9 @@ def test_video_provider_for_config_comfyui():
     assert video_provider_for_config(_cfg(model="comfyui")) == "comfyui"
 
 
-def test_video_provider_for_config_replicate_maps_to_xai():
+def test_video_provider_for_config_replicate_stays_replicate():
     cfg = _cfg(model="grok_video", grok_imagine_provider="replicate")
-    assert video_provider_for_config(cfg) == "xai"
+    assert video_provider_for_config(cfg) == "replicate"
 
 
 def test_video_provider_for_config_kie():

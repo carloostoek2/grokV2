@@ -1,7 +1,7 @@
 """Provider registry — pure resolution from ``UserConfig`` + ``MediaType`` (D6).
 
 Semantic reference: grok bot.py ``get_model``/``get_grok_imagine_config``
-(848-922) and ``get_video_provider_for_user`` (664-669). Providers and their
+(848-922) and video provider resolution. Providers and their
 availability are injected by constructor (no settings/env reads here); the app
 layer (item 6) wires real instances. Resolution raises
 :class:`ProviderNotConfiguredError` (user-facing, R9) when the resolved provider
@@ -13,7 +13,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from grokbot.domain.catalog import MODELS, resolve_grok_config, resolve_nano_banana_config
+from grokbot.domain.catalog import (
+    MODELS,
+    resolve_grok_config,
+    resolve_nano_banana_config,
+    resolve_replicate_video_id,
+)
 from grokbot.domain.generation import MediaType
 from grokbot.domain.user_config import UserConfig
 from grokbot.providers.base import ProviderInputError, ProviderNotConfiguredError
@@ -88,10 +93,10 @@ class ProviderRegistry:
         if cfg.model == "grok_video":
             resolved = resolve_grok_config(cfg.grok_imagine_provider, cfg.grok_imagine_variant)
             name = resolved["provider"]
-            # Replicate has no video backend — grok routes video to xAI (bot.py:664-669).
+            model_id = cfg.video.model
             if name == "replicate":
-                name = "xai"
-            return self._resolve(name, cfg.video.model)
+                model_id = resolve_replicate_video_id(model_id)
+            return self._resolve(name, model_id)
         if cfg.model == _COMFYUI_ID:
             return self._resolve("comfyui", _COMFYUI_ID)
         raise ProviderInputError(

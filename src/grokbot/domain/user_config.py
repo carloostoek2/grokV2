@@ -86,17 +86,16 @@ KIE_15_VIDEO_ASPECT_RATIOS = ("16:9", "9:16", "1:1", "4:3", "3:4", "3:2", "2:3")
 def video_provider_for_config(cfg: "UserConfig") -> str | None:
     """Effective video backend for ``cfg``, without touching the registry.
 
-    Pure mirror of grok ``get_video_provider_for_user`` (bot.py:664-669): only the
-    ``grok``/``grok_video`` top models route through the Grok Imagine provider
-    (Replicate has no video API → xAI); ``comfyui`` maps to itself; any other
-    model returns None (no video backend).
+    For ``grok`` / ``grok_video`` the Grok Imagine provider is used as-is
+    (xAI, Replicate, or Kie). ``comfyui`` maps to itself; any other model
+    returns None (no video backend).
     """
     if cfg.model == "comfyui":
         return "comfyui"
     if cfg.model not in ("grok", "grok_video"):
         return None
     resolved = resolve_grok_config(cfg.grok_imagine_provider, cfg.grok_imagine_variant)
-    return "xai" if resolved["provider"] == "replicate" else resolved["provider"]
+    return resolved["provider"]
 
 
 def kie_video_aspect_ratios(video_model: str) -> tuple[str, ...]:
