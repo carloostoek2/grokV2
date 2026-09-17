@@ -84,6 +84,8 @@ def test_config_comfyui_keyboard_lists_only_flow():
         "cfg:comfyui:flow:agil_solo",
         "cfg:comfyui:flow:agil_nsfw",
         "cfg:comfyui:flow:agil_moody",
+        "cfg:comfyui:flow:agil_edit_qwen",
+        "cfg:comfyui:flow:agil_edit_nsfw",
         "cfg:back:model",
         "cfg:close",
     ]

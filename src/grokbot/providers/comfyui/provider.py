@@ -228,6 +228,8 @@ class ComfyUIProvider:
         base_url = await self._transport.ensure()
         client = self._client_factory(base_url)
         try:
+            if source_image is not None:
+                graph = await self._inject_source_image(client, flow, graph, source_image)
             prompt_id = await client.run_workflow(graph, timeout=run_timeout)
             refs = self._collect_media(await client.history(prompt_id), flow)
             if not refs:
@@ -240,6 +242,37 @@ class ComfyUIProvider:
             if close is not None:
                 await close()
         return self._build_result(request, flow, locals_)
+
+
+    async def _inject_source_image(
+        self,
+        client: ComfyApiClient,
+        flow: Flow,
+        graph: dict,
+        source_image: bytes,
+    ) -> dict:
+        """Upload ``source_image`` and patch the flow's LoadImage node filename."""
+        source_node = flow.source_node
+        if not source_node:
+            # Auto-detect first LoadImage node when meta omits source_node.
+            for nid, node in graph.items():
+                if isinstance(node, dict) and node.get("class_type") == "LoadImage":
+                    source_node = str(nid)
+                    break
+        if not source_node or source_node not in graph:
+            raise ProviderInputError(
+                "La plantilla i2i no declara nodo de imagen fuente.",
+                user_message=_EDIT_UNAVAILABLE_MSG,
+            )
+        node = graph[source_node]
+        inputs = node.setdefault("inputs", {})
+        if flow.source_input not in inputs and "image" not in inputs:
+            # Still allow patching even if placeholder missing.
+            pass
+        filename = f"grokbot_src_{uuid.uuid4().hex[:12]}.png"
+        uploaded = await client.upload_image(filename, source_image)
+        inputs[flow.source_input] = uploaded
+        return graph
 
     @staticmethod
     def _collect_media(history: dict, flow: Flow) -> list[dict]:

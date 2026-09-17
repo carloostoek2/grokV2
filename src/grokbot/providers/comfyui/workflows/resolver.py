@@ -12,7 +12,9 @@ más una clave top-level ``_meta`` que lo describe y declara qué nodos parchear
       "negative_node": "27",
       "seed_nodes": ["195"],
       "save_nodes": ["914"],
-      "supports_source": false
+      "supports_source": false,
+      "source_node": "1",         # LoadImage node id (i2i)
+      "source_input": "image"     # default
     }
 
 Fuente de verdad (runtime)
@@ -79,6 +81,10 @@ class Flow:
     save_nodes: tuple[str, ...] = ()
     # True cuando la plantilla admite img2img/i2v (carga foto fuente).
     supports_source: bool = False
+    # Nodo LoadImage (o equivalente) cuyo input recibe el filename subido.
+    source_node: str | None = None
+    # Input del nodo fuente (default "image" para LoadImage).
+    source_input: str = "image"
     # Timeout de generación en segundos (override del default por media_type).
     timeout: int | None = None
     # Origen del grafo: "remote" (Vast) o "embed" (templates/ del repo).
@@ -185,6 +191,10 @@ def _flow_from_raw(raw: dict, file_name: str, *, origin: str) -> Flow:
         seed_nodes=tuple(str(x) for x in meta.get("seed_nodes", ())),
         save_nodes=tuple(str(x) for x in meta.get("save_nodes", ())),
         supports_source=bool(meta.get("supports_source", False)),
+        source_node=(
+            str(meta["source_node"]) if meta.get("source_node") else None
+        ),
+        source_input=str(meta.get("source_input", "image")),
         timeout=int(meta["timeout"]) if meta.get("timeout") else None,
         origin=origin,
     )

@@ -1,0 +1,166 @@
+{
+  "_meta": {
+    "id": "agil_edit_nsfw",
+    "name": "Ágil Edit NSFW",
+    "media_type": "image",
+    "positive_node": "4",
+    "positive_input": "prompt",
+    "seed_nodes": [
+      "6"
+    ],
+    "save_nodes": [
+      "7"
+    ],
+    "supports_source": true,
+    "source_node": "2",
+    "source_input": "image",
+    "timeout": 900,
+    "source": "Phr00t Qwen-Image-Edit-Rapid-AIO NSFW v23 all-in-one checkpoint. TextEncodeQwenImageEditPlus. 4 steps CFG 1."
+  },
+  "1": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "Qwen-Rapid-AIO-NSFW-v23.safetensors"
+    }
+  },
+  "2": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "example.png"
+    }
+  },
+  "3": {
+    "class_type": "FluxKontextImageScale",
+    "inputs": {
+      "image": [
+        "2",
+        0
+      ]
+    }
+  },
+  "4": {
+    "class_type": "TextEncodeQwenImageEditPlus",
+    "inputs": {
+      "clip": [
+        "1",
+        1
+      ],
+      "prompt": "change the background to blue, keep the face",
+      "vae": [
+        "1",
+        2
+      ],
+      "image1": [
+        "3",
+        0
+      ]
+    }
+  },
+  "5": {
+    "class_type": "TextEncodeQwenImageEditPlus",
+    "inputs": {
+      "clip": [
+        "1",
+        1
+      ],
+      "prompt": "",
+      "vae": [
+        "1",
+        2
+      ],
+      "image1": [
+        "3",
+        0
+      ]
+    }
+  },
+  "6": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 0,
+      "steps": 4,
+      "cfg": 1.0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1.0,
+      "model": [
+        "1",
+        0
+      ],
+      "positive": [
+        "8",
+        0
+      ],
+      "negative": [
+        "9",
+        0
+      ],
+      "latent_image": [
+        "10",
+        0
+      ]
+    }
+  },
+  "7": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "filename_prefix": "grokbot/agil_edit_nsfw",
+      "images": [
+        "11",
+        0
+      ]
+    }
+  },
+  "8": {
+    "class_type": "ReferenceLatent",
+    "inputs": {
+      "conditioning": [
+        "4",
+        0
+      ],
+      "latent": [
+        "10",
+        0
+      ]
+    }
+  },
+  "9": {
+    "class_type": "ReferenceLatent",
+    "inputs": {
+      "conditioning": [
+        "5",
+        0
+      ],
+      "latent": [
+        "10",
+        0
+      ]
+    }
+  },
+  "10": {
+    "class_type": "VAEEncode",
+    "inputs": {
+      "pixels": [
+        "3",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    }
+  },
+  "11": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "6",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    }
+  }
+}

@@ -30,7 +30,7 @@ def test_get_flow_grok_style_returns_flow():
 
 def test_flows_returns_registered_flows():
     ids = {f.id for f in flows()}
-    assert ids == {"grok_style", "donut_face", "agil_solo", "agil_nsfw", "agil_moody"}
+    assert ids == {"grok_style", "donut_face", "agil_solo", "agil_nsfw", "agil_moody", "agil_edit_qwen", "agil_edit_nsfw"}
 
 
 def test_get_flow_donut_face():
@@ -327,3 +327,20 @@ def test_remote_rejects_path_traversal_flow_id():
     )
     assert get_flow("../etc/passwd") is None
     assert get_flow("agil_moody/../../x") is None
+
+
+def test_get_flow_agil_edit_qwen_supports_source():
+    flow = get_flow("agil_edit_qwen")
+    assert flow is not None
+    assert flow.id == "agil_edit_qwen"
+    assert flow.supports_source is True
+    assert flow.source_node == "1"
+    assert flow.positive_input == "prompt"
+
+
+def test_get_flow_agil_edit_nsfw_supports_source():
+    flow = get_flow("agil_edit_nsfw")
+    assert flow is not None
+    assert flow.id == "agil_edit_nsfw"
+    assert flow.supports_source is True
+    assert flow.source_node == "2"
