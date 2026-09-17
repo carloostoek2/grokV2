@@ -37,7 +37,7 @@ _TUNNEL_DOWN_MSG = (
 )
 
 _DEFAULT_SSH_BIN = "ssh"
-_SSH_GRACE_SEC = 1.5  # window to detect an immediate ssh exit (bad key/auth/port)
+_SSH_GRACE_SEC = 3.0  # window to detect an immediate ssh exit (bad key/auth/port)
 _DRAIN_LIMIT = 40
 
 
