@@ -1,0 +1,180 @@
+{
+  "_meta": {
+    "id": "wan_i2v",
+    "name": "Wan I2V",
+    "media_type": "video",
+    "positive_node": "6",
+    "positive_input": "text",
+    "seed_nodes": [
+      "3"
+    ],
+    "save_nodes": [
+      "21"
+    ],
+    "supports_source": true,
+    "source_node": "1",
+    "source_input": "image",
+    "timeout": 1800,
+    "source": "Wan2.2 TI2V 5B fp16 + umt5 fp8 + wan2.2_vae. Native 16fps frames, RIFE426 x2, export 32fps. Optional raw 16fps SaveWEBM node 20. RIFE model: rife426.pth (native ComfyUI IFNet)."
+  },
+  "1": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "example.png"
+    }
+  },
+  "2": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "wan2.2_ti2v_5B_fp16.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "3": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 0,
+      "steps": 20,
+      "cfg": 5.0,
+      "sampler_name": "uni_pc",
+      "scheduler": "simple",
+      "denoise": 1.0,
+      "model": [
+        "8",
+        0
+      ],
+      "positive": [
+        "6",
+        0
+      ],
+      "negative": [
+        "7",
+        0
+      ],
+      "latent_image": [
+        "5",
+        0
+      ]
+    }
+  },
+  "4": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+      "type": "wan",
+      "device": "default"
+    }
+  },
+  "5": {
+    "class_type": "Wan22ImageToVideoLatent",
+    "inputs": {
+      "vae": [
+        "9",
+        0
+      ],
+      "width": 640,
+      "height": 640,
+      "length": 33,
+      "batch_size": 1,
+      "start_image": [
+        "1",
+        0
+      ]
+    }
+  },
+  "6": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "subtle natural motion, gentle camera drift, cinematic lighting",
+      "clip": [
+        "4",
+        0
+      ]
+    }
+  },
+  "7": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，整体发灰，最差质量，低质量，JPEG压缩残留，丑陋的，残缺的，多余的手指，画得不好的手部，画得不好的脸部，畸形的，毁容的，形态畸形的肢体，手指融合，静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走",
+      "clip": [
+        "4",
+        0
+      ]
+    }
+  },
+  "8": {
+    "class_type": "ModelSamplingSD3",
+    "inputs": {
+      "shift": 8.0,
+      "model": [
+        "2",
+        0
+      ]
+    }
+  },
+  "9": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "wan2.2_vae.safetensors"
+    }
+  },
+  "10": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "3",
+        0
+      ],
+      "vae": [
+        "9",
+        0
+      ]
+    }
+  },
+  "11": {
+    "class_type": "FrameInterpolationModelLoader",
+    "inputs": {
+      "model_name": "rife426.pth"
+    }
+  },
+  "12": {
+    "class_type": "FrameInterpolate",
+    "inputs": {
+      "interp_model": [
+        "11",
+        0
+      ],
+      "images": [
+        "10",
+        0
+      ],
+      "multiplier": 2
+    }
+  },
+  "20": {
+    "class_type": "SaveWEBM",
+    "inputs": {
+      "images": [
+        "10",
+        0
+      ],
+      "filename_prefix": "wan/wan_i2v_raw16",
+      "codec": "vp9",
+      "fps": 16.0,
+      "crf": 32.0
+    }
+  },
+  "21": {
+    "class_type": "SaveWEBM",
+    "inputs": {
+      "images": [
+        "12",
+        0
+      ],
+      "filename_prefix": "wan/wan_i2v_32",
+      "codec": "vp9",
+      "fps": 32.0,
+      "crf": 28.0
+    }
+  }
+}

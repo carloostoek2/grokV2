@@ -53,6 +53,7 @@ COMFYUI_FLOWS = (
     ("agil_moody", "Ágil Moody"),
     ("agil_edit_qwen", "Ágil Edit"),
     ("agil_edit_nsfw", "Ágil Edit NSFW"),
+    ("wan_i2v", "Wan I2V"),
 )
 DEFAULT_COMFYUI_MODEL = COMFYUI_FLOWS[0][0]
 VALID_COMFYUI_MODELS = tuple(_id for _id, _label in COMFYUI_FLOWS)
@@ -206,7 +207,7 @@ class ComfyUIConfig:
         """Build from a plain-key mapping; obsolete/invalid values fall back.
 
         Cualquier valor legacy (retired ``realvisxl``, ``krea2``/``qwen``/
-        ``wan_i2v``/... del catálogo anterior) no está en ``VALID_COMFYUI_MODELS``
+        ``minimax_i2v``/... del catálogo anterior) no está en ``VALID_COMFYUI_MODELS``
         → cae al flujo default. ``lora`` se normaliza a ``"none"`` (dormido).
         """
         model = rec.get("model", DEFAULT_COMFYUI_MODEL)

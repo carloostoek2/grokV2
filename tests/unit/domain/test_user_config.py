@@ -102,10 +102,15 @@ def test_comfyui_refine_preserved_as_str():
 
 
 def test_obsolete_comfyui_model_falls_back():
-    # realvisxl y los ids del catálogo anterior (krea2/qwen/wan_i2v/...) caen al flujo default.
-    for legacy in ("realvisxl", "krea2", "krea2_moody", "qwen", "wan_i2v"):
+    # realvisxl y los ids del catálogo anterior (krea2/qwen/...) caen al flujo default.
+    for legacy in ("realvisxl", "krea2", "krea2_moody", "qwen", "minimax_i2v"):
         uc = UserConfig.from_record({"comfyui_model": legacy})
         assert uc.comfyui.model == "grok_style"
+
+
+def test_wan_i2v_comfyui_model_is_accepted():
+    uc = UserConfig.from_record({"comfyui_model": "wan_i2v"})
+    assert uc.comfyui.model == "wan_i2v"
 
 
 def test_unknown_keys_ignored():

@@ -30,7 +30,7 @@ def test_get_flow_grok_style_returns_flow():
 
 def test_flows_returns_registered_flows():
     ids = {f.id for f in flows()}
-    assert ids == {"grok_style", "donut_face", "agil_solo", "agil_nsfw", "agil_moody", "agil_edit_qwen", "agil_edit_nsfw"}
+    assert ids == {"grok_style", "donut_face", "agil_solo", "agil_nsfw", "agil_moody", "agil_edit_qwen", "agil_edit_nsfw", "wan_i2v"}
 
 
 def test_get_flow_donut_face():
@@ -58,7 +58,7 @@ def test_render_donut_face_patches_prompt_input_and_seed():
 
 def test_get_flow_unknown_is_none():
     # Combos legacy / no existentes ya no resuelven a ninguna plantilla.
-    for unknown in ("qwen", "qwen_aio", "wan_i2v", "minimax_i2v", "krea2", "realvisxl"):
+    for unknown in ("qwen", "qwen_aio", "minimax_i2v", "krea2", "realvisxl", "agil_wan_i2v"):
         assert get_flow(unknown) is None
 
 
@@ -344,3 +344,14 @@ def test_get_flow_agil_edit_nsfw_supports_source():
     assert flow.id == "agil_edit_nsfw"
     assert flow.supports_source is True
     assert flow.source_node == "2"
+
+def test_get_flow_wan_i2v_supports_source_video():
+    flow = get_flow("wan_i2v")
+    assert flow is not None
+    assert flow.id == "wan_i2v"
+    assert flow.name == "Wan I2V"
+    assert flow.media_type is MediaType.VIDEO
+    assert flow.supports_source is True
+    assert flow.source_node == "1"
+    assert flow.source_input == "image"
+
