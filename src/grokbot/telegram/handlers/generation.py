@@ -31,11 +31,13 @@ import asyncio
 from functools import partial
 
 from aiogram import Dispatcher, types
+from aiogram.fsm.context import FSMContext
 
 from grokbot.application.events import ItemFailed, ItemResult, RetryScheduled
 from grokbot.application.integrate_refs import IntegrateReferenceError
 from grokbot.domain.generation import KieTaskRef
 from grokbot.telegram.chat_ui import ChatUI
+from grokbot.telegram.fsm_states import in_var_text_entry
 from grokbot.telegram.deps import BotDeps
 from grokbot.telegram.formatters import (
     escape,
@@ -162,7 +164,10 @@ async def _complete_long_prompt_collection(deps: BotDeps, message: types.Message
 # --------------------------------------------------------------------------- #
 # Texto
 # --------------------------------------------------------------------------- #
-async def handle_text(message: types.Message, deps: BotDeps) -> None:
+async def handle_text(message: types.Message, state: FSMContext, deps: BotDeps) -> None:
+    # /listas esperando plantilla/item/paquete: no generar (deja consumir a listas_cmd).
+    if await in_var_text_entry(state):
+        return
     # Long-prompt collection pendiente → el texto completa la edición (grok 1531-1533).
     if deps.long_prompt.is_awaiting(message.from_user.id):
         await _complete_long_prompt_collection(deps, message)
@@ -199,7 +204,10 @@ async def handle_text(message: types.Message, deps: BotDeps) -> None:
 # --------------------------------------------------------------------------- #
 # Foto + caption / sin caption / álbum
 # --------------------------------------------------------------------------- #
-async def handle_photo_caption(message: types.Message, deps: BotDeps) -> None:
+async def handle_photo_caption(message: types.Message, state: FSMContext, deps: BotDeps) -> None:
+    # /listas text-entry (p.ej. VarStates.template): caption lo consume listas_cmd.
+    if await in_var_text_entry(state):
+        return
     uid = message.from_user.id
     # A2: flag awaiting-ref chequeado ANTES de faceswap/otras rutas (parity grok 2853-2855).
     if uid in deps.integrate_ref_pending:
@@ -255,7 +263,9 @@ async def handle_photo_caption(message: types.Message, deps: BotDeps) -> None:
     )
 
 
-async def handle_photo_no_caption(message: types.Message, deps: BotDeps) -> None:
+async def handle_photo_no_caption(message: types.Message, state: FSMContext, deps: BotDeps) -> None:
+    if await in_var_text_entry(state):
+        return
     uid = message.from_user.id
     # A2: awaiting-ref → guardar la referencia (parity grok 2899-2901).
     if uid in deps.integrate_ref_pending:
@@ -276,8 +286,10 @@ async def handle_photo_no_caption(message: types.Message, deps: BotDeps) -> None
     await ui.send_text(_HINT_EDIT)
 
 
-async def handle_album(message: types.Message, deps: BotDeps) -> None:
+async def handle_album(message: types.Message, state: FSMContext, deps: BotDeps) -> None:
     """Media group → colección efímera y edición/drain secuencial (grok/nano_banana/faceswap)."""
+    if await in_var_text_entry(state):
+        return
     uid = message.from_user.id
     key = (message.chat.id, message.media_group_id)
     # A2/A1: álbum en awaiting-ref → drain que guarda la ÚLTIMA foto (final-wins,
@@ -486,7 +498,9 @@ async def _process_album_edit(
 # --------------------------------------------------------------------------- #
 # Reply texto→foto (edit sin job; video si grok_video)
 # --------------------------------------------------------------------------- #
-async def handle_reply_edit(message: types.Message, deps: BotDeps) -> None:
+async def handle_reply_edit(message: types.Message, state: FSMContext, deps: BotDeps) -> None:
+    if await in_var_text_entry(state):
+        return
     # Long-prompt collection pendiente → el texto completa la edición (grok 2953-2955).
     if deps.long_prompt.is_awaiting(message.from_user.id):
         await _complete_long_prompt_collection(deps, message)

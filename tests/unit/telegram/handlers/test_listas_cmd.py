@@ -19,6 +19,8 @@ from conftest import (
     flat_callback_data,
     make_deps,
     make_dispatcher,
+    make_photo_message,
+    make_registry,
     message_update,
     text_message,
 )
@@ -244,6 +246,75 @@ async def test_template_too_short_error():
     await dp.feed_update(_BOT, message_update(text_message("ab", message_id=61)))
     texts = [c["text"] for c in deps.gateway.calls_by_method("send_message")]
     assert texts[-1] == "La plantilla es demasiado corta."
+
+
+async def test_template_photo_caption_saves_without_generation():
+    """Foto+caption en VarStates.template guarda plantilla; no encola /prompt edit.
+
+    Regresión Ágil Edit / supports_source: sin este guard, handle_photo_caption
+    trataba el caption como instrucción de edición.
+    """
+    registry = make_registry()
+    comfy = registry.provider("comfyui")
+    deps = make_deps(registry=registry)
+    deps.update_config.set_model(_UID, "comfyui")
+    deps.update_config.set_comfyui(_UID, model="agil_edit_qwen")
+    dp, deps = await _open_listas(deps)
+    mid = _panel_id(deps)
+    await _cb(dp, "var:tmpl", mid)
+    assert await _fsm_state(dp) == VarStates.template.state
+    new_template = "{action} — {pose} — {angle} via caption"
+    await dp.feed_update(
+        _BOT,
+        message_update(make_photo_message(caption=new_template, message_id=62)),
+    )
+    assert deps.variables.get_template() == new_template
+    assert comfy.generate_count == 0
+    assert await _fsm_state(dp) == VarStates.menu.state
+    # No status de edición.
+    texts = [c["text"] for c in deps.gateway.calls_by_method("send_message")]
+    assert not any(t.startswith("Editando imagen") for t in texts)
+
+
+async def test_template_text_with_agil_edit_saves_without_generation():
+    """Texto en VarStates.template + flujo Ágil Edit → plantilla, sin generate."""
+    registry = make_registry()
+    comfy = registry.provider("comfyui")
+    deps = make_deps(registry=registry)
+    deps.update_config.set_model(_UID, "comfyui")
+    deps.update_config.set_comfyui(_UID, model="agil_edit_nsfw")
+    dp, deps = await _open_listas(deps)
+    mid = _panel_id(deps)
+    await _cb(dp, "var:tmpl", mid)
+    new_template = "{pose}, {angle}, {action} NSFW template ok"
+    await dp.feed_update(_BOT, message_update(text_message(new_template, message_id=63)))
+    assert deps.variables.get_template() == new_template
+    assert comfy.generate_count == 0
+    assert not any(
+        c["text"].startswith("Editando imagen") or c["text"].startswith("Generando")
+        for c in deps.gateway.calls_by_method("send_message")
+        if isinstance(c.get("text"), str)
+    )
+
+
+async def test_template_photo_no_caption_does_not_generate():
+    """Foto sin caption mientras se espera plantilla: silencio, sin edit hint."""
+    registry = make_registry()
+    comfy = registry.provider("comfyui")
+    deps = make_deps(registry=registry)
+    deps.update_config.set_model(_UID, "comfyui")
+    deps.update_config.set_comfyui(_UID, model="agil_edit_qwen")
+    dp, deps = await _open_listas(deps)
+    mid = _panel_id(deps)
+    await _cb(dp, "var:tmpl", mid)
+    before = deps.variables.get_template()
+    await dp.feed_update(_BOT, message_update(make_photo_message(message_id=64)))
+    assert deps.variables.get_template() == before
+    assert await _fsm_state(dp) == VarStates.template.state
+    assert comfy.generate_count == 0
+    texts = [c["text"] for c in deps.gateway.calls_by_method("send_message")]
+    assert not any("Para editar una imagen" in t for t in texts)
+    assert not any(t.startswith("Editando imagen") for t in texts)
 
 
 # --------------------------------------------------------------------------- #
