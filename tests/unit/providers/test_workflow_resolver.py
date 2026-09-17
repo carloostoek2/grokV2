@@ -127,3 +127,51 @@ def test_render_agil_nsfw_patches_prompt_and_seed():
     # El LoRA sigue cableado tras el render y la plantilla no se muta.
     assert graph["8"]["inputs"]["model"] == ["4", 0]
     assert flow.graph["8"]["inputs"]["seed"] == 0
+
+
+def test_get_flow_agil_moody_matches_platform_graph():
+    """Ágil Moody must mirror the Vast UI Moody workflow (not the old minimal KSampler)."""
+    flow = get_flow("agil_moody")
+    assert flow is not None
+    assert flow.name == "Ágil Moody"
+    assert flow.media_type is MediaType.IMAGE
+    assert flow.positive_node == "627"
+    assert flow.seed_nodes == ("851",)
+    assert flow.save_nodes == ("732",)
+    assert flow.supports_source is False
+    g = flow.graph
+    assert g["761"]["class_type"] == "UNETLoader"
+    assert g["761"]["inputs"]["unet_name"] == (
+        "Moody-Krea-Mix-v4.1G_00001__clean_nvfp4.safetensors"
+    )
+    assert g["599"]["class_type"] == "KSamplerAdvanced"
+    assert g["599"]["inputs"]["sampler_name"] == "euler_ancestral"
+    assert g["599"]["inputs"]["scheduler"] == "beta"
+    assert g["599"]["inputs"]["steps"] == 8
+    assert g["599"]["inputs"]["cfg"] == 1.0
+    assert g["763"]["class_type"] == "ConditioningZeroOut"
+    assert g["857"]["class_type"] == "ResolutionSelector"
+    assert g["857"]["inputs"]["aspect_ratio"] == "9:16 (Portrait Widescreen)"
+    assert g["857"]["inputs"]["megapixels"] == 2.0
+    assert g["857"]["inputs"]["multiple"] == 32
+    assert g["851"]["class_type"] == "SeedNode"
+    assert g["698"]["inputs"]["width"] == ["857", 0]
+    assert g["698"]["inputs"]["height"] == ["857", 1]
+    # UI LoRA is bypassed; bot graph must not include it.
+    assert not any(
+        isinstance(n, dict) and n.get("class_type") == "LoraLoaderModelOnly"
+        for n in g.values()
+    )
+
+
+def test_render_agil_moody_patches_prompt_and_seednode():
+    flow = get_flow("agil_moody")
+    graph = render(flow, "retrato moody", lambda: 4242)
+    assert graph["627"]["inputs"]["text"] == "retrato moody"
+    assert graph["851"]["inputs"]["seed"] == 4242
+    assert graph["599"]["inputs"]["noise_seed"] == ["851", 0]
+    assert graph["732"]["inputs"]["filename_prefix"] == "grokbot/comfyui"
+    assert "_meta" not in graph
+    assert all("_meta" not in node for node in graph.values())
+    assert flow.graph["627"]["inputs"]["text"] == ""
+    assert flow.graph["851"]["inputs"]["seed"] == 0

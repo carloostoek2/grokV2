@@ -3,20 +3,84 @@
     "id": "agil_moody",
     "name": "Ágil Moody",
     "media_type": "image",
-    "positive_node": "5",
-    "negative_node": "6",
-    "seed_nodes": ["8"],
-    "save_nodes": ["10"],
-    "supports_source": false
+    "positive_node": "627",
+    "seed_nodes": [
+      "851"
+    ],
+    "save_nodes": [
+      "732"
+    ],
+    "supports_source": false,
+    "source": "Synced from ComfyUI history of moodyKrea2Minimal_v40 (platform UI). LoRA bypassed in UI so omitted. UNET pinned to Moody nvfp4 on Vast. Re-sync from a successful UI /history prompt graph."
   },
-  "1": {
+  "599": {
     "inputs": {
-      "unet_name": "Moody-Krea-Mix-v4.1G_00001__clean_nvfp4.safetensors",
-      "weight_dtype": "default"
+      "add_noise": "enable",
+      "noise_seed": [
+        "851",
+        0
+      ],
+      "steps": 8,
+      "cfg": 1.0,
+      "sampler_name": "euler_ancestral",
+      "scheduler": "beta",
+      "start_at_step": 0,
+      "end_at_step": 8,
+      "return_with_leftover_noise": "enable",
+      "model": [
+        "761",
+        0
+      ],
+      "positive": [
+        "627",
+        0
+      ],
+      "negative": [
+        "763",
+        0
+      ],
+      "latent_image": [
+        "698",
+        0
+      ]
     },
-    "class_type": "UNETLoader"
+    "class_type": "KSamplerAdvanced"
   },
-  "2": {
+  "627": {
+    "inputs": {
+      "text": "",
+      "clip": [
+        "755",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "698": {
+    "inputs": {
+      "width": [
+        "857",
+        0
+      ],
+      "height": [
+        "857",
+        1
+      ],
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage"
+  },
+  "732": {
+    "inputs": {
+      "filename_prefix": "grokbot/comfyui",
+      "images": [
+        "829",
+        0
+      ]
+    },
+    "class_type": "SaveImage"
+  },
+  "755": {
     "inputs": {
       "clip_name": "qwen3vl_4b_fp8_scaled.safetensors",
       "type": "krea2",
@@ -24,61 +88,53 @@
     },
     "class_type": "CLIPLoader"
   },
-  "3": {
+  "757": {
     "inputs": {
       "vae_name": "qwen_image_vae.safetensors"
     },
     "class_type": "VAELoader"
   },
-  "5": {
+  "761": {
     "inputs": {
-      "text": "",
-      "clip": ["2", 0]
+      "unet_name": "Moody-Krea-Mix-v4.1G_00001__clean_nvfp4.safetensors",
+      "weight_dtype": "default"
     },
-    "class_type": "CLIPTextEncode"
+    "class_type": "UNETLoader"
   },
-  "6": {
+  "763": {
     "inputs": {
-      "text": "",
-      "clip": ["2", 0]
+      "conditioning": [
+        "627",
+        0
+      ]
     },
-    "class_type": "CLIPTextEncode"
+    "class_type": "ConditioningZeroOut"
   },
-  "7": {
+  "829": {
     "inputs": {
-      "width": 896,
-      "height": 1600,
-      "batch_size": 1
-    },
-    "class_type": "EmptyLatentImage"
-  },
-  "8": {
-    "inputs": {
-      "seed": 0,
-      "steps": 8,
-      "cfg": 1.0,
-      "sampler_name": "euler",
-      "scheduler": "simple",
-      "denoise": 1.0,
-      "model": ["1", 0],
-      "positive": ["5", 0],
-      "negative": ["6", 0],
-      "latent_image": ["7", 0]
-    },
-    "class_type": "KSampler"
-  },
-  "9": {
-    "inputs": {
-      "samples": ["8", 0],
-      "vae": ["3", 0]
+      "samples": [
+        "599",
+        0
+      ],
+      "vae": [
+        "757",
+        0
+      ]
     },
     "class_type": "VAEDecode"
   },
-  "10": {
+  "851": {
     "inputs": {
-      "filename_prefix": "grokbot/comfyui",
-      "images": ["9", 0]
+      "seed": 0
     },
-    "class_type": "SaveImage"
+    "class_type": "SeedNode"
+  },
+  "857": {
+    "inputs": {
+      "aspect_ratio": "9:16 (Portrait Widescreen)",
+      "megapixels": 2.0,
+      "multiple": 32
+    },
+    "class_type": "ResolutionSelector"
   }
 }
