@@ -26,14 +26,17 @@ from grokbot.domain.user_config import (
 )
 from grokbot.providers.base import (
     DEFAULT_IMAGE_ASPECT_RATIO,
-    ProviderAuthenticationError,
     ProviderError,
     ProviderGenerationError,
     ProviderInputError,
-    ProviderRateLimitError,
-    ProviderUnavailableError,
     bytes_to_data_uri,
     detect_image_mime,
+)
+from grokbot.providers.error_mapping import (
+    USER_MSG_GENERIC,
+    classify_provider_error,
+    log_mapped_error,
+    to_provider_error,
 )
 
 _SEEDREAM_ID = MODELS["seedream"]["id"]
@@ -140,32 +143,38 @@ def _named_image_buffer(data: bytes) -> io.BytesIO:
     return buf
 
 
-def _wrap_run_error(exc: Exception, *, user_message: str) -> ProviderError:
+def _wrap_run_error(
+    exc: Exception,
+    *,
+    fallback_user_message: str | None = None,
+    user_message: str | None = None,
+) -> ProviderError:
     """Map SDK/network exceptions to the typed provider hierarchy (R8).
 
-    A failed *prediction* (``ModelError``, duck-typed via ``.prediction``) is
-    terminal: retrying invalid-input failures created extra 429s. HTTP 429 stays
-    retryable; 401/403 is auth; everything else stays transient unavailable.
+    Uses the shared :mod:`error_mapping` heuristics so moderation (E005 /
+    sensitive), billing, 429, etc. get clear Spanish UX. A failed *prediction*
+    (``ModelError``, duck-typed via ``.prediction``) is terminal. ``user_message``
+    is accepted as an alias of ``fallback_user_message`` (UNKNOWN only).
     """
+    fallback = fallback_user_message or user_message or USER_MSG_GENERIC
     status = getattr(exc, "status", None)
-    if status == 429:
-        return ProviderRateLimitError(
-            f"Replicate rate-limited: {type(exc).__name__}",
-            user_message=user_message,
-        )
-    if status in (401, 403):
-        return ProviderAuthenticationError(
-            f"Replicate auth failed: {type(exc).__name__}",
-            user_message=user_message,
-        )
-    if getattr(exc, "prediction", None) is not None:
-        return ProviderGenerationError(
-            f"Replicate prediction failed: {type(exc).__name__}",
-            user_message=user_message,
-        )
-    return ProviderUnavailableError(
-        f"Replicate run failed: {type(exc).__name__}",
-        user_message=user_message,
+    prediction = getattr(exc, "prediction", None)
+    pred_error = getattr(prediction, "error", None) if prediction is not None else None
+    if pred_error is not None:
+        pred_error = str(pred_error)
+    mapped = classify_provider_error(
+        exc=exc,
+        status_code=status if isinstance(status, int) else None,
+        prediction_error=pred_error,
+    )
+    log_mapped_error(mapped, provider="replicate")
+    return to_provider_error(
+        mapped,
+        technical=f"Replicate {type(exc).__name__}: {mapped.detail}",
+        status_code=status if isinstance(status, int) else None,
+        has_prediction=prediction is not None,
+        fallback_user_message=fallback,
+        unavailable_if_unknown=prediction is None,
     )
 
 
@@ -251,7 +260,7 @@ class ReplicateProvider:
         except Exception as exc:
             raise _wrap_run_error(
                 exc,
-                user_message="Error en la generación. Intenta de nuevo más tarde.",
+                fallback_user_message="Error en la generación. Intenta de nuevo más tarde.",
             ) from exc
 
         urls = _normalize_output_urls(output)
@@ -292,7 +301,7 @@ class ReplicateProvider:
         except Exception as exc:
             raise _wrap_run_error(
                 exc,
-                user_message="Error en la generación de video. Intenta de nuevo más tarde.",
+                fallback_user_message="Error en la generación de video. Intenta de nuevo más tarde.",
             ) from exc
 
         urls = _normalize_output_urls(output)
@@ -339,7 +348,7 @@ class ReplicateProvider:
         except Exception as exc:
             raise _wrap_run_error(
                 exc,
-                user_message="Error en el face swap. Intenta de nuevo más tarde.",
+                fallback_user_message="Error en el face swap. Intenta de nuevo más tarde.",
             ) from exc
 
         urls = _normalize_output_urls(output)
