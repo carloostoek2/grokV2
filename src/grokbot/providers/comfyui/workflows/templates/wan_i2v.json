@@ -15,7 +15,7 @@
     "source_node": "1",
     "source_input": "image",
     "timeout": 1800,
-    "source": "Wan2.2 TI2V 5B fp16 + umt5 fp8 + wan2.2_vae. Native 16fps frames, RIFE426 x2, export 32fps. Optional raw 16fps SaveWEBM node 20. RIFE model: rife426.pth (native ComfyUI IFNet)."
+    "source": "Wan2.2 TI2V 5B fp16 + umt5 fp8 + wan2.2_vae. 9:16 portrait defaults: 576x1024 length 97 (~6.06s @16fps). Native 16fps frames, RIFE426 x2, export 32fps (wall-clock ~6s). Optional raw 16fps SaveWEBM node 20. RIFE model: rife426.pth (native ComfyUI IFNet)."
   },
   "1": {
     "class_type": "LoadImage",
@@ -72,9 +72,9 @@
         "9",
         0
       ],
-      "width": 640,
-      "height": 640,
-      "length": 33,
+      "width": 576,
+      "height": 1024,
+      "length": 97,
       "batch_size": 1,
       "start_image": [
         "1",
