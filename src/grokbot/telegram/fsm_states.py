@@ -7,6 +7,7 @@ efímero de confirmación de prompts (``PendingPrompts``) NO usa FSM de aiogram
 
 from __future__ import annotations
 
+from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
 
@@ -27,3 +28,23 @@ class VarStates(StatesGroup):
     template = State()
     pack_name = State()
     pack_json = State()
+
+
+# Entradas de texto del panel /listas (add/edit/template/paquete). Mientras el
+# usuario está en uno de estos estados, generation NO debe encolar ComfyUI /
+# edits: el update lo consume listas_cmd (texto o caption de foto).
+VAR_TEXT_ENTRY_STATES: frozenset[str] = frozenset(
+    {
+        VarStates.add_item.state,
+        VarStates.edit_text.state,
+        VarStates.template.state,
+        VarStates.pack_name.state,
+        VarStates.pack_json.state,
+    }
+)
+
+
+async def in_var_text_entry(state: FSMContext) -> bool:
+    """True cuando el FSM de /listas espera texto (o caption) del admin."""
+    current = await state.get_state()
+    return current in VAR_TEXT_ENTRY_STATES

@@ -32,7 +32,7 @@ from aiogram.fsm.context import FSMContext
 
 from grokbot.telegram.chat_ui import ChatUI
 from grokbot.telegram.deps import BotDeps
-from grokbot.telegram.fsm_states import VarStates
+from grokbot.telegram.fsm_states import VAR_TEXT_ENTRY_STATES, VarStates
 from grokbot.telegram.handlers._common import answer_callback
 from grokbot.telegram.keyboards import (
     packages_keyboard,
@@ -59,6 +59,12 @@ PICKER_MAX_ITEMS = 90
 # --------------------------------------------------------------------------- #
 # Helpers de texto (puros)
 # --------------------------------------------------------------------------- #
+
+def _input_text(message: types.Message) -> str:
+    """Texto de una entrada FSM: ``message.text`` o caption de foto."""
+    return (message.text or message.caption or "").strip()
+
+
 def _esc(text: str) -> str:
     return html.escape(text, quote=False)
 
@@ -383,14 +389,7 @@ async def handle_var_cancel(callback: types.CallbackQuery, state: FSMContext, de
     current = await state.get_state()
     # pack_name/pack_json incluidos (paridad variables_flow 374-380): el cancel
     # desde la creación de paquete vuelve al menú (sin vars_list cae a _show_menu).
-    allowed = {
-        VarStates.add_item.state,
-        VarStates.edit_text.state,
-        VarStates.template.state,
-        VarStates.pack_name.state,
-        VarStates.pack_json.state,
-    }
-    if current not in allowed:
+    if current not in VAR_TEXT_ENTRY_STATES:
         await answer_callback(deps.gateway, callback)
         return
     data = await state.get_data()
@@ -602,7 +601,7 @@ async def handle_add_text(message: types.Message, state: FSMContext, deps: BotDe
         await state.clear()
         await _session_outdated(message, deps)
         return
-    text = message.text.strip()
+    text = _input_text(message)
     err = deps.manage_lists.validate_item(text)
     if err:
         ui = ChatUI.for_message(deps.gateway, message)
@@ -632,7 +631,7 @@ async def handle_edit_text(message: types.Message, state: FSMContext, deps: BotD
         await state.clear()
         await _session_outdated(message, deps)
         return
-    text = message.text.strip()
+    text = _input_text(message)
     err = deps.manage_lists.validate_item(text)
     if err:
         ui = ChatUI.for_message(deps.gateway, message)
@@ -655,7 +654,7 @@ async def handle_template_text(message: types.Message, state: FSMContext, deps: 
         return
     if await _reject_non_admin_message(message, deps):
         return
-    text = message.text.strip()
+    text = _input_text(message)
     if len(text) < 3:
         ui = ChatUI.for_message(deps.gateway, message)
         await ui.send_text("La plantilla es demasiado corta.")
@@ -775,7 +774,7 @@ async def handle_pack_name_text(message: types.Message, state: FSMContext, deps:
         return
     if await _reject_non_admin_message(message, deps):
         return
-    name = message.text.strip()
+    name = _input_text(message)
     slug = _slugify_package_name(name)
     if not slug:
         ui = ChatUI.for_message(deps.gateway, message)
@@ -824,7 +823,7 @@ async def handle_pack_json_text(message: types.Message, state: FSMContext, deps:
         await _session_outdated(message, deps)
         return
     try:
-        payload = json.loads(message.text)
+        payload = json.loads(_input_text(message))
     except json.JSONDecodeError:
         ui = ChatUI.for_message(deps.gateway, message)
         await ui.send_text("JSON inválido. Revisa el formato e inténtalo de nuevo.")
@@ -851,11 +850,13 @@ async def handle_pack_json_text(message: types.Message, state: FSMContext, deps:
 # --------------------------------------------------------------------------- #
 def register_listas(dp: Dispatcher, deps: BotDeps) -> None:
     dp.message.register(partial(cmd_listas, deps=deps), Command("listas"))
-    dp.message.register(partial(handle_add_text, deps=deps), StateFilter(VarStates.add_item), F.text)
-    dp.message.register(partial(handle_edit_text, deps=deps), StateFilter(VarStates.edit_text), F.text)
-    dp.message.register(partial(handle_template_text, deps=deps), StateFilter(VarStates.template), F.text)
-    dp.message.register(partial(handle_pack_name_text, deps=deps), StateFilter(VarStates.pack_name), F.text)
-    dp.message.register(partial(handle_pack_json_text, deps=deps), StateFilter(VarStates.pack_json), F.text)
+    # Texto plano o foto+caption (el caption alimenta la misma entrada FSM).
+    _listas_input = F.text | (F.photo & F.caption)
+    dp.message.register(partial(handle_add_text, deps=deps), StateFilter(VarStates.add_item), _listas_input)
+    dp.message.register(partial(handle_edit_text, deps=deps), StateFilter(VarStates.edit_text), _listas_input)
+    dp.message.register(partial(handle_template_text, deps=deps), StateFilter(VarStates.template), _listas_input)
+    dp.message.register(partial(handle_pack_name_text, deps=deps), StateFilter(VarStates.pack_name), _listas_input)
+    dp.message.register(partial(handle_pack_json_text, deps=deps), StateFilter(VarStates.pack_json), _listas_input)
     dp.callback_query.register(partial(handle_var_open, deps=deps), lambda c: c.data and c.data.startswith("var:open:"))
     dp.callback_query.register(partial(handle_var_add, deps=deps), lambda c: c.data and c.data.startswith("var:add:"))
     dp.callback_query.register(partial(handle_var_edit_list, deps=deps), lambda c: c.data and c.data.startswith("var:edit:"))
