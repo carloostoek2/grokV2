@@ -74,12 +74,12 @@ from grokbot.telegram.stream_presenter import present_single_image
 
 # Hints de foto sin caption (grok 2916-2928).
 _HINT_VIDEO = (
-    "Para animar una imagen (imagen a video), enviala con un <b>caption</b> describiendo el movimiento.\n\n"
-    "Ejemplo: envia tu foto con el texto <i>\"haz que el agua caiga y aleja la camara lentamente\"</i>"
+    "Para animar una imagen (imagen a video), envíala con un <b>caption</b> describiendo el movimiento.\n\n"
+    "Ejemplo: envía tu foto con el texto <i>\"haz que el agua caiga y aleja la camara lentamente\"</i>"
 )
 _HINT_EDIT = (
-    "Para editar una imagen, enviala con un <b>caption</b> describiendo los cambios que quieres.\n\n"
-    "Ejemplo: envia tu foto con el texto <i>\"cambia el fondo a una playa al atardecer\"</i>"
+    "Para editar una imagen, envíala con un <b>caption</b> describiendo los cambios que quieres.\n\n"
+    "Ejemplo: envía tu foto con el texto <i>\"cambia el fondo a una playa al atardecer\"</i>"
 )
 _NO_PENDING = "Ya no hay nada pendiente. Envia una imagen o prompt nuevo."
 _EDIT_CANCEL_TEXT = "⏹ Edición cancelada."

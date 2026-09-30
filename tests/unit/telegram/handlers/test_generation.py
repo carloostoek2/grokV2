@@ -493,11 +493,11 @@ async def test_album_no_caption_shows_hint():
     deps.album.delay = 0.05
     deps = await _feed_album(deps, 3, caption_on=None)
     await _wait_until(lambda: any(
-        s["text"].startswith("Para editar una imagen, enviala con un")
+        s["text"].startswith("Para editar una imagen, envíala con un")
         for s in deps.gateway.calls_by_method("send_message")
     ))
     last = deps.gateway.calls_by_method("send_message")[-1]
-    assert last["text"].startswith("Para editar una imagen, enviala con un")
+    assert last["text"].startswith("Para editar una imagen, envíala con un")
     assert deps.gateway.calls_by_method("send_photo") == []
 
 
@@ -700,11 +700,11 @@ async def test_album_whitespace_caption_shows_hint():
         )
         await dp.feed_update(_BOT, message_update(msg))
     await _wait_until(lambda: any(
-        s["text"].startswith("Para editar una imagen, enviala con un")
+        s["text"].startswith("Para editar una imagen, envíala con un")
         for s in deps.gateway.calls_by_method("send_message")
     ))
     last = deps.gateway.calls_by_method("send_message")[-1]
-    assert last["text"].startswith("Para editar una imagen, enviala con un")
+    assert last["text"].startswith("Para editar una imagen, envíala con un")
     assert deps.gateway.calls_by_method("send_photo") == []
     assert deps.job_manager.active_jobs(_UID) == ()
 
