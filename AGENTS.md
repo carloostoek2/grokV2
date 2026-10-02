@@ -112,8 +112,8 @@ refine 2-stage está **dormido**: no revivirlo sin sacarlo antes de ese estado. 
 Regla dura 1); el dueño mantiene los tests de cardinalidad de flujos si decide tocarlos.
 
 **Idiomas**: el copy de usuario (formatters, keyboards, mensajes/errores user-safe) es
-**siempre en español neutro**; los docstrings/comentarios y nombres de código son **en inglés**;
-los documentos de estado/avance, en español neutro. El repo tiene docstrings históricos en español
+**siempre en español**; los docstrings/comentarios y nombres de código son **en inglés**;
+los documentos de estado/avance, en español. El repo tiene docstrings históricos en español
 en `telegram/`/`application/`: no se migran en masa; la regla se aplica al código nuevo.
 
 ## Límites — qué no hacer sin pensarlo dos veces
