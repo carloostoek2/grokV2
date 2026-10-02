@@ -44,7 +44,7 @@ Antes de codificar, deja claras estas preguntas con el usuario:
 - `id`: `snake_case` ASCII (va en callback `cfg:comfyui:flow:<id>` y en el nombre de
   archivo `<id>.json`). Prefijos que agrupan familias funcionan bien (p. ej. `agil_solo`,
   `agil_nsfw`).
-- `label`: texto del botón, **copy de usuario en español neutro** (p. ej. "Ágil solo").
+- `label`: texto del botón, **copy de usuario en español** (p. ej. "Ágil solo").
   Puede llevar tildes (JSON UTF-8).
 - **Verificar que los modelos/LoRAs que vas a hornear existen en la box GPU activa**
   (con el MCP de comfyui, `list_local_models`). Si falta una LoRA/modelo, reportarlo y
