@@ -111,14 +111,34 @@ uv pip install --no-cache-dir \
 
 ## 4. Custom nodes
 
-| Pack | Commit |
-|---|---|
-| ComfyUI-GGUF | `6ea2651` |
-| ComfyUI-Manager | `855a0f50` |
-| ComfyUI-Workflow-Models-Downloader | `c3ef4db` (`v1.8.0-7-gc3ef4db`) |
-| rgthree-comfy | (sin `.git`) |
+| Pack | Commit | Aporta |
+|---|---|---|
+| ComfyUI-GGUF | `6ea2651` | carga UNET `.gguf` |
+| ComfyUI-Manager | `855a0f50` (`3.42-92`) | gestión de packs |
+| ComfyUI-Workflow-Models-Downloader | `c3ef4db` (`v1.8.0-7`) | descarga de pesos desde la UI |
+| rgthree-comfy | (sin `.git`) | utilidades de canvas/nodos |
+| **ComfyUI-Krea2-NAG** | `0afb38d` (`v1.0.2`) | `Krea2NormalizedAttentionGuidance`, `Krea2EditNormalizedAttentionGuidance` |
+| **comfyui-krea2edit** | `86f886d` (`v1.2.5`) | `Krea2EditModelPatch`, `Krea2EditGroundedEncode` |
 
-Eso es **todo**. En particular **no está** el pack privado que provee los nodos `Donut*` — ver §6.
+Los dos últimos se instalaron el 2026-10-03 (clone + restart). **No tienen dependencias Python**
+(`dependencies = []` en ambos `pyproject.toml`) y sus imports resuelven contra ComfyUI 0.38.0.
+`comfyui-krea2edit` va en **v1.2.5**, que es el último tag publicado y la versión que
+`ComfyUI-Krea2-NAG` exige como compañera (≥ v1.2.5).
+
+Nodos que habilitan (4 clases nuevas, 1000 → 1004):
+
+- `Krea2EditModelPatch` — parchea el forward del modelo para anteponer el latente de la imagen
+  fuente como tokens limpios (RoPE frame 1). Entradas: `model`, `source_latent`, `vae` +
+  `source_image`, `target_latent`, `fit_mode`, `ref_boost`.
+- `Krea2EditGroundedEncode` — encode de instrucción *con* la imagen: el text encoder ve la imagen
+  mientras lee la instrucción. Con un `CLIPTextEncode` normal "el modelo nunca ve la imagen
+  semánticamente y la calidad cae en picada" (README).
+- `Krea2NormalizedAttentionGuidance` — NAG: guía negativa universal en el espacio de atención.
+- `Krea2EditNormalizedAttentionGuidance` — la versión combinada (en vez de apilar dos parches).
+
+**Restricciones que impone el README de krea2edit** (importantes para cualquier flujo nuevo):
+Turbo = 8 pasos, CFG 1 (camino rápido); generar **≤ 2 MP**; las *remociones* necesitan el modelo
+**Raw** a CFG 3, ~20 pasos; y "medir sobre 20+ pasos, no sobre 1".
 
 `ResolutionSelector` **no** es un custom node: viene del core de ComfyUI
 (`comfy_extras.nodes_resolution`).
@@ -176,18 +196,31 @@ ni VAE sueltos; `wan_i2v` usa `umt5_xxl` (faltante).
 
 ### Flujos rotos — por qué
 
-**`donut_face`** — le faltan **17 clases de nodo** que no existen en el box:
+**`donut_face`** — le faltan **16 clases de nodo**. Mapeadas a su pack con la DB de
+ComfyUI-Manager (`extension-node-map.json`):
 
-`Anything Everywhere`, `BlehSetSamplerPreset`, `CR Text Concatenate`, `DF_Text`,
-`DonutApplyLoRAStack`, `DonutFaceDetailer`, `DonutKrea2FusionControl`, `DonutLoRAStack`,
-`DonutSampler`, `DonutTiledUpscale`, `Image Save`, `Krea2NormalizedAttentionGuidance`,
-`SAMLoader`, `Seed String`, `SeedGenerator`, `UltralyticsDetectorProvider`, `Wildcard Processor`.
+| Nodo(s) | Pack |
+|---|---|
+| `SAMLoader` | `ComfyUI-Impact-Pack` |
+| `UltralyticsDetectorProvider` | `ComfyUI-Impact-Subpack` |
+| `Anything Everywhere` | `cg-use-everywhere` |
+| `CR Text Concatenate` | `ComfyUI_Comfyroll_CustomNodes` |
+| `Image Save` | `was-node-suite-comfyui` |
+| `Seed String`, `Wildcard Processor` | `mikey_nodes` |
+| `SeedGenerator` | `RES4LYF` |
+| `BlehSetSamplerPreset` | `ComfyUI-bleh` |
+| `DF_Text`, `DonutApplyLoRAStack`, `DonutFaceDetailer`, `DonutKrea2FusionControl`, `DonutLoRAStack`, `DonutSampler`, `DonutTiledUpscale` | **no están en la DB del Manager** |
 
-El grupo `Donut*` es un **pack privado del owner**, no está en el registry de ComfyUI ni en
-GitHub → **no es restaurable desde cero**. Además faltan 2 pesos:
-`loras/krea2/krea2_identity_edit_v1_2.safetensors` y `vae/qwen-image/qwen_image_vae.safetensors`
-(nota: ese VAE **sí** está instalado, pero en la raíz de `vae/`, y el flujo lo busca en la
-subcarpeta `qwen-image/`).
+Esos 7 `Donut*` + `DF_Text` son el **pack privado del owner**: no está en el registry de ComfyUI
+ni en GitHub → **no es restaurable desde cero**. Los otros 8 sí son instalables (son 7 packs
+públicos).
+
+> `Krea2NormalizedAttentionGuidance` **ya no falta**: lo aporta `ComfyUI-Krea2-NAG`, instalado el
+> 2026-10-03 (§4). La corrección de esa creencia previa es lo que bajó el conteo de 17 a 16.
+
+Además faltan 2 pesos: `loras/krea2/krea2_identity_edit_v1_2.safetensors` (la LoRA que potencia
+`comfyui-krea2edit`) y `vae/qwen-image/qwen_image_vae.safetensors` (nota: ese VAE **sí** está
+instalado, pero en la raíz de `vae/`, y el flujo lo busca en la subcarpeta `qwen-image/`).
 
 **`wan_i2v`** — le faltan 3 pesos: `diffusion_models/wan2.2_ti2v_5B_fp16.safetensors`,
 `text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors`, `vae/wan2.2_vae.safetensors`.
