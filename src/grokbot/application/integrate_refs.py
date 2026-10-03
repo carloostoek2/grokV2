@@ -58,7 +58,7 @@ class IntegrateRefsUseCase:
 
         Es el chequeo barato (provider + ``exists``, sin ``read`` completo) que los
         handlers usan ANTES de validar el prompt / abrir job; :meth:`load_for_edit`
-        re-valida y recién ahí lee los bytes una sola vez.
+        re-valida y solo entonces lee los bytes una sola vez.
         """
         if not _effective_provider_is_xai(cfg):
             raise IntegrateReferenceError(REQUIRES_XAI_MSG)
@@ -68,7 +68,7 @@ class IntegrateRefsUseCase:
     def load_for_edit(self, user_id: int, cfg) -> bytes:
         """Prereq provider==xai + ref presente y LECTURA de bytes (grok 584-591).
 
-        Quien ya validó con :meth:`validate_for_edit` puede llamar acá y leer una
+        Quien ya validó con :meth:`validate_for_edit` puede llamar aquí y leer una
         sola vez (el guard interno es defensivo para los flujos que no preflightean).
         """
         self.validate_for_edit(user_id, cfg)

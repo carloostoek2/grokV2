@@ -122,7 +122,7 @@ def build_deps(
 
     D5 (fail-fast): un ``telegram_bot_token`` vacío lanza ``ValueError`` user-safe
     aquí mismo — ``Settings()`` acepta ``""`` y ``Bot("")`` no es un error claro
-    (aiogram lo rechaza recién al validar el token, sin contexto).
+    (aiogram lo rechaza solo al validar el token, sin contexto).
     """
     if not settings.telegram_bot_token:
         raise ValueError(

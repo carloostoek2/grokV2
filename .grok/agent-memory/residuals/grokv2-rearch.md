@@ -292,7 +292,7 @@ documentadas con Response y comentario en código/SUMMARY — no diferidos con f
 ## Residual nuevo — T1: mostrar tiempo de cada generación (request del owner, 2026-09-05)
 
 - Origen: owner, tras el deploy de la wave-2/R4 (uso real). "falta que muestre el tiempo, en cada
-  generación debe demostrar el tiempo que tarda Y ahorita no lo está mostrando".
+  generación debe demostrar el tiempo que tarda Y ahora no lo está mostrando".
 - Clase: follow-up de producto (feature request, in-scope-followup de producto).
 - Detalle: hoy ninguna generación muestra cuánto tardó. Se quiere el elapsed time visible en la
   generación (single, batch/variables, video, refine, faceswap, edición `/s`) — p. ej. en el

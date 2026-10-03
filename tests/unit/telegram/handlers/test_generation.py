@@ -588,7 +588,7 @@ class _StagedAlbumProvider(FakeImageProvider):
     Expone ``started`` (un evento por llamada, seteado al entrar a generate) y
     ``releases`` (un evento por llamada, para abrir la compuerta). Permite el
     cancel-mid deterministico: item 1 completa, item 2 queda bloqueado en la
-    compuerta, el test cancela y recién ahí suelta la compuerta.
+    compuerta, el test cancela y solo entonces suelta la compuerta.
     """
 
     def __init__(self) -> None:

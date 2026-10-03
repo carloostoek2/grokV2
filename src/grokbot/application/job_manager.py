@@ -3,7 +3,7 @@
 Reproduce la semántica de jobs de grok (bot.py 435-515) para la capa
 application: cada batch registra un job activo y consulta cancelación entre
 ítems vía :class:`asyncio.Event`. El ``Job`` (domain) es un descriptor inmutable;
-el estado vivo (activos por user, eventos de cancel, hook de refine) vive acá.
+el estado vivo (activos por user, eventos de cancel, hook de refine) vive aquí.
 
 R9: SIN tope de concurrencia (decisión de producto — bot privado de un solo
 dueño, sin límites de uso): ``start`` siempre registra el job. El registro

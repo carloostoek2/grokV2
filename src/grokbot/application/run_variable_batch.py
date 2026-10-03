@@ -311,7 +311,7 @@ class RunVariableBatchUseCase:
         la primera corrida se SUPRIME y se reintenta con el prompt derangement;
         el terminal que se propaga es el de la segunda corrida. El caller hace
         ``blacklist_add`` si esa segunda también agota. La cancel se chequea en
-        el caller al recibir el terminal, y ACÁ antes del shuffle (grok 2389-2391:
+        el caller al recibir el terminal, y AQUÍ antes del shuffle (grok 2389-2391:
         un cancel tras el primer generate aborta el item sin reintentar).
         """
         shuffled = False

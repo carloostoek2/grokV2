@@ -135,7 +135,7 @@ def register_integrate_ref(dp: Dispatcher, deps: BotDeps) -> None:
     """Registra /cambiar_referencia (Command real; gate de modelo en el handler).
 
     Las fotos/textos/álbumes en awaiting-ref rutean por los filtros de
-    generation.py que delegan acá; este módulo solo añade el comando.
+    generation.py que delegan aquí; este módulo solo añade el comando.
     """
     dp.message.register(partial(cmd_cambiar_referencia, deps=deps), Command("cambiar_referencia"))
 

@@ -4,7 +4,7 @@ Los handlers reciben un :class:`BotDeps` (sin DI global ni settings): solo
 objetos ya construidos por item 6 (o por ``make_deps`` de test). ``register_all``
 arma el :class:`Dispatcher` con estos deps.
 
-El store efímero de confirmación de prompts (:class:`PendingPrompts`) vive acá
+El store efímero de confirmación de prompts (:class:`PendingPrompts`) vive aquí
 como tipo concreto mínimo (A6): NO usa FSM de aiogram (paridad ``pending_prompt``
 de grok); cada confirmación queda atada a su ``(chat_id, message_id)`` y dueño
 (C4) y un nuevo prompt pisa el pendiente anterior del mismo user. En tests se

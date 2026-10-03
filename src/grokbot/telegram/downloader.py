@@ -6,7 +6,7 @@ redirects se re-chequean con la misma allowlist, tope de media único
 (``media.MAX_MEDIA_BYTES``, R10) y timeout 120 s. Nunca loguea la URL
 descargada (R8).
 
-``MediaDownloader`` (Protocol) vive en ports.py; acá está el adaptador real con
+``MediaDownloader`` (Protocol) vive en ports.py; aquí está el adaptador real con
 aiohttp. Los tests usan ``aioresponses`` (sin red).
 """
 

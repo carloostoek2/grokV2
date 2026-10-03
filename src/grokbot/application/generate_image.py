@@ -50,7 +50,7 @@ def build_image_request(
     """Arma el :class:`GenerationRequest` de imagen (payload builders por provider).
 
     ``source`` se setea solo cuando el caller lo provee (un ref de tipo URL/file
-    no se resuelve acá — D2: 0 descargas en use cases).
+    no se resuelve aquí — D2: 0 descargas en use cases).
     """
     params = _comfy_params(cfg, prompts) if res.name == "comfyui" else {}
     if cfg.model == "nano_banana":

@@ -5,7 +5,7 @@ uso :class:`GenerateVideoUseCase` + :func:`present_video`. Sin job (A3): el vide
 es single-attempt y no muestra botón Cancelar. Cubre text→video (grok_video) y
 foto/reply→video (imagen a video) que los handlers de generation/config deciden.
 
-El status inicial se crea acá con el copy exacto de grok: texto → ``_video_start_message``;
+El status inicial se crea aquí con el copy exacto de grok: texto → ``_video_start_message``;
 imagen a video → "Animando imagen con <b>{video_model}</b>...". El ``prefix`` de
 caption es "Prompt" para texto y "Edit" cuando hay imagen fuente.
 

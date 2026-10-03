@@ -151,7 +151,7 @@ async def test_validate_for_edit_ok_does_not_read_bytes():
     """validate_for_edit valida (provider + exists) SIN leer los bytes completos.
 
     El fix round separa validación de lectura: el single /s corto valida una vez
-    (barato) y recién _process_single_photo_edit lee una vez (load_for_edit).
+    (barato) y solo entonces _process_single_photo_edit lee una vez (load_for_edit).
     """
     cfg = dataclasses.replace(_xai_cfg(), integrate_ref_path=f"/integrate_refs/{USER_ID}.jpg")
     sessions = FakeSessionRepo(seed={USER_ID: cfg})

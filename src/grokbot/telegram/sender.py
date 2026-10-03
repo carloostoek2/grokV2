@@ -12,7 +12,7 @@ grok bot.py 5402-5407).
 Reglas de la capa (SPEC §5.2 / PLAN D1):
 
 * El I/O de media (descargar URL, leer file_paths locales, enviar/editar/borrar)
-  vive acá, nunca en handlers. ``MediaDownloader`` y ``TelegramGateway`` se
+  vive aquí, nunca en handlers. ``MediaDownloader`` y ``TelegramGateway`` se
   inyectan (0 red en tests, 0 ``unittest.mock``).
 * ``generation_refs`` se guarda POST-envío con el ``message_id`` real (álbum →
   ``sent[0]``; multi-URL → índice por foto). ``regen_context`` viaja opaco.

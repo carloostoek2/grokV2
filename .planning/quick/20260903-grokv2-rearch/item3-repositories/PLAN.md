@@ -606,7 +606,7 @@ cumplido. Commit atómico: `feat(repositories): generation refs repo (save/get/T
   constantes de dominio SIEMPRE desde `grokbot.domain.*` (no duplicar valores salvo `DEFAULT_LISTS`, que se transcribe
   del archivo grok como dato de seed). `json.dump` con los flags exactos (D9). `write_json_atomic` en los 3 `_save`.
 - **Anti-patterns prohibidos:** `Path(__file__).parent` para resolver data; default de path a cwd; reconstruir el
-  documento desde cero en un save (pierde claves extra); `str.format`/format_map (no aplica acá, mantener estilo);
+  documento desde cero en un save (pierde claves extra); `str.format`/format_map (no aplica aquí, mantener estilo);
   importar `settings`/`providers`/`telegram`/`grok` desde repos; `print`.
 - **Fixtures (R8, crítica):** los datos reales de grok (IDs `6181290784`, prompts personales, `file_id` tipo
   `AgACAgE...`) son SENSIBLES. Prohibido copiarlos verbatim. Usar usuario `111111111`, prompts dummy

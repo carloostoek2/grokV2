@@ -535,7 +535,7 @@ deps externas; tests unit cubren R2/R4/R6/R11/D1/D2/D3. Se sugiere commit por su
   No commitear `.venv/`, `.env`, cachés, `.pytest_cache`.
 - **Self-check antes de cada commit:** correr `.venv/bin/pytest tests/unit -q`; verificar con
   `git status --porcelain` que solo están los archivos esperados; confirmar 0 cambios sobre grok con
-  `git -C /home/ubuntu/repos/grok status --porcelain` (debe estar limpio/inalterado por vos).
+  `git -C /home/ubuntu/repos/grok status --porcelain` (debe estar limpio/inalterado).
 - **Registro:** mantener un log corto de ejecución (comandos + resultados + desvíos) como SUMMARY al final del ítem.
 - **Residuales:** si algo no cierra (p. ej. versión de pydantic-settings resuelta distinta), reportarlo en el SUMMARY y
   en la respuesta final; no cambiar decisiones bloqueadas por cuenta propia.

@@ -468,7 +468,7 @@ def register_faceswap(dp: Dispatcher, deps: BotDeps) -> None:
     """Registra /cambiar_source y los callbacks dedicados de confirmación.
 
     Las fotos/textos/replys/álbumes ya rutean por los filtros de generation.py
-    que delegan acá; este módulo solo añade el comando y los callbacks
+    que delegan aquí; este módulo solo añade el comando y los callbacks
     ``faceswap:confirm:*``.
     """
     dp.message.register(partial(cmd_cambiar_source, deps=deps), Command("cambiar_source"))

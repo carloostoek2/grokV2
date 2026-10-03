@@ -25,7 +25,7 @@ cada flujo con paridad de copy de grok:
   "el modo Multi-pose", no "/variables").
 
 Nunca se loguean IDs/prompts/payloads/file_ids/URLs de contenido (R6/R8). El
-``try/finally`` de jobs lo hace el propio use case; acá solo se refleja el evento.
+``try/finally`` de jobs lo hace el propio use case; aquí solo se refleja el evento.
 """
 
 from __future__ import annotations

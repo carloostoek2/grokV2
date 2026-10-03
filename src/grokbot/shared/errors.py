@@ -1,6 +1,6 @@
 """Helpers de error del entrypoint (item 6, D8) — stdlib-only.
 
-La superficie de error de arranque del bot vive acá como funciones puras.
+La superficie de error de arranque del bot vive aquí como funciones puras.
 ``settings_error_user_message`` formatea un ``pydantic.ValidationError`` de
 ``Settings`` listando SOLO los nombres de campo afectados: nunca incluye el
 valor que falló ni el mensaje crudo de pydantic (que puede contener secretos).

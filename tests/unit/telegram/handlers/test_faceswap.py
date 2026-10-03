@@ -612,7 +612,7 @@ class _GatedFaceswapProvider(FakeImageProvider):
 
     ``started``/``releases`` son un evento por llamada. Permite el cancel-mid
     determinístico del batch: item 1 completa, item 2 queda en la compuerta, el
-    test cancela y recién ahí suelta la compuerta.
+    test cancela y solo entonces suelta la compuerta.
     """
 
     def __init__(self) -> None:

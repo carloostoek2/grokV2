@@ -283,7 +283,7 @@ Con eso, `donut_face` queda bloqueado **solo** por los 16 nodos — 9 de ellos i
 `text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors`, `vae/wan2.2_vae.safetensors`.
 
 > El bot **no falla ruidosamente** por esto: si no puede cargar el workflow remoto cae al fallback
-> embebido y, si el grafo es inválido, el error recién aparece al encolar en ComfyUI.
+> embebido y, si el grafo es inválido, el error solo aparece al encolar en ComfyUI.
 
 ### Flujos que exigen foto (`requires_source`)
 
