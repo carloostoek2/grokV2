@@ -87,6 +87,7 @@ def test_config_comfyui_keyboard_lists_only_flow():
         "cfg:comfyui:flow:agil_edit_qwen",
         "cfg:comfyui:flow:agil_edit_nsfw",
         "cfg:comfyui:flow:wan_i2v",
+        "cfg:comfyui:flow:qwen21_t2i",
         "cfg:back:model",
         "cfg:close",
     ]

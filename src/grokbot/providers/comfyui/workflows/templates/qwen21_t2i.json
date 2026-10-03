@@ -1,0 +1,96 @@
+{
+  "1": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "qwen_image_2.1_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "2": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+      "type": "qwen_image"
+    }
+  },
+  "3": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+    }
+  },
+  "4": {
+    "class_type": "QwenImage21Cache",
+    "inputs": {
+      "model": ["1", 0],
+      "device": "auto",
+      "dtype": "default"
+    }
+  },
+  "5": {
+    "class_type": "TextEncodeQwenImage21",
+    "inputs": {
+      "clip": ["2", 0],
+      "prompt": "",
+      "negative_prompt": "",
+      "resolution": 1024
+    }
+  },
+  "6": {
+    "class_type": "EmptyLatentImage",
+    "inputs": {
+      "width": ["7", 0],
+      "height": ["7", 1],
+      "batch_size": 1
+    }
+  },
+  "7": {
+    "class_type": "ResolutionSelector",
+    "inputs": {
+      "aspect_ratio": "2:3 (Portrait Photo)",
+      "megapixels": 2.0,
+      "multiple": 8
+    }
+  },
+  "8": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 0,
+      "steps": 25,
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": ["4", 0],
+      "positive": ["5", 0],
+      "negative": ["5", 1],
+      "latent_image": ["6", 0]
+    }
+  },
+  "9": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": ["8", 0],
+      "vae": ["3", 0]
+    }
+  },
+  "10": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "filename_prefix": "grokbot/comfyui",
+      "images": ["9", 0]
+    }
+  },
+  "_meta": {
+    "id": "qwen21_t2i",
+    "name": "Qwen 2.1",
+    "media_type": "image",
+    "positive_node": "5",
+    "positive_input": "prompt",
+    "negative_node": null,
+    "seed_nodes": ["8"],
+    "save_nodes": ["10"],
+    "supports_source": false,
+    "source": "Qwen-Image-2.1 (7B unificado, 20-sep-2026) int8_convrot + Qwen3-VL 8B. Solo texto->imagen: en edicion regenera la escena (ver docs). cfg 1 hace inerte el negativo."
+  }
+}
