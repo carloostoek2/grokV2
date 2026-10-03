@@ -155,7 +155,8 @@ Turbo = 8 pasos, CFG 1 (camino rápido); generar **≤ 2 MP**; las *remociones* 
 | `text_encoders/` | `qwen_2.5_vl_7b_fp8_scaled.safetensors` | 8.74 GB |
 | | `qwen3vl_8b_int8_convrot.safetensors` | 8.71 GB |
 | | `qwen3vl_4b_fp8_scaled.safetensors` | 4.88 GB |
-| `loras/` | `Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors` | 0.79 GB |
+| `loras/` | `krea2/krea2_identity_edit_v1_2.safetensors` | **1.83 GB** |
+| | `Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors` | 0.79 GB |
 | | `Krea2NSFWV4.safetensors` | 0.43 GB |
 | | `grokstyle_krea2_v2.safetensors` | 0.21 GB |
 | `vae/` | `qwen_image_2.1_vae_bf16.safetensors` | 0.63 GB |
@@ -171,7 +172,7 @@ Renames del owner que hay que mapear al reinstalar: `Krea2NSFWV4.safetensors` �
 público `KNP_000003000.safetensors`; `Wan2_1_VAE_fp32.safetensors` ← hardlink de
 `wan_2.1_vae.safetensors` de `Comfy-Org/Wan_2.1_ComfyUI_repackaged`.
 
-## 6. Flujos (9 registrados en `COMFYUI_FLOWS`)
+## 6. Flujos (10 registrados en `COMFYUI_FLOWS`)
 
 Los graphs viven en `/workspace/ComfyUI/user/default/api_workflows/{id}.json` (fuente de verdad en
 runtime); el fallback embebido está en `src/grokbot/providers/comfyui/workflows/templates/`.
@@ -184,6 +185,7 @@ runtime); el fallback embebido está en `src/grokbot/providers/comfyui/workflows
 | `agil_moody` | Ágil Moody | image | — | `Moody-Krea-Mix-…nvfp4` | euler_ancestral/beta · 8 · 1 | 9:16 @ 1.4 MP → 896×1600 | ✅ |
 | `agil_edit_qwen` | Ágil Edit | image | ✔ | `qwen-image-edit-2511-Q4_K_M.gguf` + LoRA `…Lightning-4steps` | euler/simple · 4 · 1 | según foto | ✅ |
 | `agil_edit_nsfw` | Ágil Edit NSFW | image | ✔ | `Qwen-Rapid-AIO-NSFW-v23` (checkpoint) | euler/simple · 4 · 1 | según foto | ✅ |
+| `grok_edit` | Grok Style Edit | image | ✔ | `krea2_turbo_fp8_scaled` + LoRAs `krea2_identity_edit_v1_2` **y** `grokstyle_krea2_v2` | euler/simple · 10 · 1 | 9:16 @ 1.0 MP | ✅ |
 | `qwen21_t2i` | Qwen 2.1 | image | — | `qwen_image_2.1_int8_convrot` | euler/simple · 25 · 1 | 2:3 @ 2.0 MP | ✅ |
 | `donut_face` | Donut Face | image | — | `krea2_turbo_fp8_scaled` | — | 9:16 @ 1 MP | ❌ roto |
 | `wan_i2v` | Wan I2V | video | ✔ | `wan2.2_ti2v_5B_fp16` | uni_pc/simple · 20 · 5 | — | ❌ roto |
@@ -193,6 +195,31 @@ Componentes compartidos: los flujos Krea2 (`grok_style`, `agil_solo`, `agil_nsfw
 Excepciones: `qwen21_t2i` usa los `_int8_convrot` + `qwen_image_2.1_vae_bf16`; `agil_edit_qwen`
 usa `qwen_2.5_vl_7b_fp8_scaled`; `agil_edit_nsfw` usa un **checkpoint todo-en-uno** sin encoder
 ni VAE sueltos; `wan_i2v` usa `umt5_xxl` (faltante).
+
+### `grok_edit` — particularidades (medidas en vivo el 2026-10-03)
+
+Es el único flujo que **edita sobre Krea 2**, y tiene dos diferencias que importan:
+
+1. **El prompt es una INSTRUCCIÓN, no una descripción.** Va a un `Krea2EditGroundedEncode`
+   (input `prompt`), no a un `CLIPTextEncode`: el text encoder *ve* la imagen mientras lee la
+   instrucción. Escribir "mujer en una playa" en vez de "cambia el fondo a una playa al
+   atardecer" no da el resultado esperado. Las instrucciones conviene darlas en inglés.
+2. **Necesita DOS LoRAs apiladas**, y esto se verificó empíricamente:
+   - `krea2/krea2_identity_edit_v1_2.safetensors` — es la que **habilita editar**. Sin ella el
+     modelo ignora la instrucción y además produce artefactos.
+   - `grokstyle_krea2_v2.safetensors` — aporta el look Grok Style.
+
+Medición (misma foto, misma instrucción "Change her outfit to a red raincoat."):
+
+| LoRAs | ¿Cumple la instrucción? | Calidad |
+|---|---|---|
+| solo `grokstyle` | **No** (mantiene la ropa original) | artefactos (motas) |
+| solo `identity_edit` | Sí | limpia |
+| `identity_edit` + `grokstyle` | Sí | limpia (+ gotas de lluvia coherentes) |
+
+Costo: ~12–16 s con los modelos en caché, ~40 s en frío. Turbo, 10 pasos, CFG 1, target 9:16
+@ 1 MP. Las *remociones* ("borra el fondo") requieren el modelo **Raw** a CFG 3 ~20 pasos, que
+**no** está instalado — con Turbo no son fiables.
 
 ### Flujos rotos — por qué
 
@@ -218,9 +245,10 @@ públicos).
 > `Krea2NormalizedAttentionGuidance` **ya no falta**: lo aporta `ComfyUI-Krea2-NAG`, instalado el
 > 2026-10-03 (§4). La corrección de esa creencia previa es lo que bajó el conteo de 17 a 16.
 
-Además faltan 2 pesos: `loras/krea2/krea2_identity_edit_v1_2.safetensors` (la LoRA que potencia
-`comfyui-krea2edit`) y `vae/qwen-image/qwen_image_vae.safetensors` (nota: ese VAE **sí** está
-instalado, pero en la raíz de `vae/`, y el flujo lo busca en la subcarpeta `qwen-image/`).
+Además faltaba `loras/krea2/krea2_identity_edit_v1_2.safetensors` — **ya está** (descargada el
+2026-10-03, ver §5). Queda un solo peso: `vae/qwen-image/qwen_image_vae.safetensors` (nota: ese
+VAE **sí** está instalado, pero en la raíz de `vae/`, y el flujo lo busca en la subcarpeta
+`qwen-image/` — bastaría con un symlink o con corregir la ruta en el grafo).
 
 **`wan_i2v`** — le faltan 3 pesos: `diffusion_models/wan2.2_ti2v_5B_fp16.safetensors`,
 `text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors`, `vae/wan2.2_vae.safetensors`.

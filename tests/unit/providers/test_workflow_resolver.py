@@ -30,7 +30,18 @@ def test_get_flow_grok_style_returns_flow():
 
 def test_flows_returns_registered_flows():
     ids = {f.id for f in flows()}
-    assert ids == {"grok_style", "donut_face", "agil_solo", "agil_nsfw", "agil_moody", "agil_edit_qwen", "agil_edit_nsfw", "wan_i2v", "qwen21_t2i"}
+    assert ids == {
+        "grok_style",
+        "donut_face",
+        "agil_solo",
+        "agil_nsfw",
+        "agil_moody",
+        "agil_edit_qwen",
+        "agil_edit_nsfw",
+        "grok_edit",
+        "wan_i2v",
+        "qwen21_t2i",
+    }
 
 
 def test_get_flow_donut_face():
@@ -164,7 +175,7 @@ def test_get_flow_agil_moody_matches_platform_graph():
     assert g["763"]["class_type"] == "ConditioningZeroOut"
     assert g["857"]["class_type"] == "ResolutionSelector"
     assert g["857"]["inputs"]["aspect_ratio"] == "9:16 (Portrait Widescreen)"
-    assert g["857"]["inputs"]["megapixels"] == 2.0
+    assert g["857"]["inputs"]["megapixels"] == 1.4
     assert g["857"]["inputs"]["multiple"] == 32
     assert g["851"]["class_type"] == "SeedNode"
     assert g["698"]["inputs"]["width"] == ["857", 0]
@@ -344,6 +355,55 @@ def test_get_flow_agil_edit_nsfw_supports_source():
     assert flow.id == "agil_edit_nsfw"
     assert flow.supports_source is True
     assert flow.source_node == "2"
+
+def test_get_flow_grok_edit_edits_and_keeps_grok_style():
+    """Grok Style Edit: edición por instrucción sobre Krea2 (krea2edit) + LoRA grokstyle."""
+    flow = get_flow("grok_edit")
+    assert flow is not None
+    assert flow.name == "Grok Style Edit"
+    assert flow.media_type is MediaType.IMAGE
+    assert flow.supports_source is True
+    assert flow.source_node == "1"
+    assert flow.source_input == "image"
+    # El prompt es una INSTRUCCIÓN: va al grounded encode (input "prompt"), no a CLIPTextEncode.
+    assert flow.positive_node == "8"
+    assert flow.positive_input == "prompt"
+    assert flow.seed_nodes == ("13",)
+    assert flow.save_nodes == ("15",)
+
+    g = flow.graph
+    # Arquitectura krea2edit: el parche recibe el latente de la fuente y el target latente.
+    assert g["7"]["class_type"] == "Krea2EditModelPatch"
+    assert g["7"]["inputs"]["source_latent"] == ["10", 0]
+    assert g["7"]["inputs"]["target_latent"] == ["11", 0]
+    assert g["10"]["class_type"] == "VAEEncode"
+    assert g["11"]["class_type"] == "EmptySD3LatentImage"
+    # Positivo y negativo son grounded encodes (el text encoder VE la imagen).
+    assert g["8"]["class_type"] == "Krea2EditGroundedEncode"
+    assert g["9"]["class_type"] == "Krea2EditGroundedEncode"
+    assert g["8"]["inputs"]["image"] == ["1", 0]
+    assert g["13"]["inputs"]["positive"] == ["8", 0]
+    assert g["13"]["inputs"]["negative"] == ["9", 0]
+    # Turbo: 10 pasos, cfg 1.
+    assert g["13"]["inputs"]["steps"] == 10
+    assert g["13"]["inputs"]["cfg"] == 1.0
+    # Las dos LoRAs apiladas: identidad (habilita editar) y grokstyle (el look).
+    assert g["5"]["class_type"] == "LoraLoaderModelOnly"
+    assert g["5"]["inputs"]["lora_name"] == "krea2/krea2_identity_edit_v1_2.safetensors"
+    assert g["6"]["inputs"]["lora_name"] == "grokstyle_krea2_v2.safetensors"
+    assert g["6"]["inputs"]["model"] == ["5", 0]
+    assert g["7"]["inputs"]["model"] == ["6", 0]
+
+
+def test_render_grok_edit_patches_instruction():
+    flow = get_flow("grok_edit")
+    graph = render(flow, "Change the background to a beach at sunset.", lambda: 77)
+    assert graph["8"]["inputs"]["prompt"] == "Change the background to a beach at sunset."
+    assert graph["13"]["inputs"]["seed"] == 77
+    # El negativo queda vacío (horneado), no se parchea.
+    assert graph["9"]["inputs"]["prompt"] == ""
+    assert "_meta" not in graph
+
 
 def test_get_flow_wan_i2v_supports_source_video():
     flow = get_flow("wan_i2v")

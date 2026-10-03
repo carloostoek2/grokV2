@@ -1,0 +1,211 @@
+{
+  "_meta": {
+    "id": "grok_edit",
+    "name": "Grok Style Edit",
+    "media_type": "image",
+    "positive_node": "8",
+    "positive_input": "prompt",
+    "seed_nodes": [
+      "13"
+    ],
+    "save_nodes": [
+      "15"
+    ],
+    "supports_source": true,
+    "source_node": "1",
+    "source_input": "image",
+    "timeout": 600,
+    "source": "Krea2 edit por instruccion: Krea2EditModelPatch + Krea2EditGroundedEncode (comfyui-krea2edit v1.2.5) sobre krea2_turbo_fp8_scaled, con las LoRAs krea2_identity_edit_v1_2 (capacidad de edicion) + grokstyle_krea2_v2 (look Grok Style) apiladas. El prompt es una INSTRUCCION de edicion en ingles, no una descripcion. Turbo: 10 pasos, cfg 1, denoise 1. Target 9:16 @ 1 MP."
+  },
+  "1": {
+    "inputs": {
+      "image": "example.png"
+    },
+    "class_type": "LoadImage"
+  },
+  "2": {
+    "inputs": {
+      "unet_name": "krea2_turbo_fp8_scaled.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader"
+  },
+  "3": {
+    "inputs": {
+      "clip_name": "qwen3vl_4b_fp8_scaled.safetensors",
+      "type": "krea2",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader"
+  },
+  "4": {
+    "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
+    },
+    "class_type": "VAELoader"
+  },
+  "5": {
+    "inputs": {
+      "model": [
+        "2",
+        0
+      ],
+      "lora_name": "krea2/krea2_identity_edit_v1_2.safetensors",
+      "strength_model": 1.0
+    },
+    "class_type": "LoraLoaderModelOnly"
+  },
+  "6": {
+    "inputs": {
+      "model": [
+        "5",
+        0
+      ],
+      "lora_name": "grokstyle_krea2_v2.safetensors",
+      "strength_model": 1.0
+    },
+    "class_type": "LoraLoaderModelOnly"
+  },
+  "7": {
+    "inputs": {
+      "model": [
+        "6",
+        0
+      ],
+      "source_latent": [
+        "10",
+        0
+      ],
+      "vae": [
+        "4",
+        0
+      ],
+      "source_image": [
+        "1",
+        0
+      ],
+      "target_latent": [
+        "11",
+        0
+      ],
+      "ref_boost": 1.0,
+      "fit_mode": "fit"
+    },
+    "class_type": "Krea2EditModelPatch"
+  },
+  "8": {
+    "inputs": {
+      "clip": [
+        "3",
+        0
+      ],
+      "prompt": "",
+      "image": [
+        "1",
+        0
+      ],
+      "grounding_px": 768
+    },
+    "class_type": "Krea2EditGroundedEncode"
+  },
+  "9": {
+    "inputs": {
+      "clip": [
+        "3",
+        0
+      ],
+      "prompt": "",
+      "image": [
+        "1",
+        0
+      ],
+      "grounding_px": 768
+    },
+    "class_type": "Krea2EditGroundedEncode"
+  },
+  "10": {
+    "inputs": {
+      "pixels": [
+        "1",
+        0
+      ],
+      "vae": [
+        "4",
+        0
+      ]
+    },
+    "class_type": "VAEEncode"
+  },
+  "11": {
+    "inputs": {
+      "width": [
+        "12",
+        0
+      ],
+      "height": [
+        "12",
+        1
+      ],
+      "batch_size": 1
+    },
+    "class_type": "EmptySD3LatentImage"
+  },
+  "12": {
+    "inputs": {
+      "aspect_ratio": "9:16 (Portrait Widescreen)",
+      "megapixels": 1.0,
+      "multiple": 8
+    },
+    "class_type": "ResolutionSelector"
+  },
+  "13": {
+    "inputs": {
+      "model": [
+        "7",
+        0
+      ],
+      "positive": [
+        "8",
+        0
+      ],
+      "negative": [
+        "9",
+        0
+      ],
+      "latent_image": [
+        "11",
+        0
+      ],
+      "seed": 0,
+      "steps": 10,
+      "cfg": 1.0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1.0
+    },
+    "class_type": "KSampler"
+  },
+  "14": {
+    "inputs": {
+      "samples": [
+        "13",
+        0
+      ],
+      "vae": [
+        "4",
+        0
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "15": {
+    "inputs": {
+      "images": [
+        "14",
+        0
+      ],
+      "filename_prefix": "grokbot/comfyui"
+    },
+    "class_type": "SaveImage"
+  }
+}

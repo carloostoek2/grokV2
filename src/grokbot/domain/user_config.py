@@ -53,6 +53,7 @@ COMFYUI_FLOWS = (
     ("agil_moody", "Ágil Moody"),
     ("agil_edit_qwen", "Ágil Edit"),
     ("agil_edit_nsfw", "Ágil Edit NSFW"),
+    ("grok_edit", "Grok Style Edit"),
     ("wan_i2v", "Wan I2V"),
     ("qwen21_t2i", "Qwen 2.1"),
 )
