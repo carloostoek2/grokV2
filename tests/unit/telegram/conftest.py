@@ -219,6 +219,18 @@ class FakeTelegramGateway:
             reply_to_message_id=reply_to_message_id,
         )["sent"]
 
+    async def send_document(self, chat_id, document, *, filename="comfyui.png", caption=None, parse_mode="HTML", reply_markup=None, reply_to_message_id=None):
+        return self._record(
+            "send_document",
+            chat_id=chat_id,
+            document=document,
+            filename=filename,
+            caption=caption,
+            parse_mode=parse_mode,
+            reply_markup=reply_markup,
+            reply_to_message_id=reply_to_message_id,
+        )["sent"]
+
     async def send_video(self, chat_id, video, *, filename="generated.mp4", caption=None, parse_mode="HTML", reply_markup=None, reply_to_message_id=None):
         return self._record(
             "send_video",

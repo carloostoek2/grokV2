@@ -3,7 +3,9 @@
 Reimplementa el fan-out de grok ``process_image_result`` (bot.py:4973-5063),
 ``_send_comfyui_image/album/video`` (4087-4310) y ``process_video_result``
 (5373-5422): URL única → photo, multi-URL → N photos separadas con variante
-``{i+1}/{N}``, ComfyUI local 1 → photo y N → álbum (máx 10), video local/remoto
+``{i+1}/{N}``, ComfyUI local 1 → photo (documento si el PNG supera el tope de
+``send_photo``) y N → álbum (máx 10; un PNG que no cabe como foto va como
+documento, sin recomprimir), video local/remoto
 → ``send_video``. R10: un video remoto que supera el tope único
 (``media.MAX_MEDIA_BYTES``) o que la Bot API rechaza se degrada ofreciendo la
 URL firmada como camino de recuperación (chat privado del dueño único; paridad
@@ -38,7 +40,7 @@ from grokbot.telegram.formatters import (
 )
 from grokbot.domain.user_config import VALID_COMFYUI_MODELS
 from grokbot.telegram.keyboards import comfy_result_keyboard, flow_id_from_item, image_regenerate_keyboard
-from grokbot.telegram.media import MAX_MEDIA_BYTES
+from grokbot.telegram.media import MAX_MEDIA_BYTES, MAX_PHOTO_BYTES
 from grokbot.telegram.ports import (
     MediaDownloader,
     OutboundMedia,
@@ -54,6 +56,9 @@ _ERR_NO_URL = "Error: el modelo no devolvio ninguna URL. Intenta con otro prompt
 _ERR_VIDEO_REJECTED = (
     "No se pudo enviar el video por Telegram. "
     "Prueba con otro modelo o una duración/resolución menor."
+)
+_ERR_IMAGE_REJECTED = (
+    "No se pudo enviar la imagen por Telegram. Intenta de nuevo."
 )
 _GENERIC_DOWNLOAD_ERROR = "No se pudo descargar el archivo. Intenta de nuevo más tarde."
 
@@ -369,10 +374,19 @@ class ResultSender:
                 kb = comfy_result_keyboard(flow_id)
             else:
                 kb = image_regenerate_keyboard() if reply_markup is None else reply_markup
-            sent = await ui.send_photo(
-                data, filename=_COMFYUI_FILENAME, caption=caption, reply_markup=kb,
-                reply_to_message_id=reply_to,
-            )
+            if len(data) > MAX_MEDIA_BYTES:
+                # sendDocument comparte el tope de 50 MiB; no intentar el upload.
+                await self._degrade_image_rejected(ui, status_id)
+                return None
+            try:
+                sent = await self._deliver_local_image(
+                    ui, data, filename=_COMFYUI_FILENAME, caption=caption,
+                    reply_markup=kb, reply_to=reply_to,
+                )
+            except TelegramBadRequest:
+                # Igual que el video local: no dejar el status en «generando».
+                await self._degrade_image_rejected(ui, status_id)
+                return None
             if (
                 self._chain is not None
                 and owner_uid is not None
@@ -392,29 +406,56 @@ class ResultSender:
                 await ui.delete(status_id)
             return SentItem(primary=sent, sent=(sent,), kind="image")
 
-        media: list[OutboundMedia] = []
+        chunks: list[tuple[int, bytes]] = []
         for i, path in enumerate(paths[:10]):
             data = self._read_local(path)
             if data is None:
                 continue
-            caption = (
-                format_result_caption(
-                    prefix, elapsed, model=caption_model,
-                    prompt=item.prompt if caption_prompt else None,
-                )
-                if i == 0 else None
-            )
-            media.append(
-                OutboundMedia(
-                    media=data, filename=f"comfyui_{i}.png",
-                    caption=caption, kind="photo",
-                )
-            )
-        if not media:
+            chunks.append((i, data))
+        if not chunks:
             if status_id is not None:
                 await ui.edit_text(status_id, _ERR_NO_ALBUM, reply_markup=None)
             return None
-        sent_group = await ui.send_media_group(media, reply_to_message_id=reply_to)
+        if any(len(data) > MAX_MEDIA_BYTES for _, data in chunks):
+            await self._degrade_image_rejected(ui, status_id)
+            return None
+
+        def _album_caption(index: int) -> str | None:
+            if index != 0:
+                return None
+            return format_result_caption(
+                prefix, elapsed, model=caption_model,
+                prompt=item.prompt if caption_prompt else None,
+            )
+
+        try:
+            # Álbum de fotos solo si todas caben en sendPhoto. Si alguna lo
+            # supera, cada archivo va suelto (foto o documento) sin recomprimir:
+            # un media group no admite documentos.
+            if any(len(data) > MAX_PHOTO_BYTES for _, data in chunks):
+                sent_group = []
+                for i, data in chunks:
+                    sent_group.append(
+                        await self._deliver_local_image(
+                            ui, data, filename=f"comfyui_{i}.png",
+                            caption=_album_caption(i), reply_markup=None,
+                            reply_to=reply_to,
+                        )
+                    )
+            else:
+                media: list[OutboundMedia] = [
+                    OutboundMedia(
+                        media=data, filename=f"comfyui_{i}.png",
+                        caption=_album_caption(i), kind="photo",
+                    )
+                    for i, data in chunks
+                ]
+                sent_group = await ui.send_media_group(
+                    media, reply_to_message_id=reply_to
+                )
+        except TelegramBadRequest:
+            await self._degrade_image_rejected(ui, status_id)
+            return None
         if save_ref and sent_group:
             self._refs.save(
                 ui.chat_id, sent_group[0].message_id,
@@ -427,6 +468,41 @@ class ResultSender:
         return SentItem(
             primary=sent_group[0], sent=tuple(sent_group), is_album=True, kind="album"
         )
+
+    async def _deliver_local_image(
+        self,
+        ui: ChatUI,
+        data: bytes,
+        *,
+        filename: str,
+        caption: str | None,
+        reply_markup,
+        reply_to: int | None,
+    ) -> SentMessage:
+        """Foto si cabe en sendPhoto; si no, el mismo PNG como documento.
+
+        No reescala ni convierte a JPEG: el tope de foto es de la Bot API, no
+        del archivo. El caller ya rechazó lo que supera ``MAX_MEDIA_BYTES``.
+        """
+        if len(data) > MAX_PHOTO_BYTES:
+            return await ui.send_document(
+                data, filename=filename, caption=caption, reply_markup=reply_markup,
+                reply_to_message_id=reply_to,
+            )
+        return await ui.send_photo(
+            data, filename=filename, caption=caption, reply_markup=reply_markup,
+            reply_to_message_id=reply_to,
+        )
+
+    async def _degrade_image_rejected(self, ui: ChatUI, status_id: int | None) -> None:
+        """Sustituye el status «generando» por un error user-safe (tú).
+
+        Sin status, manda el mismo texto: el usuario no se queda sin respuesta.
+        """
+        if status_id is not None:
+            await ui.edit_text(status_id, _ERR_IMAGE_REJECTED, reply_markup=None)
+        else:
+            await ui.send_text(_ERR_IMAGE_REJECTED)
 
     async def _degrade_video_rejected(self, ui: ChatUI, status_id: int | None) -> None:
         """Degrada un video LOCAL no enviable: edita status o manda texto user-safe.
