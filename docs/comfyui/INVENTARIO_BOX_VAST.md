@@ -448,7 +448,57 @@ Un flujo de edición debe **rechazar** el request sin foto; uno de txt2img debe 
       print(\"  %-16s supports=%-5s requires=%s\" % (m.get(\"id\"),m.get(\"supports_source\"),m.get(\"requires_source\")))"'
   ```
 
-## 9. Cómo refrescar este inventario
+## 9. Recrear el box desde cero (`scripts/provision_vast_box.sh`)
+
+Script idempotente que corre **desde el repo** (necesita los templates y el `.env`) y maneja el
+box por SSH. Volver a correrlo es un no-op, así que también sirve como reporte de estado.
+
+```bash
+scripts/provision_vast_box.sh                     # todo
+scripts/provision_vast_box.sh --only verify       # solo reporta, no cambia nada
+scripts/provision_vast_box.sh --skip models       # sin las descargas grandes
+scripts/provision_vast_box.sh --only env,links
+
+CIVITAI_TOKEN=... scripts/provision_vast_box.sh   # requerido para las descargas de Civitai
+```
+
+Fases: `preflight env nodes models links workflows restart verify`.
+
+**Automatizado** (con origen verificado; los secretos viajan en un archivo 0600, nunca en `argv`):
+
+| Fase | Qué hace |
+|---|---|
+| `preflight` | SO, GPU, driver (avisa si < 580.65), disco, presencia de ComfyUI y del venv |
+| `env` | Instala/verifica el stack torch **2.11.0+cu130** y chequea `ldd` sin faltantes |
+| `nodes` | Clona `ComfyUI-Krea2-NAG` (0afb38d) y `comfyui-krea2edit` (86f886d) |
+| `models` | 8 pesos: 3 de `Comfy-Org/Krea-2`, Moody (`catlover1937`), la LoRA de identidad (`conradlocke`), el VAE de Wan (`Comfy-Org/Wan_2.1_ComfyUI_repackaged`) y 2 de **Civitai** (grokstyle 3278913, DirtyRealism 3372523) |
+| `links` | Symlink `vae/qwen-image/` y hardlink `Wan2_1_VAE_fp32` |
+| `workflows` | Despliega los 12 templates a `api_workflows/`, **nombrados por `_meta.id`** (§7.1) |
+| `restart` | Reinicia ComfyUI por supervisor y espera el 200 |
+| `verify` | Los chequeos de §8 + el estado de cada flujo + los pesos manuales |
+
+**Manual (no automatizable hoy):**
+
+1. **La imagen base del box.** El script **asume** una instancia Vast con la imagen de ComfyUI: el
+   árbol `/workspace/ComfyUI`, el venv `/venv/main`, el servicio supervisor `comfyui` en el puerto
+   18188, el portal, `comfy-cli` y los packs que trae la imagen (Manager, GGUF, rgdownloader,
+   rgthree). Nada de eso lo crea este script.
+2. **8 pesos sin origen verificado** (el script los reporta al final como `FALTA`/`ok`):
+   `qwen-image-edit-2511-Q4_K_M.gguf`, `qwen_image_2.1_int8_convrot`, `qwen3vl_8b_int8_convrot`,
+   `qwen_2.5_vl_7b_fp8_scaled`, `qwen_image_2.1_vae_bf16`, `Qwen-Rapid-AIO-NSFW-v23`,
+   `Qwen-Image-Edit-2511-Lightning-4steps`, `Krea2NSFWV4`. Son los que alimentan los flujos
+   Ágil Edit / Ágil Edit NSFW / Qwen 2.1. **Si alguien los re-descarga, anotar la URL en la
+   tabla de §5 y agregarlos al manifiesto del script.**
+3. **Los secretos**: `CIVITAI_TOKEN` (las descargas de Civitai dan 401 sin él) y `HF_TOKEN`
+   (solo si algún repo de HF pasa a estar gated).
+4. **Reiniciar el bot**: vive en la máquina del repo, no en el box → `grokbot restart` (§8.1).
+5. **La decisión de configuración**: qué flujos quedan habilitados, con qué pasos/CFG y con qué
+   resolución. El script despliega lo que haya en `templates/`; no juzga si está bien.
+
+> El script **no** reinstala paquetes `nvidia-*` ni purga nada: la trampa de §7.6 (colisión de
+> rutas cu12/cu13) sigue aplicando si alguien lo hace a mano.
+
+## 10. Cómo refrescar este inventario
 
 ```bash
 SSH="ssh -p <COMFYUI_PORT> root@<COMFYUI_HOST>"   # coordenadas del .env

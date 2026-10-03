@@ -64,6 +64,11 @@ src/grokbot/
 │   ├── fsm_states.py        #   ConfigStates / VarStates (único FSM real)
 │   └── middlewares.py       #   PrivateChatOnly + Allowlist
 └── shared/                  # Helpers stdlib-only (logging, errores user-safe del entrypoint)
+
+scripts/
+└── provision_vast_box.sh    # (re)construye el lado ComfyUI del box Vast; idempotente.
+                             # Corre desde el repo y maneja el box por SSH. Ver
+                             # docs/comfyui/INVENTARIO_BOX_VAST.md §9 (qué automatiza y qué no).
 ```
 
 ## Patrones que hay que seguir
