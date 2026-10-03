@@ -20,6 +20,12 @@ from grokbot.domain.catalog import (
 )
 from grokbot.domain.user_config import (
     COMFYUI_FLOW_LABELS,
+    COMFYUI_MENU_HIDDEN_FLOWS,
+    PIPE_DETAIL,
+    PIPE_EDIT,
+    PIPE_RETAKE,
+    VALID_COMFYUI_MODELS,
+    comfy_chain_stages,
     VALID_VIDEO_ASPECT_RATIOS,
     VALID_VIDEO_DURATIONS,
     VALID_VIDEO_MODES,
@@ -71,6 +77,68 @@ def image_regenerate_keyboard(*, show_cancel: bool = False) -> InlineKeyboardMar
     if show_cancel:
         row.append(InlineKeyboardButton(text="Cancelar", callback_data="cancel_job"))
     return InlineKeyboardMarkup(inline_keyboard=[row])
+
+
+_PIPE_LABELS = {
+    PIPE_EDIT: "Editar",
+    PIPE_DETAIL: "Detalle cara",
+    PIPE_RETAKE: "Otra toma",
+}
+
+
+def embed_flow_flags(flow_id: str) -> tuple[bool, bool, str] | None:
+    """``(supports_source, requires_source, media_type)`` from the embed template.
+
+    None when the id does not resolve. Callers treat that as "not a confirmed
+    T2I" so Otra toma stays hidden.
+    """
+    from grokbot.providers.comfyui.workflows.resolver import get_flow
+
+    flow = get_flow(flow_id)
+    if flow is None:
+        return None
+    return (flow.supports_source, flow.requires_source, flow.media_type.value)
+
+
+def flow_id_from_item(item: object) -> str | None:
+    """Comfy flow id on an ItemResult, or None for other providers."""
+    req = getattr(item, "request", None)
+    if req is None or getattr(req, "provider", None) != "comfyui":
+        return None
+    params = getattr(req, "params", None) or {}
+    model = params.get("model") or getattr(req, "model_id", None)
+    if not model:
+        return None
+    return str(model)
+
+
+def comfy_result_keyboard(flow_id: str | None) -> InlineKeyboardMarkup:
+    """Regenerar plus chain buttons that the source flow actually supports.
+
+    Non-Comfy and unknown ids get Regenerar only. Chain callbacks are
+    ``pipe:edit|detail|retake`` and never appear for Grok/xAI results.
+    """
+    rows: list[list[InlineKeyboardButton]] = [
+        [InlineKeyboardButton(text="Regenerar", callback_data="regen")],
+    ]
+    if flow_id and flow_id in VALID_COMFYUI_MODELS:
+        flags = embed_flow_flags(flow_id)
+        if flags is None:
+            supports, requires, media = True, True, "image"
+        else:
+            supports, requires, media = flags
+        buttons = [
+            InlineKeyboardButton(text=_PIPE_LABELS[stage], callback_data=f"pipe:{stage}")
+            for stage, _dest in comfy_chain_stages(
+                flow_id,
+                supports_source=supports,
+                requires_source=requires,
+                media_type=media,
+            )
+        ]
+        if buttons:
+            rows.append(buttons)
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def refine_confirm_keyboard(token: str) -> InlineKeyboardMarkup:
@@ -173,10 +241,13 @@ def config_comfyui_keyboard(cfg: ComfyUIConfig) -> InlineKeyboardMarkup:
     """Pantalla ComfyUI: un botón por **flujo** (por nombre).
 
     Cada flujo trae su modelo/LoRA en el workflow; no hay selectores de
-    modelo/LoRA/refine (dormidos tras el slice HTTP/WS).
+    modelo/LoRA/refine (dormidos tras el slice HTTP/WS). Flujos en
+    ``COMFYUI_MENU_HIDDEN_FLOWS`` no se muestran, pero siguen siendo ids válidos.
     """
     rows = []
     for flow_id, flow_name in COMFYUI_FLOW_LABELS.items():
+        if flow_id in COMFYUI_MENU_HIDDEN_FLOWS:
+            continue
         mark = "✅ " if flow_id == cfg.model else "• "
         rows.append([
             InlineKeyboardButton(

@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import asyncio
 from functools import partial
+from pathlib import Path
 
 from aiogram import Dispatcher, types
 from aiogram.fsm.context import FSMContext
@@ -36,6 +37,11 @@ from aiogram.fsm.context import FSMContext
 from grokbot.application.events import ItemFailed, ItemResult, RetryScheduled
 from grokbot.application.integrate_refs import IntegrateReferenceError
 from grokbot.domain.generation import KieTaskRef
+from grokbot.domain.user_config import (
+    COMFYUI_FLOW_LABELS,
+    PIPE_RETAKE,
+    comfy_chain_destination,
+)
 from grokbot.telegram.chat_ui import ChatUI
 from grokbot.telegram.fsm_states import in_var_text_entry
 from grokbot.telegram.deps import BotDeps
@@ -48,6 +54,7 @@ from grokbot.telegram.formatters import (
     validate_prompt,
     video_start_message,
 )
+from grokbot.telegram.keyboards import embed_flow_flags
 from grokbot.telegram.handlers._common import (
     INTEGRATE_MAX_ALBUM,
     SOURCE_MEDIA_UNAVAILABLE_MSG,
@@ -161,6 +168,110 @@ async def _complete_long_prompt_collection(deps: BotDeps, message: types.Message
     )
 
 
+_CHAIN_NEXT_TEXT = {
+    "edit": "Editar con {label}.\n\nEscribe la instrucción. Usaré la última imagen.",
+    "detail": "Detalle cara ({label}).\n\nEscribe un prompt corto de la cara. Usaré la última imagen.",
+    "retake": "Otra toma con {label}.\n\nEscribe el prompt. No reutilizo la foto.",
+}
+_CHAIN_NO_IMAGE = "No hay una imagen reciente de ComfyUI."
+_CHAIN_NOT_OWNER = "Esta imagen pertenece a otro usuario."
+_CHAIN_NOT_APPLICABLE = "Esa etapa no aplica a esta imagen."
+_CHAIN_MISSING_FILE = "No encuentro la imagen anterior. Vuelve a generar y elige la etapa de nuevo."
+_CHAIN_SWITCH_FAILED = "No se pudo cambiar el flujo."
+
+
+def _flow_flags(flow_id: str) -> tuple[bool, bool, str]:
+    flags = embed_flow_flags(flow_id)
+    if flags is None:
+        # Not a confirmed T2I: hide Otra toma, still allow mapped edit / face detail.
+        return True, True, "image"
+    return flags
+
+
+async def handle_comfy_chain(callback: types.CallbackQuery, deps: BotDeps) -> None:
+    """``pipe:edit|detail|retake`` — set the Comfy flow and wait for the next prompt.
+
+    Does not start a job. Source bytes come from ``last_comfy_path`` on the
+    following text message, and only for stages that need a photo.
+    """
+    gateway = deps.gateway
+    data = callback.data or ""
+    stage = data.split(":", 1)[1] if ":" in data else ""
+    if stage not in _CHAIN_NEXT_TEXT:
+        await answer_callback(gateway, callback, "Acción inválida.", show_alert=True)
+        return
+    if callback.message is None or not getattr(callback.message, "photo", None):
+        await answer_callback(gateway, callback, "Mensaje no valido.", show_alert=True)
+        return
+    uid = callback.from_user.id
+    ref = deps.refs.get(callback.message.chat.id, callback.message.message_id)
+    owner_uid = ref.get("owner_uid") if ref else None
+    if owner_uid is not None and int(owner_uid) != uid:
+        await answer_callback(gateway, callback, _CHAIN_NOT_OWNER, show_alert=True)
+        return
+    last = deps.comfy_chain.last(uid)
+    if not last:
+        await answer_callback(gateway, callback, _CHAIN_NO_IMAGE, show_alert=True)
+        return
+    supports, requires, media = _flow_flags(last["flow_id"])
+    dest = comfy_chain_destination(
+        last["flow_id"],
+        stage,
+        supports_source=supports,
+        requires_source=requires,
+        media_type=media,
+    )
+    if dest is None:
+        await answer_callback(gateway, callback, _CHAIN_NOT_APPLICABLE, show_alert=True)
+        return
+    model_res = deps.update_config.set_model(uid, "comfyui")
+    flow_res = deps.update_config.set_comfyui(uid, model=dest)
+    if not model_res.ok or not flow_res.ok:
+        await answer_callback(gateway, callback, _CHAIN_SWITCH_FAILED, show_alert=True)
+        return
+    deps.comfy_chain.arm(
+        uid,
+        stage=stage,
+        dest_flow=dest,
+        path=last["path"],
+        use_source=stage != PIPE_RETAKE,
+    )
+    label = COMFYUI_FLOW_LABELS.get(dest, dest)
+    await answer_callback(gateway, callback)
+    ui = _chat_ui(deps, callback.message)
+    await ui.send_text(_CHAIN_NEXT_TEXT[stage].format(label=label))
+
+
+async def _run_armed_comfy_chain(deps: BotDeps, message: types.Message) -> None:
+    """Consume an armed chain stage with the user's next prompt."""
+    ui = _chat_ui(deps, message)
+    prompt = (message.text or "").strip()
+    prompt_err = validate_prompt(prompt)
+    if prompt_err:
+        await ui.send_text(prompt_err)
+        return
+    armed = deps.comfy_chain.pop_armed(message.from_user.id)
+    if armed is None:
+        return
+    source_image = None
+    if armed["use_source"]:
+        path = Path(armed["path"])
+        try:
+            source_image = path.read_bytes() if path.is_file() else None
+        except OSError:
+            source_image = None
+        if not source_image:
+            await ui.send_text(_CHAIN_MISSING_FILE)
+            return
+    uid = message.from_user.id
+    cfg = deps.sessions.get_config(uid)
+    await _run_single_image(
+        deps, message, cfg, prompt, uid=uid,
+        prefix="Prompt" if armed["stage"] == PIPE_RETAKE else "Edit",
+        source_image=source_image,
+    )
+
+
 # --------------------------------------------------------------------------- #
 # Texto
 # --------------------------------------------------------------------------- #
@@ -171,6 +282,9 @@ async def handle_text(message: types.Message, state: FSMContext, deps: BotDeps) 
     # Long-prompt collection pendiente → el texto completa la edición (grok 1531-1533).
     if deps.long_prompt.is_awaiting(message.from_user.id):
         await _complete_long_prompt_collection(deps, message)
+        return
+    if deps.comfy_chain.is_armed(message.from_user.id):
+        await _run_armed_comfy_chain(deps, message)
         return
     cfg = deps.sessions.get_config(message.from_user.id)
     if cfg.model == "faceswap":
@@ -872,6 +986,10 @@ def register_generation(dp: Dispatcher, deps: BotDeps) -> None:
     dp.callback_query.register(
         partial(handle_regenerate, deps=deps),
         lambda c: c.data == "regen",
+    )
+    dp.callback_query.register(
+        partial(handle_comfy_chain, deps=deps),
+        lambda c: bool(c.data) and c.data.startswith("pipe:"),
     )
 
 

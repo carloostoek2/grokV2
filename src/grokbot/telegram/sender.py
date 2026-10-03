@@ -36,7 +36,8 @@ from grokbot.telegram.formatters import (
     SENSITIVE_DOWNLOAD_WARNING,
     format_result_caption,
 )
-from grokbot.telegram.keyboards import image_regenerate_keyboard
+from grokbot.domain.user_config import VALID_COMFYUI_MODELS
+from grokbot.telegram.keyboards import comfy_result_keyboard, flow_id_from_item, image_regenerate_keyboard
 from grokbot.telegram.media import MAX_MEDIA_BYTES
 from grokbot.telegram.ports import (
     MediaDownloader,
@@ -122,10 +123,12 @@ class ResultSender:
         gateway: TelegramGateway,
         downloader: MediaDownloader,
         refs: GenerationRefsRepository,
+        chain_memory=None,
     ) -> None:
         self._gateway = gateway
         self._downloader = downloader
         self._refs = refs
+        self._chain = chain_memory
 
     # ------------------------------------------------------------------ image
     async def send_image(
@@ -361,11 +364,23 @@ class ResultSender:
                 prefix, elapsed, model=caption_model,
                 prompt=item.prompt if caption_prompt else None,
             )
-            kb = image_regenerate_keyboard() if reply_markup is None else reply_markup
+            flow_id = flow_id_from_item(item)
+            if reply_markup is None and flow_id in VALID_COMFYUI_MODELS:
+                kb = comfy_result_keyboard(flow_id)
+            else:
+                kb = image_regenerate_keyboard() if reply_markup is None else reply_markup
             sent = await ui.send_photo(
                 data, filename=_COMFYUI_FILENAME, caption=caption, reply_markup=kb,
                 reply_to_message_id=reply_to,
             )
+            if (
+                self._chain is not None
+                and owner_uid is not None
+                and flow_id in VALID_COMFYUI_MODELS
+            ):
+                self._chain.remember(
+                    owner_uid, path=paths[0], flow_id=flow_id, prompt=item.prompt,
+                )
             if save_ref:
                 self._refs.save(
                     ui.chat_id, sent.message_id,

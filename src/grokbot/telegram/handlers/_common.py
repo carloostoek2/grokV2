@@ -176,7 +176,12 @@ def parse_integrate_caption(caption: str) -> tuple[bool, str]:
 # --- Armado (parity helpers de grok) -----------------------------------------
 def make_sender(deps: BotDeps) -> ResultSender:
     """ResultSender con los seams inyectados del deps."""
-    return ResultSender(gateway=deps.gateway, downloader=deps.downloader, refs=deps.refs)
+    return ResultSender(
+        gateway=deps.gateway,
+        downloader=deps.downloader,
+        refs=deps.refs,
+        chain_memory=deps.comfy_chain,
+    )
 
 
 def effective_image_provider(cfg: UserConfig) -> str:

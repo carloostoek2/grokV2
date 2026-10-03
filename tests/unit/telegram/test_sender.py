@@ -22,7 +22,8 @@ from conftest import (
 )
 from aiogram.exceptions import TelegramBadRequest
 from grokbot.application.events import ItemResult
-from grokbot.domain.generation import GenerationResult, MediaType
+from grokbot.domain.generation import GenerationRequest, GenerationResult, MediaType
+from grokbot.telegram.deps import ComfyChainMemory
 from grokbot.telegram import sender as sender_mod
 from grokbot.telegram.chat_ui import ChatUI
 from grokbot.telegram.downloader import DownloadError
@@ -164,6 +165,44 @@ async def test_comfyui_local_single_photo(tmp_path, gateway, downloader, refs_re
     assert ref["regen"] == regen
     # No descarga nada (ruta local).
     assert downloader.calls == []
+
+
+@pytest.mark.asyncio
+async def test_comfyui_known_flow_adds_chain_buttons_and_remembers_path(tmp_path, gateway, downloader, refs_repo):
+    img = tmp_path / "out.png"
+    img.write_bytes(b"png-bytes")
+    ui = ChatUI(gateway, CHAT_ID)
+    memory = ComfyChainMemory()
+    sender = ResultSender(
+        gateway=gateway, downloader=downloader, refs=refs_repo, chain_memory=memory,
+    )
+    request = GenerationRequest(
+        provider="comfyui",
+        model_id="grok_style",
+        media_type=MediaType.IMAGE,
+        prompt="un gato",
+        params={"model": "grok_style"},
+    )
+    item = ItemResult(
+        result=make_result(
+            provider="comfyui",
+            media_type=MediaType.IMAGE,
+            file_path=str(img),
+            meta={"file_paths": [str(img)]},
+        ),
+        prompt="un gato",
+        regen_context={"provider": "comfyui", "mode": "text"},
+        request=request,
+    )
+    await sender.send_image(ui, item, "Prompt", owner_uid=7)
+    photos = gateway.calls_by_method("send_photo")
+    assert flat_callback_data(photos[0]["reply_markup"]) == [
+        "regen", "pipe:edit", "pipe:detail", "pipe:retake",
+    ]
+    remembered = memory.last(7)
+    assert remembered is not None
+    assert remembered["path"] == str(img)
+    assert remembered["flow_id"] == "grok_style"
 
 
 @pytest.mark.asyncio

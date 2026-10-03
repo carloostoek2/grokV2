@@ -31,7 +31,8 @@ from grokbot.application.refine_flow import RefineDecision, ResolveRefineUseCase
 from grokbot.telegram.chat_ui import ChatUI
 from grokbot.telegram.keyboards import (
     cancel_job_keyboard,
-    image_regenerate_keyboard,
+    comfy_result_keyboard,
+    flow_id_from_item,
     refine_confirm_keyboard,
     refining_keyboard,
 )
@@ -43,6 +44,11 @@ _ALBUM_FINAL_TEXT = "Imagen final."
 _REFINE_ERR_FALLBACK = "No se pudo refinar la imagen."
 _SEND_REFINED_FAIL_SINGLE = "No se pudo enviar la imagen refinada."
 _SEND_REFINED_FAIL_ALBUM = "No se pudieron enviar las imágenes refinadas."
+
+
+def _final_markup(item: ItemResult):
+    """Regen, plus Comfy chain buttons when the source flow supports them."""
+    return comfy_result_keyboard(flow_id_from_item(item))
 
 
 def _user_safe_message(exc: Exception) -> str:
@@ -124,7 +130,7 @@ async def run_refine_flow(
                 await ui.edit_text(confirm_id, _ALBUM_FINAL_TEXT, reply_markup=None)
         else:
             await ui.edit_reply_markup(
-                base.primary.message_id, image_regenerate_keyboard()
+                base.primary.message_id, _final_markup(item)
             )
         if delete_status and status_id is not None:
             await ui.delete(status_id)
@@ -159,7 +165,7 @@ async def run_refine_flow(
             if confirm_id is not None:
                 await ui.delete(confirm_id)
         else:
-            await ui.edit_reply_markup(base.primary.message_id, image_regenerate_keyboard())
+            await ui.edit_reply_markup(base.primary.message_id, _final_markup(item))
         return RefineDecision.yes
 
     if cancel_event is not None and cancel_event.is_set():
@@ -168,7 +174,7 @@ async def run_refine_flow(
             if confirm_id is not None:
                 await ui.delete(confirm_id)
         else:
-            await ui.edit_reply_markup(base.primary.message_id, image_regenerate_keyboard())
+            await ui.edit_reply_markup(base.primary.message_id, _final_markup(item))
         return RefineDecision.cancelled
 
     refined_item = ItemResult(
@@ -195,7 +201,7 @@ async def run_refine_flow(
             if confirm_id is not None:
                 await ui.delete(confirm_id)
         else:
-            await ui.edit_reply_markup(base.primary.message_id, image_regenerate_keyboard())
+            await ui.edit_reply_markup(base.primary.message_id, _final_markup(item))
         return RefineDecision.yes
 
     if is_album:

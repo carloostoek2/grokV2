@@ -43,6 +43,9 @@ def test_flows_returns_registered_flows():
         "dirty_edit",
         "wan_i2v",
         "qwen21_t2i",
+        "flux1_dev_t2i",
+        "face_detail_impact",
+        "instantid_sdxl",
     }
 
 
@@ -363,10 +366,25 @@ def test_get_flow_agil_edit_nsfw_supports_source():
 
 def test_txt2img_flows_do_not_require_source():
     """requires_source is only for flows that make no sense without a photo."""
-    for flow_id in ("grok_style", "agil_solo", "agil_moody", "qwen21_t2i"):
+    for flow_id in ("grok_style", "agil_solo", "agil_moody", "qwen21_t2i", "flux1_dev_t2i"):
         flow = get_flow(flow_id)
         assert flow.supports_source is False, flow_id
         assert flow.requires_source is False, flow_id
+
+
+def test_face_detail_and_instantid_require_source():
+    detail = get_flow("face_detail_impact")
+    assert detail is not None
+    assert detail.name == "Face Detail"
+    assert detail.supports_source is True
+    assert detail.requires_source is True
+    assert detail.source_node == "1"
+    instant = get_flow("instantid_sdxl")
+    assert instant is not None
+    assert instant.name == "InstantID SDXL"
+    assert instant.supports_source is True
+    assert instant.requires_source is True
+    assert instant.media_type is MediaType.IMAGE
 
 def test_get_flow_grok_edit_edits_and_keeps_grok_style():
     """Grok Style Edit: Krea2 instruction editing (krea2edit) + grokstyle LoRA."""
