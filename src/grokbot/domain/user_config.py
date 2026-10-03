@@ -54,6 +54,8 @@ COMFYUI_FLOWS = (
     ("agil_edit_qwen", "Ágil Edit"),
     ("agil_edit_nsfw", "Ágil Edit NSFW"),
     ("grok_edit", "Grok Style Edit"),
+    ("dirty_realism", "Dirty Realism"),
+    ("dirty_edit", "Dirty Realism Edit"),
     ("wan_i2v", "Wan I2V"),
     ("qwen21_t2i", "Qwen 2.1"),
 )

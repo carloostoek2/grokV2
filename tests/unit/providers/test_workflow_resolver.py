@@ -39,6 +39,8 @@ def test_flows_returns_registered_flows():
         "agil_edit_qwen",
         "agil_edit_nsfw",
         "grok_edit",
+        "dirty_realism",
+        "dirty_edit",
         "wan_i2v",
         "qwen21_t2i",
     }
@@ -414,6 +416,51 @@ def test_render_grok_edit_patches_instruction():
     # El negativo queda vacío (horneado), no se parchea.
     assert graph["9"]["inputs"]["prompt"] == ""
     assert "_meta" not in graph
+
+
+def test_get_flow_dirty_realism_uses_checkpoint_as_the_look():
+    """Dirty Realism: el look lo aporta el checkpoint, sin LoRA de estilo horneada."""
+    flow = get_flow("dirty_realism")
+    assert flow is not None
+    assert flow.name == "Dirty Realism"
+    assert flow.media_type is MediaType.IMAGE
+    assert flow.supports_source is False
+    assert flow.requires_source is False
+
+    g = flow.graph
+    assert g["1"]["class_type"] == "UNETLoader"
+    assert g["1"]["inputs"]["unet_name"] == "krea2SATDirtyRealism_uncut_fp8.safetensors"
+    assert g["2"]["inputs"]["type"] == "krea2"
+    assert g["7"]["inputs"]["steps"] == 20
+    assert g["7"]["inputs"]["cfg"] == 1.0
+    # Sin LoRA de estilo: apilar una competiria con el finetune.
+    assert not any(
+        isinstance(n, dict) and n.get("class_type") == "LoraLoaderModelOnly"
+        for n in g.values()
+    )
+
+
+def test_get_flow_dirty_edit_edits_on_the_dirty_checkpoint():
+    """Dirty Realism Edit: mismo grafo krea2edit, base Dirty y solo LoRA de identidad."""
+    flow = get_flow("dirty_edit")
+    assert flow is not None
+    assert flow.name == "Dirty Realism Edit"
+    assert flow.supports_source is True
+    assert flow.requires_source is True
+    assert flow.source_node == "1"
+    assert flow.positive_node == "8"
+    assert flow.positive_input == "prompt"
+
+    g = flow.graph
+    assert g["2"]["inputs"]["unet_name"] == "krea2SATDirtyRealism_uncut_fp8.safetensors"
+    assert g["7"]["class_type"] == "Krea2EditModelPatch"
+    assert g["5"]["inputs"]["lora_name"] == "krea2/krea2_identity_edit_v1_2.safetensors"
+    # grokstyle NO va: competiria con el look del checkpoint.
+    assert not any(
+        isinstance(n, dict)
+        and (n.get("inputs") or {}).get("lora_name") == "grokstyle_krea2_v2.safetensors"
+        for n in g.values()
+    )
 
 
 def test_get_flow_wan_i2v_supports_source_video():

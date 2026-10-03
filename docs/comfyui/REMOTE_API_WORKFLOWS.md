@@ -9,12 +9,13 @@ JSON files **on the Vast box** and fetches them at runtime.
 ```
 /workspace/ComfyUI/user/default/api_workflows/
   agil_edit_nsfw.json   agil_edit_qwen.json   agil_moody.json
-  agil_nsfw.json        agil_solo.json        donut_face.json
+  agil_nsfw.json        agil_solo.json        dirty_edit.json
+  dirty_realism.json    donut_face.json       grok_edit.json
   grok_style.json       qwen21_t2i.json       wan_i2v.json
 ```
 
 > El listado completo, con pesos/sampler/resolución y **cuáles flujos están rotos hoy**, vive
-> en [INVENTARIO_BOX_VAST.md](./INVENTARIO_BOX_VAST.md) (foto del 2026-10-03: 7 de 9 OK;
+> en [INVENTARIO_BOX_VAST.md](./INVENTARIO_BOX_VAST.md) (foto del 2026-10-03: 10 de 12 OK;
 > `donut_face` y `wan_i2v` no son ejecutables por nodos/pesos faltantes).
 
 Each file is ComfyUI **API format** (flat `{node_id: {class_type, inputs}}`) plus

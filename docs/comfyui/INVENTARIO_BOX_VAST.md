@@ -143,12 +143,13 @@ Turbo = 8 pasos, CFG 1 (camino rápido); generar **≤ 2 MP**; las *remociones* 
 `ResolutionSelector` **no** es un custom node: viene del core de ComfyUI
 (`comfy_extras.nodes_resolution`).
 
-## 5. Pesos instalados (~91 GB, bajo `/workspace/ComfyUI/models`)
+## 5. Pesos instalados (~103 GB, bajo `/workspace/ComfyUI/models`)
 
 | Categoría | Archivo | Tamaño |
 |---|---|---|
 | `checkpoints/` | `Qwen-Rapid-AIO-NSFW-v23.safetensors` | 26.48 GB |
-| `diffusion_models/` | `krea2_turbo_fp8_scaled.safetensors` | 12.24 GB |
+| `diffusion_models/` | `krea2SATDirtyRealism_uncut_fp8.safetensors` | **12.24 GB** |
+| | `krea2_turbo_fp8_scaled.safetensors` | 12.24 GB |
 | | `qwen-image-edit-2511-Q4_K_M.gguf` | 12.34 GB |
 | | `Moody-Krea-Mix-v4.1G_00001__clean_nvfp4.safetensors` | 8.20 GB |
 | | `qwen_image_2.1_int8_convrot.safetensors` | 6.76 GB |
@@ -173,7 +174,7 @@ Renames del owner que hay que mapear al reinstalar: `Krea2NSFWV4.safetensors` �
 público `KNP_000003000.safetensors`; `Wan2_1_VAE_fp32.safetensors` ← hardlink de
 `wan_2.1_vae.safetensors` de `Comfy-Org/Wan_2.1_ComfyUI_repackaged`.
 
-## 6. Flujos (10 registrados en `COMFYUI_FLOWS`)
+## 6. Flujos (12 registrados en `COMFYUI_FLOWS`)
 
 Los graphs viven en `/workspace/ComfyUI/user/default/api_workflows/{id}.json` (fuente de verdad en
 runtime); el fallback embebido está en `src/grokbot/providers/comfyui/workflows/templates/`.
@@ -187,6 +188,8 @@ runtime); el fallback embebido está en `src/grokbot/providers/comfyui/workflows
 | `agil_edit_qwen` | Ágil Edit | image | ✔ | `qwen-image-edit-2511-Q4_K_M.gguf` + LoRA `…Lightning-4steps` | euler/simple · 4 · 1 | según foto | ✅ |
 | `agil_edit_nsfw` | Ágil Edit NSFW | image | ✔ | `Qwen-Rapid-AIO-NSFW-v23` (checkpoint) | euler/simple · 4 · 1 | según foto | ✅ |
 | `grok_edit` | Grok Style Edit | image | ✔ | `krea2_turbo_fp8_scaled` + LoRAs `krea2_identity_edit_v1_2` **y** `grokstyle_krea2_v2` | euler/simple · 10 · 1 | 9:16 @ 1.0 MP | ✅ |
+| `dirty_realism` | Dirty Realism | image | — | `krea2SATDirtyRealism_uncut_fp8` (el checkpoint **es** el look, sin LoRA) | euler/simple · 20 · 1 | 9:16 @ 1.0 MP | ✅ |
+| `dirty_edit` | Dirty Realism Edit | image | ✔ | `krea2SATDirtyRealism_uncut_fp8` + LoRA `krea2_identity_edit_v1_2` | euler/simple · 10 · 1 | 9:16 @ 1.0 MP | ✅ |
 | `qwen21_t2i` | Qwen 2.1 | image | — | `qwen_image_2.1_int8_convrot` | euler/simple · 25 · 1 | 2:3 @ 2.0 MP | ✅ |
 | `donut_face` | Donut Face | image | — | `krea2_turbo_fp8_scaled` | — | 9:16 @ 1 MP | ❌ roto |
 | `wan_i2v` | Wan I2V | video | ✔ | `wan2.2_ti2v_5B_fp16` | uni_pc/simple · 20 · 5 | — | ❌ roto |
@@ -221,6 +224,27 @@ Medición (misma foto, misma instrucción "Change her outfit to a red raincoat."
 Costo: ~12–16 s con los modelos en caché, ~40 s en frío. Turbo, 10 pasos, CFG 1, target 9:16
 @ 1 MP. Las *remociones* ("borra el fondo") requieren el modelo **Raw** a CFG 3 ~20 pasos, que
 **no** está instalado — con Turbo no son fiables.
+
+### `dirty_realism` / `dirty_edit` — el checkpoint Dirty (medido 2026-10-03)
+
+- **Origen**: Civitai **2796522** / modelVersion **3372523** ("Krea2-SAT-DirtyUncut", autor
+  Sateluco), fp8 de 12.24 GB. **La descarga exige token de Civitai** (401 sin él); la metadata
+  de la API es pública y no lo necesita.
+- Es un **checkpoint (finetune), no una LoRA**: *reemplaza* el UNET, no se apila sobre él.
+- **Drop-in verificado**: 942 tensores, todos bajo `model.diffusion_model.*` con tensores
+  `.weight_scale` (fp8 escalado) y **sin** VAE ni CLIP embebidos → carga en el mismo
+  `UNETLoader`. (El `krea2_turbo_fp8_scaled` de Comfy-Org trae los nombres **sin** ese prefijo;
+  ComfyUI acepta ambas convenciones.)
+- **Tolerante al muestreo**: probado a 8, 10 y 20 pasos con CFG 1, y a 20 pasos con CFG 3 — los
+  cuatro salen bien. A diferencia de lo que el README de krea2edit dice del modelo *Raw*, **este
+  funciona a CFG 1**, así que el camino rápido está disponible.
+- **La LoRA de identidad transfiere al finetune**: verificado que `krea2_identity_edit_v1_2`
+  sigue cumpliendo la instrucción sobre esta base (impermeable rojo, identidad intacta). Por eso
+  `dirty_edit` es viable.
+- **Ninguno de los dos lleva LoRA de estilo**: el look lo aporta el checkpoint; apilar
+  `grokstyle` competiría con él.
+- **Alternativa medida**: CFG 3 + 20 pasos da algo más de detalle fotográfico a ~3× el tiempo
+  (20 s vs 12 s en txt2img; 44 s vs 16 s en edición). Es cambiar `steps`/`cfg` en el template.
 
 ### Flujos rotos — por qué
 

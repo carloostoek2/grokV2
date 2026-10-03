@@ -150,11 +150,22 @@ local-forward** (`transport.py` → `client.py` → plantillas API-format en
   con `supports_source`. Es independiente de `supports_source`, que solo dice "admite".
   **Ojo**: el `_meta` que se usa en runtime vive en el `api_workflows/` del box; cambiarlo exige
   **desplegarlo**, no basta con el template del repo.
-- **Alcance actual**: **10 flujos** — 9 de imagen (Grok Style, Grok Style Edit, Donut Face,
-  Ágil solo, Ágil NSFW, Ágil Moody, Ágil Edit, Ágil Edit NSFW, Qwen 2.1) y 1 de video
-  (Wan I2V). Salud real de cada uno y pesos que faltan: `docs/comfyui/INVENTARIO_BOX_VAST.md`
-  (a 2026-10-03: 8 ejecutables; `donut_face` bloqueado por nodos de un pack privado y `wan_i2v`
-  por 3 pesos).
+- **Dirty Realism (`dirty_realism` + `dirty_edit`, 2026-10-03)**: el finetune
+  **Krea2-SAT-DirtyRealism "DirtyUncut"** (Civitai 2796522 / version 3372523, autor Sateluco) —
+  realismo fotográfico crudo, sin pulir, sin censura. Es un **checkpoint, no una LoRA**:
+  *reemplaza* el UNET (`krea2_turbo_fp8_scaled`), y **ninguno de los dos flujos lleva LoRA de
+  estilo** — el look lo aporta el checkpoint; apilar `grokstyle` competiría con él.
+  `dirty_realism` es txt2img; `dirty_edit` reusa el grafo krea2edit con la LoRA de identidad.
+  **Medido**: es drop-in (UNET-only fp8, mismos prefijos que el turbo salvo el
+  `model.diffusion_model.` que ComfyUI acepta), tolera 8-20 pasos y **funciona a CFG 1** (a
+  diferencia del modelo *Raw* que menciona krea2edit), y **la LoRA de identidad transfiere al
+  finetune** (la instrucción se cumple). 12 s txt2img / 16 s edición; la variante CFG 3 + 20
+  pasos da algo más de detalle a ~3× el tiempo. **La descarga exige token de Civitai.**
+- **Alcance actual**: **12 flujos** — 11 de imagen (Grok Style, Grok Style Edit, Dirty Realism,
+  Dirty Realism Edit, Donut Face, Ágil solo, Ágil NSFW, Ágil Moody, Ágil Edit, Ágil Edit NSFW,
+  Qwen 2.1) y 1 de video (Wan I2V). Salud real de cada uno y pesos que faltan:
+  `docs/comfyui/INVENTARIO_BOX_VAST.md` (a 2026-10-03: 10 ejecutables; `donut_face` bloqueado por
+  nodos de un pack privado y `wan_i2v` por 3 pesos).
 
 ### Flujos degradados D8 — ninguno (wave-2/R4 resuelta 2026-09-05)
 
