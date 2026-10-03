@@ -12,6 +12,7 @@
       "21"
     ],
     "supports_source": true,
+    "requires_source": true,
     "source_node": "1",
     "source_input": "image",
     "timeout": 1800,

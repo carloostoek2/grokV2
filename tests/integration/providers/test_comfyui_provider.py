@@ -148,6 +148,28 @@ async def test_source_photo_without_template_variant_raises(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_edit_flow_without_source_photo_raises(tmp_path):
+    """Guard inverso: sin foto, un flujo de edición correría con el placeholder
+    horneado (example.png) y devolvería un resultado incorrecto en silencio."""
+    prov = _provider(FakeTransport("box"), tmp_path)
+
+    with pytest.raises(ProviderInputError) as exc:
+        await prov.generate(_req(params={"model": "grok_edit"}))
+
+    assert "foto" in exc.value.user_message
+
+
+@pytest.mark.asyncio
+async def test_t2i_flow_without_source_photo_is_allowed(tmp_path):
+    """El guard es solo para flujos que exigen foto; txt2img sin foto es normal."""
+    prov = _provider(FakeTransport("box"), tmp_path)
+
+    result = await prov.generate(_req(params={"model": "grok_style"}))
+
+    assert result.media_type is MediaType.IMAGE
+
+
+@pytest.mark.asyncio
 async def test_missing_template_combo_raises(tmp_path):
     prov = _provider(FakeTransport("box"), tmp_path)
 

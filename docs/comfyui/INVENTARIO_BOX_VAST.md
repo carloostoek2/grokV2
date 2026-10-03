@@ -161,6 +161,7 @@ Turbo = 8 pasos, CFG 1 (camino rápido); generar **≤ 2 MP**; las *remociones* 
 | | `grokstyle_krea2_v2.safetensors` | 0.21 GB |
 | `vae/` | `qwen_image_2.1_vae_bf16.safetensors` | 0.63 GB |
 | | `qwen_image_vae.safetensors` | 0.24 GB |
+| | `qwen-image/qwen_image_vae.safetensors` | *(symlink relativo al anterior — lo pide `donut_face`)* |
 | | `Wan2_1_VAE_fp32.safetensors` | 0.24 GB |
 | | `wan_2.1_vae.safetensors` | *(mismo inodo — hardlink del anterior)* |
 
@@ -245,16 +246,34 @@ públicos).
 > `Krea2NormalizedAttentionGuidance` **ya no falta**: lo aporta `ComfyUI-Krea2-NAG`, instalado el
 > 2026-10-03 (§4). La corrección de esa creencia previa es lo que bajó el conteo de 17 a 16.
 
-Además faltaba `loras/krea2/krea2_identity_edit_v1_2.safetensors` — **ya está** (descargada el
-2026-10-03, ver §5). Queda un solo peso: `vae/qwen-image/qwen_image_vae.safetensors` (nota: ese
-VAE **sí** está instalado, pero en la raíz de `vae/`, y el flujo lo busca en la subcarpeta
-`qwen-image/` — bastaría con un symlink o con corregir la ruta en el grafo).
+De los 2 pesos que faltaban, **ninguno falta ya** (2026-10-03):
+`loras/krea2/krea2_identity_edit_v1_2.safetensors` se descargó (§5) y
+`vae/qwen-image/qwen_image_vae.safetensors` se resolvió con un **symlink relativo** a
+`vae/qwen_image_vae.safetensors` (el VAE ya estaba; el grafo lo buscaba en la subcarpeta).
+Verificado: ComfyUI lo lista en `VAELoader`.
+
+Con eso, `donut_face` queda bloqueado **solo** por los 16 nodos — 9 de ellos instalables desde
+7 packs públicos, y 7 + `DF_Text` del pack privado del owner.
 
 **`wan_i2v`** — le faltan 3 pesos: `diffusion_models/wan2.2_ti2v_5B_fp16.safetensors`,
 `text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors`, `vae/wan2.2_vae.safetensors`.
 
 > El bot **no falla ruidosamente** por esto: si no puede cargar el workflow remoto cae al fallback
 > embebido y, si el grafo es inválido, el error recién aparece al encolar en ComfyUI.
+
+### Flujos que exigen foto (`requires_source`)
+
+Los 4 flujos con `supports_source: true` declaran además **`requires_source: true`** en su `_meta`
+(`agil_edit_qwen`, `agil_edit_nsfw`, `grok_edit`, `wan_i2v`). El provider **rechaza** el request
+con un mensaje claro si llega sin foto.
+
+Sin esa marca el grafo correría con el **placeholder horneado** — los cuatro apuntan a
+`example.png`, que existe en el `input/` del box — y devolvería un resultado incorrecto **en
+silencio**. Es un flag independiente de `supports_source` a propósito: un flujo futuro podría
+aceptar foto *opcionalmente* sin exigirla.
+
+> Al cambiar cualquiera de estos dos flags hay que **desplegar el `_meta` al box**: en runtime el
+> flujo se lee del `api_workflows/` remoto, no del template del repo.
 
 ## 7. Gotchas operativos
 

@@ -345,6 +345,7 @@ def test_get_flow_agil_edit_qwen_supports_source():
     assert flow is not None
     assert flow.id == "agil_edit_qwen"
     assert flow.supports_source is True
+    assert flow.requires_source is True
     assert flow.source_node == "1"
     assert flow.positive_input == "prompt"
 
@@ -354,7 +355,16 @@ def test_get_flow_agil_edit_nsfw_supports_source():
     assert flow is not None
     assert flow.id == "agil_edit_nsfw"
     assert flow.supports_source is True
+    assert flow.requires_source is True
     assert flow.source_node == "2"
+
+
+def test_txt2img_flows_do_not_require_source():
+    """requires_source es solo para flujos que no tienen sentido sin foto."""
+    for flow_id in ("grok_style", "agil_solo", "agil_moody", "qwen21_t2i"):
+        flow = get_flow(flow_id)
+        assert flow.supports_source is False, flow_id
+        assert flow.requires_source is False, flow_id
 
 def test_get_flow_grok_edit_edits_and_keeps_grok_style():
     """Grok Style Edit: edición por instrucción sobre Krea2 (krea2edit) + LoRA grokstyle."""
@@ -363,6 +373,7 @@ def test_get_flow_grok_edit_edits_and_keeps_grok_style():
     assert flow.name == "Grok Style Edit"
     assert flow.media_type is MediaType.IMAGE
     assert flow.supports_source is True
+    assert flow.requires_source is True
     assert flow.source_node == "1"
     assert flow.source_input == "image"
     # El prompt es una INSTRUCCIÓN: va al grounded encode (input "prompt"), no a CLIPTextEncode.
@@ -412,6 +423,7 @@ def test_get_flow_wan_i2v_supports_source_video():
     assert flow.name == "Wan I2V"
     assert flow.media_type is MediaType.VIDEO
     assert flow.supports_source is True
+    assert flow.requires_source is True
     assert flow.source_node == "1"
     assert flow.source_input == "image"
 

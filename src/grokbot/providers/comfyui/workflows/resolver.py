@@ -81,6 +81,10 @@ class Flow:
     save_nodes: tuple[str, ...] = ()
     # True cuando la plantilla admite img2img/i2v (carga foto fuente).
     supports_source: bool = False
+    # True cuando la plantilla **exige** foto: sin ella el grafo correría con el
+    # placeholder horneado (p. ej. ``example.png``) y devolvería un resultado
+    # silenciosamente incorrecto. El provider lo rechaza antes de encolar.
+    requires_source: bool = False
     # Nodo LoadImage (o equivalente) cuyo input recibe el filename subido.
     source_node: str | None = None
     # Input del nodo fuente (default "image" para LoadImage).
@@ -191,6 +195,7 @@ def _flow_from_raw(raw: dict, file_name: str, *, origin: str) -> Flow:
         seed_nodes=tuple(str(x) for x in meta.get("seed_nodes", ())),
         save_nodes=tuple(str(x) for x in meta.get("save_nodes", ())),
         supports_source=bool(meta.get("supports_source", False)),
+        requires_source=bool(meta.get("requires_source", False)),
         source_node=(
             str(meta["source_node"]) if meta.get("source_node") else None
         ),
