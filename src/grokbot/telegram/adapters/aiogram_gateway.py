@@ -181,6 +181,30 @@ class AiogramGateway(Bot):
         )
         return self._sent(msg)
 
+    async def send_document(
+        self,
+        chat_id: int,
+        document: bytes,
+        *,
+        filename: str = "comfyui.png",
+        caption: str | None = None,
+        parse_mode: str = "HTML",
+        reply_markup: InlineKeyboardMarkup | None = None,
+        reply_to_message_id: int | None = None,
+    ) -> SentMessage:
+        msg = await super().send_document(
+            chat_id,
+            self._file(document, filename),
+            caption=caption,
+            parse_mode=parse_mode,
+            reply_markup=reply_markup,
+            reply_to_message_id=reply_to_message_id,
+            # Igual que send_photo: si el mensaje al que se responde ya no
+            # existe, no se aborta el envío del archivo.
+            allow_sending_without_reply=reply_to_message_id is not None,
+        )
+        return self._sent(msg)
+
     async def send_video(
         self,
         chat_id: int,

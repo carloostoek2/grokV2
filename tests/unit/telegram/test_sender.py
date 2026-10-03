@@ -1,6 +1,8 @@
 """Tests del ResultSender (item 5, R4/R6/R10): fan-out y refs post-envío.
 
-Verifica URL única/multi-URL (kie), local ComfyUI single/álbum, video local/
+Verifica URL única/multi-URL (kie), local ComfyUI single/álbum, PNG local
+que supera el tope de sendPhoto enviado como documento sin recomprimir, rechazo
+de la API que limpia el status, video local/
 remoto, video local rechazado degradado user-safe sin path (C9c), video remoto
 que supera el tope único (``media.MAX_MEDIA_BYTES``) o que la API rechaza →
 fallback de texto con la URL de recuperación (R10, privado), allowlist
@@ -28,6 +30,7 @@ from grokbot.telegram import sender as sender_mod
 from grokbot.telegram.chat_ui import ChatUI
 from grokbot.telegram.downloader import DownloadError
 from grokbot.telegram.formatters import SENSITIVE_DOWNLOAD_WARNING
+from grokbot.telegram.media import MAX_PHOTO_BYTES
 from grokbot.telegram.sender import ResultSender
 
 URL_1 = "https://files.x.ai/one.png"
@@ -249,6 +252,256 @@ async def test_comfyui_local_unreadable_reports_on_status(tmp_path, gateway, dow
     edits = gateway.calls_by_method("edit_message_text")
     assert edits[-1]["text"] == "No se pudo leer la imagen generada."
     assert edits[-1]["reply_markup"] is None
+
+_ERR_IMAGE_REJECTED = "No se pudo enviar la imagen por Telegram. Intenta de nuevo."
+
+
+def test_max_photo_bytes_is_under_send_photo_cap():
+    """9.5 MiB: bajo el tope de 10 MiB de sendPhoto, encima de un PNG de ~10 MiB."""
+    assert MAX_PHOTO_BYTES == (19 * 1024 * 1024) // 2
+    assert MAX_PHOTO_BYTES < 10 * 1024 * 1024
+
+
+def _local_png(tmp_path, name: str, payload: bytes):
+    img = tmp_path / name
+    img.write_bytes(payload)
+    return img
+
+
+class _RejectingPhotoGateway(FakeTelegramGateway):
+    async def send_photo(
+        self, chat_id, photo, *, filename="generated.png", caption=None,
+        parse_mode="HTML", reply_markup=None, reply_to_message_id=None,
+    ):
+        raise TelegramBadRequest(method="sendPhoto", message="photo is too big")
+
+
+class _RejectingDocumentGateway(FakeTelegramGateway):
+    async def send_document(
+        self, chat_id, document, *, filename="comfyui.png", caption=None,
+        parse_mode="HTML", reply_markup=None, reply_to_message_id=None,
+    ):
+        raise TelegramBadRequest(method="sendDocument", message="file is too big")
+
+
+class _RejectingMediaGroupGateway(FakeTelegramGateway):
+    async def send_media_group(self, chat_id, media, *, reply_to_message_id=None):
+        raise TelegramBadRequest(method="sendMediaGroup", message="photo is too big")
+
+
+@pytest.mark.asyncio
+async def test_comfyui_local_over_photo_limit_sends_png_as_document(
+    tmp_path, gateway, downloader, refs_repo, monkeypatch
+):
+    """Cualquier PNG local que no cabe como foto va como archivo, intacto."""
+    monkeypatch.setattr(sender_mod, "MAX_PHOTO_BYTES", 8)
+    payload = b"\x89PNG\r\n\x1a\n" + b"x" * 16
+    img = _local_png(tmp_path, "out.png", payload)
+    ui = ChatUI(gateway, CHAT_ID)
+    sender = _make_sender(gateway, downloader, refs_repo)
+    regen = {"provider": "comfyui", "mode": "text"}
+    item = _item(
+        provider="comfyui",
+        file_paths=[str(img)],
+        meta={},
+        regen=regen,
+    )
+    status = await ui.send_text("Generando imagen con Face Detail…")
+    sent = await sender.send_image(ui, item, "Edit", status_id=status.message_id)
+
+    assert sent is not None
+    assert gateway.calls_by_method("send_photo") == []
+    docs = gateway.calls_by_method("send_document")
+    assert len(docs) == 1
+    assert docs[0]["document"] == payload
+    assert docs[0]["filename"] == "comfyui.png"
+    assert docs[0]["filename"].endswith(".png")
+    assert docs[0]["caption"] == "<b>Edit:</b> …"
+    assert flat_callback_data(docs[0]["reply_markup"]) == ["regen"]
+    ref = refs_repo.get(CHAT_ID, sent.primary.message_id)
+    assert ref is not None and ref["provider"] == "comfyui"
+    assert ref["regen"] == regen
+    assert gateway.calls_by_method("delete_message")
+    assert not any(
+        c["text"] == _ERR_IMAGE_REJECTED
+        for c in gateway.calls_by_method("edit_message_text")
+    )
+
+
+@pytest.mark.asyncio
+async def test_comfyui_local_at_photo_limit_stays_photo(
+    tmp_path, gateway, downloader, refs_repo, monkeypatch
+):
+    monkeypatch.setattr(sender_mod, "MAX_PHOTO_BYTES", 8)
+    img = _local_png(tmp_path, "fit.png", b"12345678")
+    ui = ChatUI(gateway, CHAT_ID)
+    sender = _make_sender(gateway, downloader, refs_repo)
+    item = _item(provider="comfyui", file_paths=[str(img)], meta={})
+    sent = await sender.send_image(ui, item, "Edit")
+    assert sent is not None
+    photos = gateway.calls_by_method("send_photo")
+    assert len(photos) == 1
+    assert photos[0]["photo"] == b"12345678"
+    assert gateway.calls_by_method("send_document") == []
+
+
+@pytest.mark.asyncio
+async def test_comfyui_over_photo_limit_is_not_tied_to_one_flow(
+    tmp_path, gateway, downloader, refs_repo, monkeypatch
+):
+    """El corte es el tamaño, no el id de flujo (p. ej. no solo face_detail)."""
+    monkeypatch.setattr(sender_mod, "MAX_PHOTO_BYTES", 4)
+    img = _local_png(tmp_path, "big.png", b"\x89PNG" + b"yyyy")
+    ui = ChatUI(gateway, CHAT_ID)
+    memory = ComfyChainMemory()
+    sender = ResultSender(
+        gateway=gateway, downloader=downloader, refs=refs_repo, chain_memory=memory,
+    )
+    request = GenerationRequest(
+        provider="comfyui",
+        model_id="grok_style",
+        media_type=MediaType.IMAGE,
+        prompt="un gato",
+        params={"model": "grok_style"},
+    )
+    item = ItemResult(
+        result=make_result(
+            provider="comfyui",
+            media_type=MediaType.IMAGE,
+            file_path=str(img),
+            meta={"file_paths": [str(img)]},
+        ),
+        prompt="un gato",
+        regen_context={"provider": "comfyui", "mode": "text"},
+        request=request,
+    )
+    await sender.send_image(ui, item, "Prompt", owner_uid=7)
+    assert gateway.calls_by_method("send_photo") == []
+    docs = gateway.calls_by_method("send_document")
+    assert len(docs) == 1
+    assert docs[0]["document"] == b"\x89PNG" + b"yyyy"
+    assert flat_callback_data(docs[0]["reply_markup"]) == [
+        "regen", "pipe:edit", "pipe:detail", "pipe:retake",
+    ]
+    remembered = memory.last(7)
+    assert remembered is not None and remembered["flow_id"] == "grok_style"
+
+
+@pytest.mark.asyncio
+async def test_comfyui_local_photo_rejected_clears_generating_status(
+    tmp_path, downloader, refs_repo
+):
+    gateway = _RejectingPhotoGateway()
+    ui = ChatUI(gateway, CHAT_ID)
+    sender = _make_sender(gateway, downloader, refs_repo)
+    img = _local_png(tmp_path, "small.png", b"png")
+    item = _item(provider="comfyui", file_paths=[str(img)], meta={})
+    status = await ui.send_text("Generando imagen con Face Detail…")
+    sent = await sender.send_image(ui, item, "Edit", status_id=status.message_id)
+    assert sent is None
+    edits = gateway.calls_by_method("edit_message_text")
+    assert edits[-1]["text"] == _ERR_IMAGE_REJECTED
+    assert edits[-1]["reply_markup"] is None
+    assert "Generando" not in edits[-1]["text"]
+    assert not any(str(img) in c["text"] for c in edits)
+    assert gateway.calls_by_method("delete_message") == []
+
+
+@pytest.mark.asyncio
+async def test_comfyui_local_document_rejected_clears_status(
+    tmp_path, downloader, refs_repo, monkeypatch
+):
+    monkeypatch.setattr(sender_mod, "MAX_PHOTO_BYTES", 2)
+    gateway = _RejectingDocumentGateway()
+    ui = ChatUI(gateway, CHAT_ID)
+    sender = _make_sender(gateway, downloader, refs_repo)
+    img = _local_png(tmp_path, "big.png", b"png-bytes")
+    item = _item(provider="comfyui", file_paths=[str(img)], meta={})
+    status = await ui.send_text("Generando imagen…")
+    sent = await sender.send_image(ui, item, "Edit", status_id=status.message_id)
+    assert sent is None
+    assert gateway.calls_by_method("send_photo") == []
+    edits = gateway.calls_by_method("edit_message_text")
+    assert edits[-1]["text"] == _ERR_IMAGE_REJECTED
+    assert "Generando" not in edits[-1]["text"]
+
+
+@pytest.mark.asyncio
+async def test_comfyui_local_photo_rejected_without_status_sends_text(
+    tmp_path, downloader, refs_repo
+):
+    gateway = _RejectingPhotoGateway()
+    ui = ChatUI(gateway, CHAT_ID)
+    sender = _make_sender(gateway, downloader, refs_repo)
+    img = _local_png(tmp_path, "small.png", b"png")
+    item = _item(provider="comfyui", file_paths=[str(img)], meta={})
+    sent = await sender.send_image(ui, item, "Edit", status_id=None)
+    assert sent is None
+    texts = [c["text"] for c in gateway.calls_by_method("send_message")]
+    assert texts[-1] == _ERR_IMAGE_REJECTED
+
+
+@pytest.mark.asyncio
+async def test_comfyui_local_over_document_cap_does_not_upload(
+    tmp_path, gateway, downloader, refs_repo, monkeypatch
+):
+    monkeypatch.setattr(sender_mod, "MAX_MEDIA_BYTES", 10)
+    monkeypatch.setattr(sender_mod, "MAX_PHOTO_BYTES", 4)
+    img = _local_png(tmp_path, "huge.png", b"x" * 11)
+    ui = ChatUI(gateway, CHAT_ID)
+    sender = _make_sender(gateway, downloader, refs_repo)
+    item = _item(provider="comfyui", file_paths=[str(img)], meta={})
+    status = await ui.send_text("Generando…")
+    sent = await sender.send_image(ui, item, "Edit", status_id=status.message_id)
+    assert sent is None
+    assert gateway.calls_by_method("send_photo") == []
+    assert gateway.calls_by_method("send_document") == []
+    assert gateway.calls_by_method("edit_message_text")[-1]["text"] == _ERR_IMAGE_REJECTED
+
+
+@pytest.mark.asyncio
+async def test_comfyui_album_over_photo_limit_sends_documents_not_media_group(
+    tmp_path, gateway, downloader, refs_repo, monkeypatch
+):
+    monkeypatch.setattr(sender_mod, "MAX_PHOTO_BYTES", 4)
+    small = _local_png(tmp_path, "a.png", b"ab")
+    big = _local_png(tmp_path, "b.png", b"\x89PNG-big")
+    ui = ChatUI(gateway, CHAT_ID)
+    sender = _make_sender(gateway, downloader, refs_repo)
+    item = _item(
+        provider="comfyui",
+        file_paths=[str(small), str(big)],
+        meta={},
+        regen={"provider": "comfyui", "mode": "edit"},
+    )
+    sent = await sender.send_image(ui, item, "Edit")
+    assert sent is not None and sent.is_album is True
+    assert gateway.calls_by_method("send_media_group") == []
+    photos = gateway.calls_by_method("send_photo")
+    docs = gateway.calls_by_method("send_document")
+    assert len(photos) == 1 and photos[0]["photo"] == b"ab"
+    assert photos[0]["filename"] == "comfyui_0.png"
+    assert photos[0]["caption"] is not None
+    assert len(docs) == 1 and docs[0]["document"] == b"\x89PNG-big"
+    assert docs[0]["filename"] == "comfyui_1.png"
+    assert docs[0]["caption"] is None
+    ref = refs_repo.get(CHAT_ID, sent.sent[0].message_id)
+    assert ref is not None and ref["provider"] == "comfyui"
+
+
+@pytest.mark.asyncio
+async def test_comfyui_album_rejected_clears_status(tmp_path, downloader, refs_repo):
+    gateway = _RejectingMediaGroupGateway()
+    ui = ChatUI(gateway, CHAT_ID)
+    sender = _make_sender(gateway, downloader, refs_repo)
+    p1 = _local_png(tmp_path, "a.png", b"a")
+    p2 = _local_png(tmp_path, "b.png", b"b")
+    item = _item(provider="comfyui", file_paths=[str(p1), str(p2)], meta={})
+    status = await ui.send_text("Generando…")
+    sent = await sender.send_image(ui, item, "Edit", status_id=status.message_id)
+    assert sent is None
+    assert gateway.calls_by_method("edit_message_text")[-1]["text"] == _ERR_IMAGE_REJECTED
+
 
 
 # --------------------------------------------------------------------------- #
