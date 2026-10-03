@@ -116,6 +116,26 @@ class ChatUI:
             reply_to_message_id=reply_to_message_id,
         )
 
+    async def send_document(
+        self,
+        document: bytes,
+        *,
+        filename: str = "comfyui.png",
+        caption: str | None = None,
+        parse_mode: str = "HTML",
+        reply_markup: InlineKeyboardMarkup | None = None,
+        reply_to_message_id: int | None = None,
+    ) -> SentMessage:
+        return await self._gateway.send_document(
+            self._chat_id,
+            document,
+            filename=filename,
+            caption=caption,
+            parse_mode=parse_mode,
+            reply_markup=reply_markup,
+            reply_to_message_id=reply_to_message_id,
+        )
+
     async def send_video(
         self,
         video: bytes,

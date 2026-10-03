@@ -83,6 +83,18 @@ class TelegramGateway(Protocol):
         reply_to_message_id: int | None = None,
     ) -> SentMessage: ...
 
+    async def send_document(
+        self,
+        chat_id: int,
+        document: bytes,
+        *,
+        filename: str = "comfyui.png",
+        caption: str | None = None,
+        parse_mode: str = "HTML",
+        reply_markup: InlineKeyboardMarkup | None = None,
+        reply_to_message_id: int | None = None,
+    ) -> SentMessage: ...
+
     async def send_video(
         self,
         chat_id: int,

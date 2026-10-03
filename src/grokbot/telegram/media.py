@@ -8,3 +8,8 @@ la usa como red de seguridad user-safe para downloaders que no apliquen la cota
 """
 
 MAX_MEDIA_BYTES = 50 * 1024 * 1024
+
+# Bot API: sendPhoto rechaza el upload si el archivo pasa de 10 MiB. 9.5 MiB
+# queda bajo ese tope; por encima el PNG se manda intacto con sendDocument
+# (mismo tope que MAX_MEDIA_BYTES), sin recomprimir ni reescalar.
+MAX_PHOTO_BYTES = (19 * 1024 * 1024) // 2
