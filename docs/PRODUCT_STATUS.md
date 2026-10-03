@@ -128,10 +128,33 @@ local-forward** (`transport.py` → `client.py` → plantillas API-format en
   sin ResolutionSelector ni 2.ª pasada; **solo txt2img**. `agil_solo.json` (sin LoRA) y
   `agil_nsfw.json` (con la LoRA `Krea2NSFWV4.safetensors` @1.0 horneada). **Validados en
   vivo** contra el box (imagen real PNG 896×1600 desde el template); ~40% más rápidos.
-- **Alcance actual**: flujos de imagen **Grok Style** (txt2img), **Donut Face**
-  (txt2img + upscale + refine de caras) y los ágiles **Ágil solo** / **Ágil NSFW**
-  (krea2 turbo single-pass 896×1600). Video (`wan_i2v`/`minimax_i2v`) y variantes con
-  foto quedan pendientes de pesos/plantillas (follow-up T2, §3).
+- **Flujos siguientes (hasta 2026-10-03)**: a los 4 originales se sumaron **Ágil Moody**
+  (Krea2 Mix nvfp4; 8 pasos euler_ancestral/beta, 9:16 @ 1.4 MP), **Ágil Edit**
+  (Qwen-Image-Edit-2511 GGUF Q4_K_M + Lightning 4 pasos), **Ágil Edit NSFW** (checkpoint
+  all-in-one Qwen-Rapid-AIO-NSFW v23), **Qwen 2.1** (int8_convrot, 25 pasos) y **Wan I2V**
+  (video). Los de edición declaran `supports_source: true` y el provider sube la foto
+  (`upload_image`) parcheando el nodo `LoadImage` del grafo.
+- **Grok Style Edit (`grok_edit`, 2026-10-03)**: edición **por instrucción** sobre Krea 2 con
+  los nodos `Krea2EditModelPatch` + `Krea2EditGroundedEncode` (pack `comfyui-krea2edit`) y dos
+  LoRAs apiladas — `krea2_identity_edit_v1_2` (es la que **habilita editar**) + `grokstyle_krea2_v2`
+  (aporta el look). **Medido en vivo**: con *solo* la LoRA de estilo el modelo **ignora la
+  instrucción** y deja artefactos; con la de identidad (sola o apilada) la cumple con salida
+  limpia (~12-16 s en caliente). El prompt es una **instrucción** en inglés ("Change the
+  background to a beach at sunset."), no una descripción. Es un flujo **separado** de
+  `grok_style` y ambos conviven en el menú: unificarlos en un solo botón exigiría una noción de
+  *variante* en el provider, descartada a propósito (decisión del owner, 2026-10-03).
+- **Guard `requires_source` (2026-10-03)**: un flujo que **exige** foto lo declara en su `_meta`
+  y el provider rechaza el request sin foto con mensaje user-safe. Sin ese flag un flujo de
+  edición usado sin foto corría con el **placeholder horneado** (`example.png`, presente en el
+  `input/` del box) y devolvía un resultado incorrecto **en silencio** — afectaba a los 4 flujos
+  con `supports_source`. Es independiente de `supports_source`, que solo dice "admite".
+  **Ojo**: el `_meta` que se usa en runtime vive en el `api_workflows/` del box; cambiarlo exige
+  **desplegarlo**, no basta con el template del repo.
+- **Alcance actual**: **10 flujos** — 9 de imagen (Grok Style, Grok Style Edit, Donut Face,
+  Ágil solo, Ágil NSFW, Ágil Moody, Ágil Edit, Ágil Edit NSFW, Qwen 2.1) y 1 de video
+  (Wan I2V). Salud real de cada uno y pesos que faltan: `docs/comfyui/INVENTARIO_BOX_VAST.md`
+  (a 2026-10-03: 8 ejecutables; `donut_face` bloqueado por nodos de un pack privado y `wan_i2v`
+  por 3 pesos).
 
 ### Flujos degradados D8 — ninguno (wave-2/R4 resuelta 2026-09-05)
 

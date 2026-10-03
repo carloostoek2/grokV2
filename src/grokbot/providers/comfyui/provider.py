@@ -56,8 +56,8 @@ _EDIT_UNAVAILABLE_MSG = (
     "La edición con foto aún no está disponible en esta integración. "
     "Intenta con un prompt de texto."
 )
-# Flujo de edición usado SIN foto: sin esto correría con el placeholder horneado
-# (p. ej. ``example.png``) y devolvería un resultado silenciosamente incorrecto.
+# Edit-only flow used WITHOUT a photo: otherwise the baked placeholder (e.g.
+# ``example.png``) would be edited and a silently wrong result would be returned.
 _SOURCE_REQUIRED_MSG = (
     "Este flujo edita una foto: envía la imagen con un caption describiendo "
     "el cambio que quieres."
@@ -225,8 +225,8 @@ class ComfyUIProvider:
                 "La plantilla no admite foto de entrada.",
                 user_message=_EDIT_UNAVAILABLE_MSG,
             )
-        # Guard inverso: un flujo de edición sin foto usaría el placeholder
-        # horneado en el grafo y devolvería un resultado incorrecto en silencio.
+        # Reverse guard: an edit flow without a photo would run with the baked
+        # placeholder and return a silently wrong result.
         if source_image is None and flow.requires_source:
             raise ProviderInputError(
                 "La plantilla exige foto de entrada.",

@@ -16,7 +16,7 @@
     "source_node": "1",
     "source_input": "image",
     "timeout": 600,
-    "source": "Krea2 edit por instruccion: Krea2EditModelPatch + Krea2EditGroundedEncode (comfyui-krea2edit v1.2.5) sobre krea2_turbo_fp8_scaled, con las LoRAs krea2_identity_edit_v1_2 (capacidad de edicion) + grokstyle_krea2_v2 (look Grok Style) apiladas. El prompt es una INSTRUCCION de edicion en ingles, no una descripcion. Turbo: 10 pasos, cfg 1, denoise 1. Target 9:16 @ 1 MP."
+    "source": "Krea2 instruction edit: Krea2EditModelPatch + Krea2EditGroundedEncode (comfyui-krea2edit v1.2.5) on krea2_turbo_fp8_scaled, with two stacked LoRAs: krea2_identity_edit_v1_2 (enables editing) + grokstyle_krea2_v2 (Grok Style look). The prompt is an edit INSTRUCTION (English), not a description. Turbo: 10 steps, cfg 1, denoise 1. Target 9:16 @ 1 MP."
   },
   "1": {
     "inputs": {

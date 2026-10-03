@@ -1,8 +1,10 @@
 > **Update:** runtime source of truth for API graphs is now on Vast (`api_workflows/{flow_id}.json`, SSH fetch). See [REMOTE_API_WORKFLOWS.md](./REMOTE_API_WORKFLOWS.md). Embed `templates/` remains the offline fallback.
 >
-> **Estado real del box (entorno, pesos, custom nodes y salud de cada flujo):**
+> **Estado real del box (config, pesos, custom nodes y salud de cada flujo):**
 > [INVENTARIO_BOX_VAST.md](./INVENTARIO_BOX_VAST.md) — foto del 2026-10-03. Las secciones
-> §3-§6 de abajo son del 2026-09-05 y quedaron desactualizadas (hoy hay 9 flujos, no 4).
+> §3-§6 de abajo son del 2026-09-05 y quedaron desactualizadas en el **inventario de flujos**
+> (hoy son 10, no 4) y en el contrato `_meta` (falta `requires_source`, ya documentado en §5).
+> El resto del diseño (transporte, cliente, render, descarga) sigue vigente.
 
 # ComfyUI en grokV2 — integración por API HTTP/WS (avance y estado)
 
@@ -141,7 +143,18 @@ directa no se toca). Contrato:
    `workflows/templates/<id>.json` con su modelo/LoRA **horneados** en los nodos y una
    clave `_meta`: id, name, media_type, positive_node, **positive_input** (default
    `"text"`; p. ej. `"prompt"` si el nodo es un Wildcard Processor), negative_node,
-   seed_nodes, save_nodes, supports_source y **timeout** (override del default por media).
+   seed_nodes, save_nodes, supports_source, **requires_source** y **timeout** (override del
+   default por media).
+   - `supports_source: true` + `source_node`/`source_input` = el flujo **admite** foto (el
+     provider la sube y parchea ese nodo).
+   - `requires_source: true` = el flujo **exige** foto. Sin foto el grafo correría con el
+     placeholder horneado (`example.png`, que existe en el `input/` del box) y devolvería un
+     resultado incorrecto **en silencio**; el provider lo rechaza con mensaje user-safe. Van
+     juntos en los flujos de edición, pero son flags distintos a propósito (un flujo futuro
+     podría admitir foto *opcionalmente*).
+   - **El `_meta` que se usa en runtime vive en el `api_workflows/` del box** (ver
+     [REMOTE_API_WORKFLOWS.md](./REMOTE_API_WORKFLOWS.md)): tras tocar cualquier flag hay que
+     **desplegarlo**, no basta con el template del repo.
 2. Registrar el flujo en `domain/user_config.COMFYUI_FLOWS`:
    `(("grok_style", "Grok Style"), ("<id>", "<Nombre>"))`. El id entra a
    `VALID_COMFYUI_MODELS` (validación/normalización) y la UI lo lista por `name`.

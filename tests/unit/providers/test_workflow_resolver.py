@@ -360,14 +360,14 @@ def test_get_flow_agil_edit_nsfw_supports_source():
 
 
 def test_txt2img_flows_do_not_require_source():
-    """requires_source es solo para flujos que no tienen sentido sin foto."""
+    """requires_source is only for flows that make no sense without a photo."""
     for flow_id in ("grok_style", "agil_solo", "agil_moody", "qwen21_t2i"):
         flow = get_flow(flow_id)
         assert flow.supports_source is False, flow_id
         assert flow.requires_source is False, flow_id
 
 def test_get_flow_grok_edit_edits_and_keeps_grok_style():
-    """Grok Style Edit: edición por instrucción sobre Krea2 (krea2edit) + LoRA grokstyle."""
+    """Grok Style Edit: Krea2 instruction editing (krea2edit) + grokstyle LoRA."""
     flow = get_flow("grok_edit")
     assert flow is not None
     assert flow.name == "Grok Style Edit"

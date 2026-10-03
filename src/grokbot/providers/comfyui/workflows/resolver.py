@@ -81,9 +81,9 @@ class Flow:
     save_nodes: tuple[str, ...] = ()
     # True cuando la plantilla admite img2img/i2v (carga foto fuente).
     supports_source: bool = False
-    # True cuando la plantilla **exige** foto: sin ella el grafo correría con el
-    # placeholder horneado (p. ej. ``example.png``) y devolvería un resultado
-    # silenciosamente incorrecto. El provider lo rechaza antes de encolar.
+    # True when the template **requires** a photo: without one the graph would
+    # run with its baked placeholder (e.g. ``example.png``) and return a silently
+    # wrong result. The provider rejects it before enqueueing.
     requires_source: bool = False
     # Nodo LoadImage (o equivalente) cuyo input recibe el filename subido.
     source_node: str | None = None

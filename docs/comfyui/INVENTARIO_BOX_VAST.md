@@ -322,7 +322,109 @@ aceptar foto *opcionalmente* sin exigirla.
    conjunto cu13 en la misma operación y verificar con el `ldd` de §3 antes de dar por bueno el
    cambio.
 
-## 8. Cómo refrescar este inventario
+## 8. Verificación — qué comprobar exactamente
+
+### 8.1 Cambios que tocan el **bot** (provider, resolver, `_meta` de un flujo)
+
+El bot corre en la máquina del repo como **servicio de usuario systemd** (`grok-bot.service`,
+gestionado por el shell `grokbot`). **No recarga código solo: hay que reiniciarlo.**
+
+```bash
+grokbot status          # estado + pid
+grokbot restart         # ← obligatorio tras cambiar código del bot
+grokbot logs            # journal en vivo (ctrl-c para salir)
+```
+
+Puntos a verificar, en orden:
+
+1. **Suite completa en verde** (no solo el módulo tocado — hay convenciones fijadas en tests
+   ajenos): `.venv/bin/pytest -q`.
+2. **Si cambió algún `_meta`: desplegar el JSON al box.** En runtime el flujo se lee del
+   `api_workflows/` remoto, no del template del repo — si no se despliega, el cambio **no
+   aplica** (y no falla: usa el valor viejo).
+   ```bash
+   scp -P <COMFYUI_PORT> templates/<id>.json \
+       root@<COMFYUI_HOST>:/workspace/ComfyUI/user/default/api_workflows/<id>.json
+   ```
+   El archivo remoto debe llamarse por `_meta.id`, **no** por el nombre del template (§7.1).
+3. **Reiniciar el bot** (`grokbot restart`) y confirmar en el journal que el flujo se carga
+   desde el box — la línea sana es `Loaded ComfyUI workflow <id> from remote`. Si dice `rc=1`
+   cayó al fallback embebido **sin fallar** (§7.1).
+4. **Menú**: `/config` → ComfyUI debe listar el flujo por su nombre.
+5. **Generación real**, no solo tests: mandar un prompt (y una foto, si es flujo de edición).
+
+### 8.2 Cambios que tocan el **box** (paquetes, torch, custom nodes)
+
+1. **Librerías dinámicas completas** — este chequeo es el que detecta purgas mal hechas (§7.6);
+   `uv pip check` **no** sirve para esto:
+   ```bash
+   ldd /venv/main/lib/python3.12/site-packages/torch/lib/libtorch_cuda.so | grep -c "not found"   # debe dar 0
+   ```
+2. **torch vivo**, no solo importable:
+   ```bash
+   /venv/main/bin/python -c "import torch;print(torch.__version__, torch.version.cuda, torch.cuda.is_available(), torch.cuda.get_device_capability())"
+   ```
+3. **ComfyUI arriba y con la versión esperada**:
+   ```bash
+   supervisorctl status comfyui
+   curl -s http://127.0.0.1:18188/system_stats | /venv/main/bin/python -c "import sys,json;print(json.load(sys.stdin)['system']['pytorch_version'])"
+   ```
+4. **Sin imports fallidos** de custom nodes en el log:
+   ```bash
+   tail -200 /var/log/portal/comfyui.log | grep -iE "IMPORT FAILED|Failed to import|Traceback"
+   ```
+5. **Smoke real de un flujo** (§8.3) — un `system_stats` 200 no prueba que se pueda generar.
+
+> Tras instalar o actualizar un **custom node** hay que **reiniciar ComfyUI** para que lo
+> cargue, y después revalidar los flujos (§8.3).
+
+### 8.3 Pesos y nodos de los flujos
+
+Comprueba, por flujo, qué clases de nodo y qué pesos faltan realmente. **Ojo con la trampa
+§7.2**: `/object_info/<nodo>` responde 200 con `{}` para un nodo inexistente, así que este
+script compara contra el listado completo, no contra el HTTP status.
+
+```bash
+SSH="ssh -p <COMFYUI_PORT> root@<COMFYUI_HOST>"
+$SSH '/venv/main/bin/python -' <<'PY'
+import json, urllib.request, os, glob
+oi = json.load(urllib.request.urlopen("http://127.0.0.1:18188/object_info", timeout=60))
+KEYS = {"unet_name":"diffusion_models","ckpt_name":"checkpoints","clip_name":"text_encoders",
+        "vae_name":"vae","lora_name":"loras"}
+M = "/workspace/ComfyUI/models"
+for f in sorted(glob.glob("/workspace/ComfyUI/user/default/api_workflows/*.json")):
+    wf = json.load(open(f)); meta = wf.pop("_meta", {})
+    miss_n = sorted({n["class_type"] for n in wf.values()
+                     if isinstance(n, dict) and n.get("class_type") not in oi})
+    miss_m = sorted({f"{KEYS[k]}={v}" for n in wf.values() if isinstance(n, dict)
+                     for k, v in (n.get("inputs") or {}).items()
+                     if k in KEYS and isinstance(v, str)
+                     and not os.path.exists(os.path.join(M, KEYS[k], v))})
+    if miss_n or miss_m:
+        print(f"{meta.get('id'):16} nodos_faltan={len(miss_n)} pesos_faltan={len(miss_m)} {miss_m}")
+print("(los no listados están completos)")
+PY
+```
+
+### 8.4 El guard de edición (`requires_source`)
+
+Un flujo de edición debe **rechazar** el request sin foto; uno de txt2img debe **aceptarlo**.
+
+- Cubierto por tests: `test_edit_flow_without_source_photo_raises` y
+  `test_t2i_flow_without_source_photo_is_allowed` (provider) + el flag en el resolver.
+- En vivo (bot): seleccionar un flujo de edición y mandar **solo texto** → debe responder
+  *"Este flujo edita una foto: envía la imagen con un caption…"*, **nunca** devolver una imagen.
+  Si devuelve una imagen, el `_meta` desplegado en el box no tiene `requires_source` (§8.1.2).
+- El flag correcto se puede comprobar sin generar nada:
+  ```bash
+  $SSH '/venv/main/bin/python -c "
+  import json,glob
+  for f in sorted(glob.glob(\"/workspace/ComfyUI/user/default/api_workflows/*.json\")):
+      m=json.load(open(f)).get(\"_meta\",{})
+      print(\"  %-16s supports=%-5s requires=%s\" % (m.get(\"id\"),m.get(\"supports_source\"),m.get(\"requires_source\")))"'
+  ```
+
+## 9. Cómo refrescar este inventario
 
 ```bash
 SSH="ssh -p <COMFYUI_PORT> root@<COMFYUI_HOST>"   # coordenadas del .env
