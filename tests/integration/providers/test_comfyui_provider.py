@@ -190,12 +190,13 @@ async def test_m1_invalid_model_or_lora_raises_before_transport(params, tmp_path
 async def test_supports_routing(tmp_path):
     prov = _provider(FakeTransport("box"), tmp_path)
 
-    # Solo los flujos con template son soportados (v1: grok_style / imagen).
+    # Solo los flujos con template son soportados, y el media_type debe coincidir.
     assert prov.supports(_req(media_type=MediaType.IMAGE))  # default grok_style
     assert prov.supports(_req(media_type=MediaType.IMAGE, params={"model": "grok_style"}))
     assert not prov.supports(_req(media_type=MediaType.IMAGE, params={"model": "qwen"}))
     assert not prov.supports(_req(media_type=MediaType.VIDEO, params={"model": "grok_style"}))  # flujo de imagen
-    assert not prov.supports(_req(media_type=MediaType.VIDEO, params={"model": "wan_i2v"}))
+    assert prov.supports(_req(media_type=MediaType.VIDEO, params={"model": "wan_i2v"}))  # flujo de video
+    assert not prov.supports(_req(media_type=MediaType.IMAGE, params={"model": "wan_i2v"}))  # video != imagen
     assert not prov.supports(
         GenerationRequest(provider="xai", model_id="x", media_type=MediaType.IMAGE, prompt="x")
     )
