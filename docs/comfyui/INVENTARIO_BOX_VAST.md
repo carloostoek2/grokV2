@@ -1,68 +1,37 @@
-# Inventario del box Vast (ComfyUI) — estado exacto
+# Inventario de ComfyUI en el box Vast — configuración, pesos y flujos
 
-> **Foto del 2026-10-03.** Esto es un *inventario* (qué hay hoy), no un contrato ni un
-> runbook. Para el diseño/integración ver [AVANCE_VAST_HTTP.md](./AVANCE_VAST_HTTP.md) y
-> [REMOTE_API_WORKFLOWS.md](./REMOTE_API_WORKFLOWS.md).
+> **Alcance.** Este documento describe lo **constante**: la configuración de ComfyUI, las
+> **versiones del software** que se usan, los pesos instalados y los flujos registrados.
 >
-> ⚠️ El box **no tiene volumen persistente**: un *recycle*/*destroy* borra ComfyUI, los
-> pesos y los custom nodes. Solo sobrevive *stop/start*. Ver §9.
+> **Lo que depende de la máquina concreta NO se documenta aquí a propósito** — IP y puerto SSH,
+> GPU, driver, RAM, disco, SO/kernel, puertos del portal. Una instancia recreada cambia todo eso
+> (o parte), así que fijarlo en un doc induce a error. Esas coordenadas viven en el `.env`
+> (`COMFYUI_HOST` / `COMFYUI_PORT`) y rotan al recrear la instancia.
+>
+> Corolario: la instancia puede recrearse; **nada de esto sobrevive a un *recycle*/*destroy***.
+> Este doc es la receta de lo que hay que volver a dejar igual.
+>
+> Para el diseño/integración del provider ver [AVANCE_VAST_HTTP.md](./AVANCE_VAST_HTTP.md) y
+> [REMOTE_API_WORKFLOWS.md](./REMOTE_API_WORKFLOWS.md).
 
-## 1. Acceso
+## 1. Conexión del bot (contrato)
 
-| Qué | Valor |
-|---|---|
-| SSH | `ssh -p 44411 root@180.189.55.43` (coordenadas en `.env`: `COMFYUI_HOST` / `COMFYUI_PORT`) |
-| ComfyUI HTTP | loopback del box `127.0.0.1:18188` (`COMFYUI_REMOTE_PORT`); el bot entra por **túnel SSH local-forward**, no por HTTP público |
-| UI web | portal del box: `external_port 10100 → internal_port 18188`, `open_path /` |
-| Log de ComfyUI | `/var/log/portal/comfyui.log` |
-| Instalación | `/workspace/ComfyUI` |
+El bot **no** habla con ComfyUI por HTTP público: abre un **túnel SSH local-forward** y entra
+por loopback. Las claves (en `.env`):
 
-Las coordenadas SSH rotan al reiniciar la instancia. Si el bot no llega al box, probar el SSH
-antes de culpar al provider.
+| Clave | Valor | Nota |
+|---|---|---|
+| `COMFYUI_HOST` / `COMFYUI_PORT` | *variable* | SSH al box. **Rota por instancia.** Host vacío = provider deshabilitado |
+| `COMFYUI_REMOTE_PORT` | `18188` | Puerto HTTP de ComfyUI **dentro** del box |
+| `COMFYUI_TUNNEL_LOCAL_PORT` | `18188` | Puerto local a bindear (`0` = efímero) |
+| `COMFYUI_WORKFLOW_SOURCE` | `remote` | `remote` (SSH `cat` desde el box) \| `embed` (templates del repo) |
+| `COMFYUI_WORKFLOWS_DIR` | `/workspace/ComfyUI/user/default/api_workflows` | Dir de los graphs API-format en el box |
+| `COMFYUI_WORKFLOW_CACHE_TTL` | `45` | Segundos de caché del fetch remoto |
 
-## 2. Hardware
+ComfyUI escucha **solo en loopback** (`127.0.0.1:18188`). El puerto `8188` histórico ya no existe
+(el `8188` público era un proxy Caddy).
 
-| | |
-|---|---|
-| GPU | **NVIDIA GeForce RTX 5090** — 32 607 MiB (~31.8 GB), compute capability **12.0** (Blackwell `sm_120`) |
-| Driver | **580.82.07** (mínimo para CUDA 13.0: 580.65) |
-| CPU / RAM | 16 vCPU / 30 GB |
-| Disco | 251 GB totales, 100 GB usados, **152 GB libres** (`overlay`, incluye `/workspace`) |
-
-## 3. Sistema y runtime
-
-| | |
-|---|---|
-| SO | Ubuntu 24.04.4 LTS (Noble Numbat), kernel 6.17.0-19-generic |
-| CUDA toolkit del sistema (`nvcc`) | 12.8.93 — **no** es el que usa ComfyUI (los wheels traen su propio runtime) |
-| Python | 3.12.14 |
-| venv | **`/venv/main`** (no hay `.venv` dentro de ComfyUI) |
-
-### Stack de cómputo (lo que acabamos de actualizar)
-
-| Paquete | Versión |
-|---|---|
-| **torch** | **2.11.0+cu130** |
-| torchvision | 0.26.0+cu130 |
-| torchaudio | 2.11.0+cu130 |
-| Runtime CUDA (torch) | **13.0** |
-| triton | 3.6.0 |
-| sageattention | 1.0.6 (JIT; sin `.so` propios) |
-| numpy / scipy | 2.5.2 / 1.18.1 |
-| transformers | 5.18.0 |
-| safetensors / einops | 0.8.0 / 0.8.2 |
-| aiohttp | 3.14.3 |
-| pillow | 12.3.0 |
-
-Libs NVIDIA del wheel: `nvidia-cudnn-cu13 9.19.0.56`, `nvidia-cusparselt-cu13 0.8.0`,
-`nvidia-nccl-cu13 2.28.9`, `nvidia-nvshmem-cu13 3.4.5`, `nvidia-nvjitlink 13.0.88`,
-`nvidia-nvtx 13.0.85`.
-
-> **Residuo:** quedan ~4.5 GB de paquetes `nvidia-*-cu12` huérfanos (nada los enlaza:
-> `libtorch_cuda.so` no referencia cu12 y sageattention no tiene binarios propios). Se pueden
-> purgar sin riesgo aparente, pero **no se hizo**.
-
-### ComfyUI
+## 2. ComfyUI
 
 | | |
 |---|---|
@@ -70,28 +39,77 @@ Libs NVIDIA del wheel: `nvidia-cudnn-cu13 9.19.0.56`, `nvidia-cusparselt-cu13 0.
 | Frontend | `comfyui_frontend_package` 1.53.10 |
 | comfy-cli | 1.22.0 |
 | ComfyUI-Manager | commit `855a0f50` (`3.42-92-g855a0f50`) |
-| Backend `comfy-kitchen` | 0.2.37 — reporta disponible `quantize_nvfp4` / `dequantize_nvfp4` / `scaled_mm_nvfp4` (lo que usa el UNET nvfp4 de Moody) |
-| Clases de nodo cargadas | 1000 |
+| Clases de nodo cargadas | ~1000 |
 
-## 4. Servicio
-
-Supervisor (`/etc/supervisor/conf.d/comfyui.conf`), script `/opt/supervisor-scripts/comfyui.sh`:
+**Cómo se levanta** — vía supervisor (`/etc/supervisor/conf.d/comfyui.conf` →
+`/opt/supervisor-scripts/comfyui.sh`):
 
 ```
-command      = /opt/supervisor-scripts/comfyui.sh
 COMFYUI_ARGS = --disable-auto-launch --enable-cors-header --port 18188
 autostart    = true
 autorestart  = true
 ```
 
-- Escucha **solo en loopback** (`127.0.0.1:18188`); el `8188` histórico ya no existe.
-- Arranca con `LD_PRELOAD=libtcmalloc_minimal.so.4`.
+- Corre con `LD_PRELOAD=libtcmalloc_minimal.so.4`.
+- Log: `/var/log/portal/comfyui.log`.
 - **En cada arranque** el script corre `uv pip install -r /workspace/ComfyUI/requirements.txt`
-  (salvo que exista `/.provisioning`, que no existe). Ese archivo lista `torch` / `torchvision`
-  **sin pin**, así que uv las ve satisfechas y **no pisa** la versión CUDA instalada a mano.
+  (salvo que exista `/.provisioning`). Ese archivo lista `torch` / `torchvision` **sin pin**, así
+  que uv las ve satisfechas y **no pisa** la versión de CUDA instalada a mano.
 - No hay `extra_model_paths.yaml`.
 
-## 5. Custom nodes
+> Tras instalar un custom node hay que **reiniciar ComfyUI** para que lo cargue.
+
+## 3. Stack de software (versiones — esto sí es constante)
+
+| Paquete | Versión |
+|---|---|
+| Python | 3.12 |
+| **torch** | **2.11.0+cu130** |
+| torchvision / torchaudio | 0.26.0+cu130 / 2.11.0+cu130 |
+| Runtime CUDA (torch) | **13.0** |
+| triton | 3.6.0 |
+| sageattention | 1.0.6 (JIT; sin `.so` propios) |
+| transformers | 5.18.0 |
+| numpy / scipy | 2.5.2 / 1.18.1 |
+| safetensors / einops | 0.8.0 / 0.8.2 |
+| aiohttp | 3.14.3 |
+| pillow | 12.3.0 |
+
+Libs NVIDIA que acompañan al wheel cu130 (15 paquetes, ~2.7 GB): `nvidia-cublas 13.1.0.3`,
+`nvidia-cuda-runtime 13.0.96`, `nvidia-cuda-cupti 13.0.85`, `nvidia-cuda-nvrtc 13.0.88`,
+`nvidia-cudnn-cu13 9.19.0.56`, `nvidia-cufft 12.0.0.61`, `nvidia-cufile 1.15.1.6`,
+`nvidia-curand 10.4.0.35`, `nvidia-cusolver 12.0.4.66`, `nvidia-cusparse 12.6.3.3`,
+`nvidia-cusparselt-cu13 0.8.0`, `nvidia-nccl-cu13 2.28.9`, `nvidia-nvjitlink 13.0.88`,
+`nvidia-nvshmem-cu13 3.4.5`, `nvidia-nvtx 13.0.85`.
+
+Las `nvidia-*-cu12` heredadas de cu128 **se purgaron** (liberaron ~2.3 GB). Al hacerlo se
+descubrió una trampa que está documentada en §7.6 — **leerla antes de repetir la purga**.
+
+Verificación de que el stack quedó completo (debe dar **0**):
+
+```bash
+ldd /venv/main/lib/python3.12/site-packages/torch/lib/libtorch_cuda.so | grep -c "not found"
+```
+
+**Requisitos de plataforma que impone este stack** (a verificar en cualquier instancia nueva):
+
+- GPU **Blackwell `sm_120`** (RTX 5090 o superior) — los wheels `cu128`/`cu130` son el mínimo,
+  CUDA ≥ 12.8 es obligatorio para `sm_120`.
+- **Driver NVIDIA ≥ 580.65** para el runtime CUDA 13.0.
+- El wheel es `cp312` → Python 3.12.
+- Backend `comfy-kitchen` 0.2.37: expone `quantize_nvfp4` / `dequantize_nvfp4` / `scaled_mm_nvfp4`,
+  que es lo que aprovecha el UNET nvfp4 de Moody.
+
+**Rollback a cu128** (por si una actualización futura rompe custom nodes):
+
+```bash
+source /venv/main/bin/activate
+uv pip install --no-cache-dir \
+  torch==2.11.0+cu128 torchvision==0.26.0+cu128 torchaudio==2.11.0+cu128 \
+  --index-url https://download.pytorch.org/whl/cu128
+```
+
+## 4. Custom nodes
 
 | Pack | Commit |
 |---|---|
@@ -100,9 +118,12 @@ autorestart  = true
 | ComfyUI-Workflow-Models-Downloader | `c3ef4db` (`v1.8.0-7-gc3ef4db`) |
 | rgthree-comfy | (sin `.git`) |
 
-Eso es **todo**. En particular **no está** el pack privado que provee los nodos `Donut*` — ver §7.
+Eso es **todo**. En particular **no está** el pack privado que provee los nodos `Donut*` — ver §6.
 
-## 6. Pesos instalados (~91 GB)
+`ResolutionSelector` **no** es un custom node: viene del core de ComfyUI
+(`comfy_extras.nodes_resolution`).
+
+## 5. Pesos instalados (~91 GB, bajo `/workspace/ComfyUI/models`)
 
 | Categoría | Archivo | Tamaño |
 |---|---|---|
@@ -122,33 +143,36 @@ Eso es **todo**. En particular **no está** el pack privado que provee los nodos
 | | `Wan2_1_VAE_fp32.safetensors` | 0.24 GB |
 | | `wan_2.1_vae.safetensors` | *(mismo inodo — hardlink del anterior)* |
 
-Procedencias conocidas: los tres Krea/Qwen base salen de `huggingface.co/Comfy-Org/Krea-2`;
+Procedencias: los base Krea/Qwen salen de `huggingface.co/Comfy-Org/Krea-2`;
 `Moody-Krea-Mix-…nvfp4` de `catlover1937/moody-krea-mix`; `grokstyle_krea2_v2` es la LoRA
-**Civitai 2891415** ("Grok Style for Krea 2", requiere token).
+**Civitai 2891415** ("Grok Style for Krea 2", **requiere token**).
 
-## 7. Flujos (9 registrados en `COMFYUI_FLOWS`)
+Renames del owner que hay que mapear al reinstalar: `Krea2NSFWV4.safetensors` ← único equivalente
+público `KNP_000003000.safetensors`; `Wan2_1_VAE_fp32.safetensors` ← hardlink de
+`wan_2.1_vae.safetensors` de `Comfy-Org/Wan_2.1_ComfyUI_repackaged`.
 
-Los graph viven en `/workspace/ComfyUI/user/default/api_workflows/{id}.json` (fuente de verdad
-en runtime) y su fallback embebido en `src/grokbot/providers/comfyui/workflows/templates/`.
+## 6. Flujos (9 registrados en `COMFYUI_FLOWS`)
+
+Los graphs viven en `/workspace/ComfyUI/user/default/api_workflows/{id}.json` (fuente de verdad en
+runtime); el fallback embebido está en `src/grokbot/providers/comfyui/workflows/templates/`.
 
 | id | Nombre UI | Media | Foto | Modelo principal | Sampler / steps / cfg | Resolución | Estado |
 |---|---|---|---|---|---|---|---|
 | `grok_style` | Grok Style | image | — | `krea2_turbo_fp8_scaled` + LoRA `grokstyle_krea2_v2` + VAE **Wan** | euler/simple · 3 · 1 | 2:3 @ 1.2 MP | ✅ |
 | `agil_solo` | Ágil solo | image | — | `krea2_turbo_fp8_scaled` | euler/simple · 8 · 1 | fija 896×1600 (1.43 MP) | ✅ |
 | `agil_nsfw` | Ágil NSFW | image | — | `krea2_turbo_fp8_scaled` + LoRA `Krea2NSFWV4` | euler/simple · 8 · 1 | fija 896×1600 (1.43 MP) | ✅ |
-| `agil_moody` | Ágil Moody | image | — | `Moody-Krea-Mix-…nvfp4` | euler_ancestral/beta · 8 · 1 | **9:16 @ 1.4 MP** → 896×1600 | ✅ |
+| `agil_moody` | Ágil Moody | image | — | `Moody-Krea-Mix-…nvfp4` | euler_ancestral/beta · 8 · 1 | 9:16 @ 1.4 MP → 896×1600 | ✅ |
 | `agil_edit_qwen` | Ágil Edit | image | ✔ | `qwen-image-edit-2511-Q4_K_M.gguf` + LoRA `…Lightning-4steps` | euler/simple · 4 · 1 | según foto | ✅ |
 | `agil_edit_nsfw` | Ágil Edit NSFW | image | ✔ | `Qwen-Rapid-AIO-NSFW-v23` (checkpoint) | euler/simple · 4 · 1 | según foto | ✅ |
 | `qwen21_t2i` | Qwen 2.1 | image | — | `qwen_image_2.1_int8_convrot` | euler/simple · 25 · 1 | 2:3 @ 2.0 MP | ✅ |
 | `donut_face` | Donut Face | image | — | `krea2_turbo_fp8_scaled` | — | 9:16 @ 1 MP | ❌ roto |
 | `wan_i2v` | Wan I2V | video | ✔ | `wan2.2_ti2v_5B_fp16` | uni_pc/simple · 20 · 5 | — | ❌ roto |
 
-Sobre los componentes compartidos: los flujos Krea2 (`grok_style`, `agil_solo`, `agil_nsfw`,
-`agil_moody`, `donut_face`) usan `qwen3vl_4b_fp8_scaled` como text encoder y `qwen_image_vae`
-como VAE. Las excepciones: `qwen21_t2i` usa los `_int8_convrot` + `qwen_image_2.1_vae_bf16`;
-`agil_edit_qwen` usa `qwen_2.5_vl_7b_fp8_scaled`; `agil_edit_nsfw` usa un **checkpoint
-todo-en-uno** (`Qwen-Rapid-AIO-NSFW-v23`) sin encoder ni VAE sueltos; `wan_i2v` usa `umt5_xxl`
-(faltante).
+Componentes compartidos: los flujos Krea2 (`grok_style`, `agil_solo`, `agil_nsfw`, `agil_moody`,
+`donut_face`) usan `qwen3vl_4b_fp8_scaled` como text encoder y `qwen_image_vae` como VAE.
+Excepciones: `qwen21_t2i` usa los `_int8_convrot` + `qwen_image_2.1_vae_bf16`; `agil_edit_qwen`
+usa `qwen_2.5_vl_7b_fp8_scaled`; `agil_edit_nsfw` usa un **checkpoint todo-en-uno** sin encoder
+ni VAE sueltos; `wan_i2v` usa `umt5_xxl` (faltante).
 
 ### Flujos rotos — por qué
 
@@ -159,58 +183,76 @@ todo-en-uno** (`Qwen-Rapid-AIO-NSFW-v23`) sin encoder ni VAE sueltos; `wan_i2v` 
 `DonutSampler`, `DonutTiledUpscale`, `Image Save`, `Krea2NormalizedAttentionGuidance`,
 `SAMLoader`, `Seed String`, `SeedGenerator`, `UltralyticsDetectorProvider`, `Wildcard Processor`.
 
-El grupo `Donut*` es un **pack privado del owner** que no está en el registry de ComfyUI ni en
+El grupo `Donut*` es un **pack privado del owner**, no está en el registry de ComfyUI ni en
 GitHub → **no es restaurable desde cero**. Además faltan 2 pesos:
-`loras/krea2/krea2_identity_edit_v1_2.safetensors`, `vae/qwen-image/qwen_image_vae.safetensors`
-(nota: ese VAE está instalado en la raíz de `vae/`, pero el flujo lo busca en la subcarpeta
-`qwen-image/`).
+`loras/krea2/krea2_identity_edit_v1_2.safetensors` y `vae/qwen-image/qwen_image_vae.safetensors`
+(nota: ese VAE **sí** está instalado, pero en la raíz de `vae/`, y el flujo lo busca en la
+subcarpeta `qwen-image/`).
 
 **`wan_i2v`** — le faltan 3 pesos: `diffusion_models/wan2.2_ti2v_5B_fp16.safetensors`,
 `text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors`, `vae/wan2.2_vae.safetensors`.
 
-> El bot **no falla ruidosamente** por esto: al no poder cargar el workflow remoto cae al
-> fallback embebido y, si el grafo es inválido, el error aparece recién al encolar en ComfyUI.
+> El bot **no falla ruidosamente** por esto: si no puede cargar el workflow remoto cae al fallback
+> embebido y, si el grafo es inválido, el error recién aparece al encolar en ComfyUI.
 
-## 8. Gotchas operativos
+## 7. Gotchas operativos
 
-1. **`python`/`pip` no existen en SSH no interactivo.** Hay que `source /venv/main/bin/activate`
-   o usar `/venv/main/bin/python` directo.
-2. **Los `api_workflows` del box se nombran por `_meta.id`, no por el nombre del template del
-   repo.** Ejemplo vivo: el template `templates/krea2_t2i.json` tiene `_meta.id = grok_style`
-   → en el box es `grok_style.json`. Si el nombre no coincide, el bot loguea
-   `SSH fetch workflow … rc=1` y **cae al fallback embed sin fallar** (parece funcionar y en
-   realidad ignora el box). El journal sano dice
-   `Loaded ComfyUI workflow <id> from remote`.
-3. **`/object_info/<nodo>` devuelve HTTP 200 con `{}`** para un nodo inexistente. Para saber si
-   un nodo existe de verdad hay que mirar si el JSON tiene contenido (o el listado completo).
-4. Tras instalar un custom node hay que **reiniciar ComfyUI** para que lo cargue.
-5. El `_meta` (top-level y por nodo) **nunca** viaja a ComfyUI: `resolver.py` lo separa antes de
+1. **Los `api_workflows` del box se nombran por `_meta.id`, no por el nombre del template del
+   repo.** Ejemplo vivo: `templates/krea2_t2i.json` tiene `_meta.id = grok_style` → en el box es
+   `grok_style.json`. Si el nombre no coincide, el bot loguea `SSH fetch workflow … rc=1` y **cae
+   al fallback embed sin fallar** (parece funcionar y en realidad ignora el box). El journal sano
+   dice `Loaded ComfyUI workflow <id> from remote`.
+2. **`/object_info/<nodo>` devuelve HTTP 200 con `{}`** para un nodo inexistente. Para saber si un
+   nodo existe de verdad hay que mirar si el JSON tiene contenido (o el listado completo).
+3. El `_meta` (top-level y por nodo) **nunca** viaja a ComfyUI: `resolver.py` lo separa antes de
    encolar. Enviarlo crudo da `missing_node_type: Node 'ID #_meta' has no class_type`.
-6. **Sin volumen persistente.** Ver §9.
+4. En SSH no interactivo `python`/`pip` no existen: hay que `source /venv/main/bin/activate` o usar
+   `/venv/main/bin/python`.
+5. Tras instalar un custom node, **reiniciar ComfyUI** (§2).
+6. **Nunca purgar `nvidia-*-cu12` a ciegas (ni desinstalar paquetes `nvidia-*` en general).**
+   Varios paquetes cu12 y cu13 comparten **la misma ruta de instalación** en el namespace
+   `nvidia/` y solo se diferencian por la metadata: `nvidia-cusparselt-cu12` y `-cu13` instalan
+   ambos en `nvidia/cusparselt/lib/`; ídem `nvidia-nccl-*` (`nvidia/nccl/`) y `nvidia-nvshmem-*`
+   (`nvidia/nvshmem/`). Al desinstalar la cu12, uv **borra ficheros que también pertenecen a la
+   cu13** y reescribe su `RECORD`, dejando el paquete cu13 "instalado" según pip pero **sin sus
+   `.so`**. Síntoma: `ImportError: libcusparseLt.so.0: cannot open shared object file` al importar
+   torch (ComfyUI queda en `FATAL`). `uv pip check` **no lo detecta** (valida metadata, no
+   enlazado dinámico).
 
-## 9. Persistencia
+   Afectados en la purga del 2026-10-03 y reparados con
+   `uv pip install --no-cache-dir --reinstall nvidia-cudnn-cu13 nvidia-cusparselt-cu13 nvidia-nccl-cu13 nvidia-nvshmem-cu13 --index-url https://download.pytorch.org/whl/cu130`:
+   `cudnn`, `cusparselt`, `nccl`, `nvshmem`.
 
-`workspace_is_volume: false`. *Stop/start* conserva el disco; *recycle*/*destroy* lo borra todo
-(ComfyUI, pesos, custom nodes, torch cu130). Si el owner quiere que aguante, hay que montar un
-volumen.
+   Para auditar qué paquetes `nvidia_*` perdieron ficheros, comparar su `RECORD` con el disco:
 
-**Rollback de torch a cu128** (freeze completo en `/workspace/torch-cu128-freeze.txt`):
+   ```bash
+   /venv/main/bin/python - <<'PY'
+   import glob, os
+   SP = "/venv/main/lib/python3.12/site-packages"
+   for rec in sorted(glob.glob(SP + "/nvidia_*.dist-info/RECORD")):
+       name = os.path.basename(os.path.dirname(rec)).replace(".dist-info", "")
+       miss = [l.split(",")[0] for l in open(rec)
+               if l.split(",")[0].startswith("nvidia/")
+               and not os.path.exists(os.path.join(SP, l.split(",")[0].strip()))]
+       if miss: print("FALTAN:", name, len(miss))
+   PY
+   ```
+
+   Regla práctica: si hay que tocar paquetes `nvidia-*`, **reinstalar explícitamente** el
+   conjunto cu13 en la misma operación y verificar con el `ldd` de §3 antes de dar por bueno el
+   cambio.
+
+## 8. Cómo refrescar este inventario
 
 ```bash
-source /venv/main/bin/activate
-uv pip install --no-cache-dir \
-  torch==2.11.0+cu128 torchvision==0.26.0+cu128 torchaudio==2.11.0+cu128 \
-  --index-url https://download.pytorch.org/whl/cu128
-```
+SSH="ssh -p <COMFYUI_PORT> root@<COMFYUI_HOST>"   # coordenadas del .env
 
-## 10. Cómo refrescar este inventario
-
-```bash
-SSH="ssh -p 44411 root@180.189.55.43"
-
-# Entorno
+# Versiones del stack
 $SSH 'source /venv/main/bin/activate; python -V; pip list | grep -iE "^torch|^triton|^sageattention"'
-$SSH 'nvidia-smi --query-gpu=name,driver_version,memory.total,compute_cap --format=csv,noheader'
+
+# Custom nodes + commits
+$SSH 'cd /workspace/ComfyUI/custom_nodes && for d in */; do d=${d%/};
+      [ -d "$d/.git" ] && echo "$d $(git -C $d rev-parse --short HEAD)" || echo "$d (sin git)"; done'
 
 # Pesos
 $SSH 'cd /workspace/ComfyUI/models && find . -type f \( -name "*.safetensors" -o -name "*.gguf" \) \
