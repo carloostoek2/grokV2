@@ -77,10 +77,9 @@ def test_config_variant_keyboard():
 def test_config_comfyui_keyboard_lists_only_flow():
     cfg = ComfyUIConfig(model="grok_style")
     data = flat_callback_data(kb.config_comfyui_keyboard(cfg))
-    # Los flujos registrados (Grok Style, Donut Face) + navegación; sin legacy.
+    # Flujos del menú + navegación; sin legacy ni flujos ocultos.
     assert data == [
         "cfg:comfyui:flow:grok_style",
-        "cfg:comfyui:flow:donut_face",
         "cfg:comfyui:flow:agil_solo",
         "cfg:comfyui:flow:agil_nsfw",
         "cfg:comfyui:flow:agil_moody",
@@ -89,11 +88,18 @@ def test_config_comfyui_keyboard_lists_only_flow():
         "cfg:comfyui:flow:grok_edit",
         "cfg:comfyui:flow:dirty_realism",
         "cfg:comfyui:flow:dirty_edit",
-        "cfg:comfyui:flow:wan_i2v",
         "cfg:comfyui:flow:qwen21_t2i",
+        "cfg:comfyui:flow:flux1_dev_t2i",
+        "cfg:comfyui:flow:face_detail_impact",
+        "cfg:comfyui:flow:instantid_sdxl",
         "cfg:back:model",
         "cfg:close",
     ]
+    assert "cfg:comfyui:flow:flux1_dev_t2i" in data
+    assert "cfg:comfyui:flow:face_detail_impact" in data
+    assert "cfg:comfyui:flow:instantid_sdxl" in data
+    assert "cfg:comfyui:flow:donut_face" not in data
+    assert "cfg:comfyui:flow:wan_i2v" not in data
 
 
 def test_config_comfyui_has_no_legacy_model_lora_refine_rows():
@@ -191,3 +197,22 @@ def test_config_variant_keyboard_nano_banana():
     ]
     rows = kb.config_variant_keyboard(cfg, model_key="nano_banana").inline_keyboard
     assert rows[1][0].text == "✅ Nano Banana 2"
+
+
+def test_comfy_result_keyboard_is_stage_gated():
+    grok = flat_callback_data(kb.comfy_result_keyboard("grok_style"))
+    assert grok == ["regen", "pipe:edit", "pipe:detail", "pipe:retake"]
+    flux = flat_callback_data(kb.comfy_result_keyboard("flux1_dev_t2i"))
+    assert flux == ["regen", "pipe:detail", "pipe:retake"]
+    assert "pipe:edit" not in flux
+    edit = flat_callback_data(kb.comfy_result_keyboard("grok_edit"))
+    assert edit == ["regen", "pipe:detail"]
+    detail = flat_callback_data(kb.comfy_result_keyboard("face_detail_impact"))
+    assert detail == ["regen"]
+    instant = flat_callback_data(kb.comfy_result_keyboard("instantid_sdxl"))
+    assert instant == ["regen", "pipe:detail"]
+    assert "pipe:retake" not in instant
+    # Unknown / non-catalog ids stay regen-only (Grok results never use this builder).
+    assert flat_callback_data(kb.comfy_result_keyboard("krea2")) == ["regen"]
+    assert flat_callback_data(kb.comfy_result_keyboard(None)) == ["regen"]
+    assert flat_callback_data(kb.image_regenerate_keyboard()) == ["regen"]

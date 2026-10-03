@@ -218,6 +218,52 @@ class AlbumStore:
 
 
 @dataclass
+class ComfyChainMemory:
+    """Last ComfyUI image plus an armed chain stage waiting for the next prompt.
+
+    In memory only (not sessions.json). The callback sets the destination flow
+    and arms the stage; the following text message consumes it.
+    """
+
+    _last: dict[int, dict] = field(default_factory=dict)
+    _armed: dict[int, dict] = field(default_factory=dict)
+
+    def remember(self, user_id: int, *, path: str, flow_id: str, prompt: str) -> None:
+        self._last[int(user_id)] = {
+            "path": path,
+            "flow_id": flow_id,
+            "prompt": prompt,
+        }
+
+    def last(self, user_id: int) -> dict | None:
+        entry = self._last.get(int(user_id))
+        return dict(entry) if entry is not None else None
+
+    def arm(
+        self,
+        user_id: int,
+        *,
+        stage: str,
+        dest_flow: str,
+        path: str,
+        use_source: bool,
+    ) -> None:
+        self._armed[int(user_id)] = {
+            "stage": stage,
+            "dest_flow": dest_flow,
+            "path": path,
+            "use_source": use_source,
+        }
+
+    def is_armed(self, user_id: int) -> bool:
+        return int(user_id) in self._armed
+
+    def pop_armed(self, user_id: int) -> dict | None:
+        entry = self._armed.pop(int(user_id), None)
+        return dict(entry) if entry is not None else None
+
+
+@dataclass
 class BotDeps:
     """Dependencias de la capa telegram (use cases + seams + gates)."""
 
@@ -240,6 +286,7 @@ class BotDeps:
     faceswap_pending: FaceswapPending = field(default_factory=FaceswapPending)
     long_prompt: LongPromptStore = field(default_factory=LongPromptStore)
     album: AlbumStore = field(default_factory=AlbumStore)
+    comfy_chain: ComfyChainMemory = field(default_factory=ComfyChainMemory)
     # Flag efímero awaiting-ref (A2): en memoria, NUNCA en cfg.state/sessions.json
     # (parity grok ``state["integrate_ref_awaiting"]``, se pierde al reiniciar).
     integrate_ref_pending: set[int] = field(default_factory=set)
@@ -250,6 +297,7 @@ class BotDeps:
 __all__ = [
     "AlbumStore",
     "BotDeps",
+    "ComfyChainMemory",
     "FaceswapPending",
     "LongPromptStore",
     "PendingPrompts",

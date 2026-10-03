@@ -58,10 +58,81 @@ COMFYUI_FLOWS = (
     ("dirty_edit", "Dirty Realism Edit"),
     ("wan_i2v", "Wan I2V"),
     ("qwen21_t2i", "Qwen 2.1"),
+    ("flux1_dev_t2i", "Flux.1 Dev"),
+    ("face_detail_impact", "Face Detail"),
+    ("instantid_sdxl", "InstantID SDXL"),
 )
 DEFAULT_COMFYUI_MODEL = COMFYUI_FLOWS[0][0]
 VALID_COMFYUI_MODELS = tuple(_id for _id, _label in COMFYUI_FLOWS)
 COMFYUI_FLOW_LABELS = dict(COMFYUI_FLOWS)
+# Still valid saved configs (see VALID_COMFYUI_MODELS). Hidden from the
+# Telegram config keyboard until the graphs actually run.
+COMFYUI_MENU_HIDDEN_FLOWS = frozenset({"donut_face", "wan_i2v"})
+
+# Result-chain stages (Telegram buttons under a ComfyUI image). The callback
+# does not generate; it only selects the destination flow.
+PIPE_EDIT = "edit"
+PIPE_DETAIL = "detail"
+PIPE_RETAKE = "retake"
+PIPE_STAGES = (PIPE_EDIT, PIPE_DETAIL, PIPE_RETAKE)
+FACE_DETAIL_FLOW_ID = "face_detail_impact"
+# T2I id → edit sibling. No entry means the Editar button stays hidden.
+COMFYUI_EDIT_SIBLINGS = {
+    "grok_style": "grok_edit",
+    "dirty_realism": "dirty_edit",
+    "qwen21_t2i": "agil_edit_qwen",
+    "agil_solo": "agil_edit_qwen",
+    "agil_moody": "agil_edit_qwen",
+    "agil_nsfw": "agil_edit_nsfw",
+}
+
+
+def comfy_chain_stages(
+    flow_id: str,
+    *,
+    supports_source: bool,
+    requires_source: bool,
+    media_type: str = "image",
+) -> tuple[tuple[str, str], ...]:
+    """Visible ``(stage, dest_flow_id)`` pairs for a ComfyUI result.
+
+    Editar only when ``flow_id`` has a mapped edit sibling that is still a
+    valid catalog id. Detalle cara when ``face_detail_impact`` is registered
+    and this result is a Comfy image that is not already that flow. Otra toma
+    only for T2I (no source support and source not required). Unknown or
+    non-image flows get nothing.
+    """
+    if flow_id not in VALID_COMFYUI_MODELS or media_type != "image":
+        return ()
+    stages: list[tuple[str, str]] = []
+    sibling = COMFYUI_EDIT_SIBLINGS.get(flow_id)
+    if sibling and sibling in VALID_COMFYUI_MODELS:
+        stages.append((PIPE_EDIT, sibling))
+    if FACE_DETAIL_FLOW_ID in VALID_COMFYUI_MODELS and flow_id != FACE_DETAIL_FLOW_ID:
+        stages.append((PIPE_DETAIL, FACE_DETAIL_FLOW_ID))
+    if not supports_source and not requires_source:
+        stages.append((PIPE_RETAKE, flow_id))
+    return tuple(stages)
+
+
+def comfy_chain_destination(
+    flow_id: str,
+    stage: str,
+    *,
+    supports_source: bool,
+    requires_source: bool,
+    media_type: str = "image",
+) -> str | None:
+    """Destination flow for ``stage``, or None when that button must not exist."""
+    for name, dest in comfy_chain_stages(
+        flow_id,
+        supports_source=supports_source,
+        requires_source=requires_source,
+        media_type=media_type,
+    ):
+        if name == stage:
+            return dest
+    return None
 # ``lora``/``refine`` quedaron dormidos tras el slice HTTP/WS: el LoRA forma
 # parte del workflow y refine no se ofrece. Se conservan en la config persistida
 # por compat (from_record/to_record) pero no participan en la resolución.

@@ -1,0 +1,166 @@
+{
+  "_meta": {
+    "id": "instantid_sdxl",
+    "name": "InstantID SDXL",
+    "media_type": "image",
+    "positive_node": "6",
+    "positive_input": "text",
+    "negative_node": "7",
+    "seed_nodes": [
+      "11"
+    ],
+    "save_nodes": [
+      "13"
+    ],
+    "supports_source": true,
+    "requires_source": true,
+    "source_node": "1",
+    "source_input": "image",
+    "timeout": 420,
+    "notes": "T2I from a face reference. LoadImage is the face photo (not a scene to edit). SDXL sd_xl_base_1.0 + InstantID ip-adapter.bin + instantid_controlnet_sdxl + InsightFace antelopev2."
+  },
+  "1": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "example.png"
+    }
+  },
+  "2": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "sd_xl_base_1.0.safetensors"
+    }
+  },
+  "3": {
+    "class_type": "InstantIDModelLoader",
+    "inputs": {
+      "instantid_file": "ip-adapter.bin"
+    }
+  },
+  "4": {
+    "class_type": "InstantIDFaceAnalysis",
+    "inputs": {
+      "provider": "CUDA"
+    }
+  },
+  "5": {
+    "class_type": "ControlNetLoader",
+    "inputs": {
+      "control_net_name": "instantid_controlnet_sdxl.safetensors"
+    }
+  },
+  "6": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "portrait photo of a person, natural light, detailed face, sharp focus",
+      "clip": [
+        "2",
+        1
+      ]
+    }
+  },
+  "7": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "blurry, deformed, extra fingers, watermark, low quality, text",
+      "clip": [
+        "2",
+        1
+      ]
+    }
+  },
+  "8": {
+    "class_type": "ApplyInstantID",
+    "inputs": {
+      "instantid": [
+        "3",
+        0
+      ],
+      "insightface": [
+        "4",
+        0
+      ],
+      "control_net": [
+        "5",
+        0
+      ],
+      "image": [
+        "1",
+        0
+      ],
+      "model": [
+        "2",
+        0
+      ],
+      "positive": [
+        "6",
+        0
+      ],
+      "negative": [
+        "7",
+        0
+      ],
+      "weight": 0.8,
+      "start_at": 0.0,
+      "end_at": 1.0
+    }
+  },
+  "9": {
+    "class_type": "EmptyLatentImage",
+    "inputs": {
+      "width": 1024,
+      "height": 1024,
+      "batch_size": 1
+    }
+  },
+  "11": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 0,
+      "steps": 25,
+      "cfg": 4.5,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 1.0,
+      "model": [
+        "8",
+        0
+      ],
+      "positive": [
+        "8",
+        1
+      ],
+      "negative": [
+        "8",
+        2
+      ],
+      "latent_image": [
+        "9",
+        0
+      ]
+    }
+  },
+  "12": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "11",
+        0
+      ],
+      "vae": [
+        "2",
+        2
+      ]
+    }
+  },
+  "13": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "12",
+        0
+      ],
+      "filename_prefix": "instantid_sdxl"
+    }
+  }
+}

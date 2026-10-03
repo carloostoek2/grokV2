@@ -113,6 +113,19 @@ def test_wan_i2v_comfyui_model_is_accepted():
     assert uc.comfyui.model == "wan_i2v"
 
 
+def test_hidden_comfyui_flows_stay_valid_when_saved():
+    """donut_face / wan_i2v stay out of the menu but must not fall back on load."""
+    for flow_id in ("donut_face", "wan_i2v"):
+        uc = UserConfig.from_record({"comfyui_model": flow_id})
+        assert uc.comfyui.model == flow_id
+        assert uc.to_record()["comfyui_model"] == flow_id
+
+
+def test_flux1_dev_t2i_comfyui_model_is_accepted():
+    uc = UserConfig.from_record({"comfyui_model": "flux1_dev_t2i"})
+    assert uc.comfyui.model == "flux1_dev_t2i"
+
+
 def test_unknown_keys_ignored():
     uc = UserConfig.from_record(
         {
@@ -191,3 +204,40 @@ def test_nano_banana_invalid_falls_back():
     rec = uc.to_record()
     assert rec["nano_banana_provider"] == "kie"
     assert rec["nano_banana_variant"] == "banana2"
+
+
+def test_new_comfy_flows_are_accepted():
+    for flow_id in ("flux1_dev_t2i", "face_detail_impact", "instantid_sdxl"):
+        uc = UserConfig.from_record({"comfyui_model": flow_id})
+        assert uc.comfyui.model == flow_id
+
+
+def test_comfy_chain_stages():
+    from grokbot.domain.user_config import comfy_chain_destination, comfy_chain_stages
+
+    grok = comfy_chain_stages("grok_style", supports_source=False, requires_source=False)
+    assert grok == (
+        ("edit", "grok_edit"),
+        ("detail", "face_detail_impact"),
+        ("retake", "grok_style"),
+    )
+    assert comfy_chain_destination(
+        "dirty_realism", "edit", supports_source=False, requires_source=False
+    ) == "dirty_edit"
+    flux = [stage for stage, _dest in comfy_chain_stages(
+        "flux1_dev_t2i", supports_source=False, requires_source=False
+    )]
+    assert flux == ["detail", "retake"]
+    instant = [stage for stage, _dest in comfy_chain_stages(
+        "instantid_sdxl", supports_source=True, requires_source=True
+    )]
+    assert instant == ["detail"]
+    assert comfy_chain_stages(
+        "face_detail_impact", supports_source=True, requires_source=True
+    ) == ()
+    assert comfy_chain_stages(
+        "wan_i2v", supports_source=True, requires_source=True, media_type="video"
+    ) == ()
+    assert comfy_chain_stages(
+        "not_a_flow", supports_source=False, requires_source=False
+    ) == ()
