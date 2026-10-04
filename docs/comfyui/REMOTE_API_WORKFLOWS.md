@@ -11,12 +11,28 @@ JSON files **on the Vast box** and fetches them at runtime.
   agil_edit_nsfw.json   agil_edit_qwen.json   agil_moody.json
   agil_nsfw.json        agil_solo.json        dirty_edit.json
   dirty_realism.json    donut_face.json       grok_edit.json
-  grok_style.json       qwen21_t2i.json       wan_i2v.json
+  grok_style.json       ohwx_dirty_edit.json  ohwx_edit.json
+  ohwx_krea2.json       qwen21_t2i.json       wan_i2v.json
 ```
 
-> El listado completo, con pesos/sampler/resolución y **cuáles flujos están rotos hoy**, vive
-> en [INVENTARIO_BOX_VAST.md](./INVENTARIO_BOX_VAST.md) (foto del 2026-10-03: 10 de 12 OK;
-> `donut_face` y `wan_i2v` no son ejecutables por nodos/pesos faltantes).
+> Pesos, sampler y cuáles flujos están rotos: [INVENTARIO_BOX_VAST.md](./INVENTARIO_BOX_VAST.md).
+> El listado de arriba es el de ese inventario (los 12 previos más los tres Ohwx).
+> `donut_face` y `wan_i2v` siguen sin ser ejecutables por nodos o pesos faltantes.
+> Los tres Ohwx sí corren, pero solo si está `models/loras/ohwx_krea2.safetensors`
+> (Drive, paso manual; el script no la descarga).
+
+| id | Nombre | Foto | LoRA | Trigger |
+|---|---|---|---|---|
+| `ohwx_krea2` | Ohwx | no | `ohwx_krea2.safetensors` @ 1.0/1.0 (`LoraLoader`) | `ohwx woman` en el prompt |
+| `ohwx_edit` | Ohwx Edit | sí | `ohwx_krea2` @ 1.0 (`LoraLoaderModelOnly`) + `grokstyle_krea2_v2` @ 0.6 | `ohwx woman` en la instrucción |
+| `ohwx_dirty_edit` | Ohwx Dirty Edit | sí | solo `ohwx_krea2` @ 1.0 sobre el UNET Dirty | `ohwx woman` en la instrucción |
+
+Los JSON salen de `src/grokbot/providers/comfyui/workflows/templates/` y
+`scripts/provision_vast_box.sh` (fase `workflows`) los copia a `api_workflows/`
+con el nombre de `_meta.id`. La LoRA hay que unirla desde Drive y dejarla en
+`/workspace/ComfyUI/models/loras/ohwx_krea2.safetensors` (SHA-256
+`d453337ccb17ae1696b763c1315ca606baf3907ffe6b75beb493a327c40e488e`, 457111520 bytes).
+`verify` falla si falta, salvo `--skip-ohwx`.
 
 Each file is ComfyUI **API format** (flat `{node_id: {class_type, inputs}}`) plus
 a top-level `_meta` block (`id`, `name`, `media_type`, `positive_node`,

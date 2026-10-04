@@ -159,6 +159,7 @@ Turbo = 8 pasos, CFG 1 (camino rápido); generar **≤ 2 MP**; las *remociones* 
 | `loras/` | `krea2/krea2_identity_edit_v1_2.safetensors` | **1.83 GB** |
 | | `Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors` | 0.79 GB |
 | | `Krea2NSFWV4.safetensors` | 0.43 GB |
+| | `ohwx_krea2.safetensors` | 0.43 GB |
 | | `grokstyle_krea2_v2.safetensors` | 0.21 GB |
 | `vae/` | `qwen_image_2.1_vae_bf16.safetensors` | 0.63 GB |
 | | `qwen_image_vae.safetensors` | 0.24 GB |
@@ -170,14 +171,29 @@ Procedencias: los base Krea/Qwen salen de `huggingface.co/Comfy-Org/Krea-2`;
 `Moody-Krea-Mix-…nvfp4` de `catlover1937/moody-krea-mix`; `grokstyle_krea2_v2` es la LoRA
 **Civitai 2891415** ("Grok Style for Krea 2", **requiere token**).
 
+`ohwx_krea2.safetensors` es la LoRA de **identidad** de los tres flujos Ohwx (§6). Tamaño
+exacto **457111520** bytes (~436 MiB; en la tabla, 0.43 GB). SHA-256
+`d453337ccb17ae1696b763c1315ca606baf3907ffe6b75beb493a327c40e488e`. No está en Hugging Face
+ni en Civitai: el respaldo es la carpeta de Drive
+[`loras`](https://drive.google.com/drive/folders/1HJ8zosZgiDg6qUPMtZDUj3NW8gkEs0Kw)
+(`1HJ8zosZgiDg6qUPMtZDUj3NW8gkEs0Kw`), subida en 5 partes. `provision_vast_box.sh` **no la
+descarga**; hay que unirla a mano y dejarla en `models/loras/` (§9). Sin ese archivo los
+tres flujos Ohwx quedan rotos por peso faltante.
+
 Renames del owner que hay que mapear al reinstalar: `Krea2NSFWV4.safetensors` ← único equivalente
 público `KNP_000003000.safetensors`; `Wan2_1_VAE_fp32.safetensors` ← hardlink de
 `wan_2.1_vae.safetensors` de `Comfy-Org/Wan_2.1_ComfyUI_repackaged`.
 
-## 6. Flujos (12 registrados en `COMFYUI_FLOWS`)
+## 6. Flujos (15 en este inventario: los 12 previos + Ohwx)
 
 Los graphs viven en `/workspace/ComfyUI/user/default/api_workflows/{id}.json` (fuente de verdad en
 runtime); el fallback embebido está en `src/grokbot/providers/comfyui/workflows/templates/`.
+Esos JSON **viajan con el repo**. La fase `workflows` de `provision_vast_box.sh` copia cada
+template a `api_workflows/`, nombrado por `_meta.id` (§7.1 y §9). La LoRA Ohwx no va en el
+repo: hay que conseguirla aparte (§5, §9).
+
+`ohwx_krea2`, `ohwx_edit` y `ohwx_dirty_edit` ya están en `COMFYUI_FLOWS`. Este apartado los
+suma al listado que el inventario ya cubría. No reenumera otros ids que el código tenga aparte.
 
 | id | Nombre UI | Media | Foto | Modelo principal | Sampler / steps / cfg | Resolución | Estado |
 |---|---|---|---|---|---|---|---|
@@ -190,11 +206,14 @@ runtime); el fallback embebido está en `src/grokbot/providers/comfyui/workflows
 | `grok_edit` | Grok Style Edit | image | ✔ | `krea2_turbo_fp8_scaled` + LoRAs `krea2_identity_edit_v1_2` **y** `grokstyle_krea2_v2` | euler/simple · 10 · 1 | 9:16 @ 1.0 MP | ✅ |
 | `dirty_realism` | Dirty Realism | image | — | `krea2SATDirtyRealism_uncut_fp8` (el checkpoint **es** el look, sin LoRA) | euler/simple · 20 · 1 | 9:16 @ 1.0 MP | ✅ |
 | `dirty_edit` | Dirty Realism Edit | image | ✔ | `krea2SATDirtyRealism_uncut_fp8` + LoRA `krea2_identity_edit_v1_2` | euler/simple · 10 · 1 | 9:16 @ 1.0 MP | ✅ |
+| `ohwx_krea2` | Ohwx | image | — | `krea2_turbo_fp8_scaled` + LoRA `ohwx_krea2` **1.0/1.0** (`LoraLoader`) + VAE `qwen_image_vae` | euler/simple · 3 · 1 | 2:3 @ 1.2 MP | ✅ si está la LoRA |
+| `ohwx_edit` | Ohwx Edit | image | ✔ | `krea2_turbo_fp8_scaled` + `ohwx_krea2` **1.0** (`LoraLoaderModelOnly`) + `grokstyle_krea2_v2` **0.6** | euler/simple · 10 · 1 | 9:16 @ 1.0 MP | ✅ si está la LoRA |
+| `ohwx_dirty_edit` | Ohwx Dirty Edit | image | ✔ | `krea2SATDirtyRealism_uncut_fp8` + solo `ohwx_krea2` **1.0** (`LoraLoaderModelOnly`) | euler/simple · 8 · 1 | 9:16 @ 1.0 MP | ✅ si está la LoRA |
 | `qwen21_t2i` | Qwen 2.1 | image | — | `qwen_image_2.1_int8_convrot` | euler/simple · 25 · 1 | 2:3 @ 2.0 MP | ✅ |
 | `donut_face` | Donut Face | image | — | `krea2_turbo_fp8_scaled` | — | 9:16 @ 1 MP | ❌ roto |
 | `wan_i2v` | Wan I2V | video | ✔ | `wan2.2_ti2v_5B_fp16` | uni_pc/simple · 20 · 5 | — | ❌ roto |
 
-Componentes compartidos: los flujos Krea2 (`grok_style`, `agil_solo`, `agil_nsfw`, `agil_moody`,
+Componentes compartidos: los flujos Krea2 (`grok_style`, `ohwx_krea2`, `agil_solo`, `agil_nsfw`, `agil_moody`,
 `donut_face`) usan `qwen3vl_4b_fp8_scaled` como text encoder y `qwen_image_vae` como VAE.
 Excepciones: `qwen21_t2i` usa los `_int8_convrot` + `qwen_image_2.1_vae_bf16`; `agil_edit_qwen`
 usa `qwen_2.5_vl_7b_fp8_scaled`; `agil_edit_nsfw` usa un **checkpoint todo-en-uno** sin encoder
@@ -202,7 +221,7 @@ ni VAE sueltos; `wan_i2v` usa `umt5_xxl` (faltante).
 
 ### `grok_edit` — particularidades (medidas en vivo el 2026-10-03)
 
-Es el único flujo que **edita sobre Krea 2**, y tiene dos diferencias que importan:
+Edita sobre Krea 2 (`ohwx_edit` repite el patrón con la LoRA Ohwx; ver más abajo), y tiene dos diferencias que importan:
 
 1. **El prompt es una INSTRUCCIÓN, no una descripción.** Va a un `Krea2EditGroundedEncode`
    (input `prompt`), no a un `CLIPTextEncode`: el text encoder *ve* la imagen mientras lee la
@@ -246,6 +265,23 @@ Costo: ~12–16 s con los modelos en caché, ~40 s en frío. Turbo, 10 pasos, CF
 - **Alternativa medida**: CFG 3 + 20 pasos da algo más de detalle fotográfico a ~3× el tiempo
   (20 s vs 12 s en txt2img; 44 s vs 16 s en edición). Es cambiar `steps`/`cfg` en el template.
 
+### Ohwx — identidad (`ohwx_krea2`, `ohwx_edit`, `ohwx_dirty_edit`)
+
+Clones de `grok_style`, `grok_edit` y `dirty_edit` (los originales no se tocan). El trigger
+**`ohwx woman` tiene que ir en el prompt del usuario**: no hay prefijo horneado. En T2I el
+positivo (nodo `4`) queda vacío; en edición la instrucción es el nodo `8` (`prompt`).
+
+| id | Foto | LoRA | Notas |
+|---|---|---|---|
+| `ohwx_krea2` | no | `ohwx_krea2.safetensors` @ **1.0 / 1.0** (`LoraLoader`, nodo `100`) | Misma estructura que Grok Style: pasada `er_sde` 8 pasos y refino euler 3 pasos, denoise 0.25. El template del repo usa VAE `qwen_image_vae`. |
+| `ohwx_edit` | sí | identidad `ohwx_krea2` @ **1.0** (`LoraLoaderModelOnly`, nodo `5`) y estilo `grokstyle_krea2_v2` @ **0.6** (nodo `6`) | Ese loader no tiene fuerza de CLIP (el CLIP sigue en el nodo `3`). El prompt es una instrucción, igual que `grok_edit`. |
+| `ohwx_dirty_edit` | sí | solo `ohwx_krea2` @ **1.0** (`LoraLoaderModelOnly`, nodo `5`) | UNET `krea2SATDirtyRealism_uncut_fp8`. Sin `grokstyle`: el look lo pone el checkpoint. El grafo va a **8** pasos, CFG 1. |
+
+Destino en el box: `/workspace/ComfyUI/models/loras/ohwx_krea2.safetensors`. Los tres JSON ya
+están en `templates/` (`ohwx_krea2.json`, `ohwx_edit.json`, `ohwx_dirty_edit.json`); la fase
+`workflows` los copia. La LoRA no. Sin ella, `verify` falla con un mensaje explícito (salvo
+`--skip-ohwx`).
+
 ### Flujos rotos — por qué
 
 **`donut_face`** — le faltan **16 clases de nodo**. Mapeadas a su pack con la DB de
@@ -287,9 +323,10 @@ Con eso, `donut_face` queda bloqueado **solo** por los 16 nodos — 9 de ellos i
 
 ### Flujos que exigen foto (`requires_source`)
 
-Los 4 flujos con `supports_source: true` declaran además **`requires_source: true`** en su `_meta`
-(`agil_edit_qwen`, `agil_edit_nsfw`, `grok_edit`, `wan_i2v`). El provider **rechaza** el request
-con un mensaje claro si llega sin foto.
+Los flujos de este inventario con `supports_source: true` declaran además **`requires_source: true`**
+en su `_meta` (`agil_edit_qwen`, `agil_edit_nsfw`, `grok_edit`, `dirty_edit`, `ohwx_edit`,
+`ohwx_dirty_edit`, `wan_i2v`). El provider **rechaza** el request con un mensaje claro si llega
+sin foto. `ohwx_krea2` no está en esa lista: es txt2img, sin imagen fuente.
 
 Sin esa marca el grafo correría con el **placeholder horneado** — los cuatro apuntan a
 `example.png`, que existe en el `input/` del box — y devolvería un resultado incorrecto **en
@@ -458,6 +495,7 @@ scripts/provision_vast_box.sh                     # todo
 scripts/provision_vast_box.sh --only verify       # solo reporta, no cambia nada
 scripts/provision_vast_box.sh --skip models       # sin las descargas grandes
 scripts/provision_vast_box.sh --only env,links
+scripts/provision_vast_box.sh --skip-ohwx         # verify no falla si falta la LoRA Ohwx
 
 CIVITAI_TOKEN=... scripts/provision_vast_box.sh   # requerido para las descargas de Civitai
 ```
@@ -473,9 +511,9 @@ Fases: `preflight env nodes models links workflows restart verify`.
 | `nodes` | Clona `ComfyUI-Krea2-NAG` (0afb38d) y `comfyui-krea2edit` (86f886d) |
 | `models` | 8 pesos: 3 de `Comfy-Org/Krea-2`, Moody (`catlover1937`), la LoRA de identidad (`conradlocke`), el VAE de Wan (`Comfy-Org/Wan_2.1_ComfyUI_repackaged`) y 2 de **Civitai** (grokstyle 3278913, DirtyRealism 3372523) |
 | `links` | Symlink `vae/qwen-image/` y hardlink `Wan2_1_VAE_fp32` |
-| `workflows` | Despliega los 12 templates a `api_workflows/`, **nombrados por `_meta.id`** (§7.1) |
+| `workflows` | Copia **cada** `templates/*.json` a `api_workflows/{_meta.id}.json` (§7.1). Los tres Ohwx ya están en ese directorio del repo, así que entran solos; la LoRA no |
 | `restart` | Reinicia ComfyUI por supervisor y espera el 200 |
-| `verify` | Los chequeos de §8 + el estado de cada flujo + los pesos manuales |
+| `verify` | Los chequeos de §8 + el estado de cada flujo + los pesos manuales + la LoRA Ohwx (tamaño y SHA-256; falla si falta, salvo `--skip-ohwx`) |
 
 **Manual (no automatizable hoy):**
 
@@ -483,17 +521,61 @@ Fases: `preflight env nodes models links workflows restart verify`.
    árbol `/workspace/ComfyUI`, el venv `/venv/main`, el servicio supervisor `comfyui` en el puerto
    18188, el portal, `comfy-cli` y los packs que trae la imagen (Manager, GGUF, rgdownloader,
    rgthree). Nada de eso lo crea este script.
-2. **8 pesos sin origen verificado** (el script los reporta al final como `FALTA`/`ok`):
-   `qwen-image-edit-2511-Q4_K_M.gguf`, `qwen_image_2.1_int8_convrot`, `qwen3vl_8b_int8_convrot`,
-   `qwen_2.5_vl_7b_fp8_scaled`, `qwen_image_2.1_vae_bf16`, `Qwen-Rapid-AIO-NSFW-v23`,
-   `Qwen-Image-Edit-2511-Lightning-4steps`, `Krea2NSFWV4`. Son los que alimentan los flujos
-   Ágil Edit / Ágil Edit NSFW / Qwen 2.1. **Si alguien los re-descarga, anotar la URL en la
-   tabla de §5 y agregarlos al manifiesto del script.**
-3. **Los secretos**: `CIVITAI_TOKEN` (las descargas de Civitai dan 401 sin él) y `HF_TOKEN`
-   (solo si algún repo de HF pasa a estar gated).
-4. **Reiniciar el bot**: vive en la máquina del repo, no en el box → `grokbot restart` (§8.1).
-5. **La decisión de configuración**: qué flujos quedan habilitados, con qué pasos/CFG y con qué
-   resolución. El script despliega lo que haya en `templates/`; no juzga si está bien.
+2. **8 pesos sin origen verificado** (el script los reporta al final como `FALTA`/`ok`, sin
+   abortar): `qwen-image-edit-2511-Q4_K_M.gguf`, `qwen_image_2.1_int8_convrot`,
+   `qwen3vl_8b_int8_convrot`, `qwen_2.5_vl_7b_fp8_scaled`, `qwen_image_2.1_vae_bf16`,
+   `Qwen-Rapid-AIO-NSFW-v23`, `Qwen-Image-Edit-2511-Lightning-4steps`, `Krea2NSFWV4`. Son los
+   que alimentan los flujos Ágil Edit / Ágil Edit NSFW / Qwen 2.1. **Si alguien los
+   re-descarga, anotar la URL en la tabla de §5 y agregarlos al manifiesto del script.**
+3. **La LoRA Ohwx** (`loras/ohwx_krea2.safetensors`). Origen verificado, pero en Drive y en
+   partes: no hay un `curl` estable sin cliente de Drive, así que **no entra en la fase
+   `models`**. Hay que bajarla, unirla y comprobar el hash. `verify` **sale con error** si el
+   archivo no está o no coincide (tamaño **457111520**, SHA-256
+   `d453337ccb17ae1696b763c1315ca606baf3907ffe6b75beb493a327c40e488e`), salvo
+   `scripts/provision_vast_box.sh --skip-ohwx`.
+
+   Carpeta: <https://drive.google.com/drive/folders/1HJ8zosZgiDg6qUPMtZDUj3NW8gkEs0Kw>
+   (`loras`). Ids de las partes, en orden:
+
+   | Parte | File id |
+   |---|---|
+   | `ohwx_krea2.safetensors.part00` | `1-TamXEU2D-MK5yKo2k1mWMeZyJa8ljeT` |
+   | `ohwx_krea2.safetensors.part01` | `1MGL-MHi8lTv_BYEvt6rkcBtgbGu6LkfU` |
+   | `ohwx_krea2.safetensors.part02` | `1B_Scn3DJCQA4FDiny-ylB1FgW3b6tB5g` |
+   | `ohwx_krea2.safetensors.part03` | `1ON1mP_xlr9WlPLDhPPelmRk4FYcBavln` |
+   | `ohwx_krea2.safetensors.part04` | `1AAfDb4oArCeVPR4bHUCgD756UupyWOxA` |
+   | instrucciones de join | `11EnAGhe4CHshJ2QY8vXPahC2LfDDErdO` |
+   | archivo SHA-256 | `1eWFS0uVt1h53CAeN5dFsrKbfjnqidJKq` |
+
+   El join del backup es, con las partes en un directorio y nombres `part00`…`part04`:
+
+   ```bash
+   cat ohwx_krea2.safetensors.part* > ohwx_krea2.safetensors
+   ```
+
+   (`part*` ordena bien porque van con cero a la izquierda: part00, part01, part02, part03,
+   part04.) En el box nuevo, dejar el resultado donde ComfyUI lo carga y verificar:
+
+   ```bash
+   install -d /workspace/ComfyUI/models/loras
+   cat ohwx_krea2.safetensors.part00 \
+       ohwx_krea2.safetensors.part01 \
+       ohwx_krea2.safetensors.part02 \
+       ohwx_krea2.safetensors.part03 \
+       ohwx_krea2.safetensors.part04 \
+     > /workspace/ComfyUI/models/loras/ohwx_krea2.safetensors
+   sha256sum /workspace/ComfyUI/models/loras/ohwx_krea2.safetensors
+   # d453337ccb17ae1696b763c1315ca606baf3907ffe6b75beb493a327c40e488e
+   stat -c %s /workspace/ComfyUI/models/loras/ohwx_krea2.safetensors
+   # 457111520
+   ```
+
+4. **Los secretos**: `CIVITAI_TOKEN` (las descargas de Civitai dan 401 sin él) y `HF_TOKEN`
+   (solo si algún repo de HF pasa a estar gated). La LoRA Ohwx no usa ninguno de los dos.
+5. **Reiniciar el bot**: vive en la máquina del repo, no en el box → `grokbot restart` (§8.1).
+6. **La decisión de configuración**: qué flujos quedan habilitados, con qué pasos/CFG y con qué
+   resolución. El script despliega lo que haya en `templates/` (incluidos los tres Ohwx); no
+   juzga si está bien.
 
 > El script **no** reinstala paquetes `nvidia-*` ni purga nada: la trampa de §7.6 (colisión de
 > rutas cu12/cu13) sigue aplicando si alguien lo hace a mano.
