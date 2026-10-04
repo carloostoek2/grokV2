@@ -207,7 +207,14 @@ def test_nano_banana_invalid_falls_back():
 
 
 def test_new_comfy_flows_are_accepted():
-    for flow_id in ("flux1_dev_t2i", "face_detail_impact", "instantid_sdxl", "ohwx_krea2"):
+    for flow_id in (
+        "flux1_dev_t2i",
+        "face_detail_impact",
+        "instantid_sdxl",
+        "ohwx_krea2",
+        "ohwx_edit",
+        "ohwx_dirty_edit",
+    ):
         uc = UserConfig.from_record({"comfyui_model": flow_id})
         assert uc.comfyui.model == flow_id
 
@@ -228,12 +235,18 @@ def test_comfy_chain_stages():
         "flux1_dev_t2i", supports_source=False, requires_source=False
     )]
     assert flux == ["detail", "retake"]
-    # T2I sin sibling de edición: Detalle + Otra toma, sin Editar.
+    # T2I Ohwx encadena solo a ohwx_edit (no a ohwx_dirty_edit).
     ohwx = comfy_chain_stages("ohwx_krea2", supports_source=False, requires_source=False)
     assert ohwx == (
+        ("edit", "ohwx_edit"),
         ("detail", "face_detail_impact"),
         ("retake", "ohwx_krea2"),
     )
+    assert comfy_chain_destination(
+        "ohwx_krea2", "edit", supports_source=False, requires_source=False
+    ) == "ohwx_edit"
+    from grokbot.domain.user_config import COMFYUI_EDIT_SIBLINGS
+    assert "ohwx_dirty_edit" not in COMFYUI_EDIT_SIBLINGS.values()
     instant = [stage for stage, _dest in comfy_chain_stages(
         "instantid_sdxl", supports_source=True, requires_source=True
     )]

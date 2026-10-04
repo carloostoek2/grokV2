@@ -64,6 +64,8 @@ def test_flows_returns_registered_flows():
         "face_detail_impact",
         "instantid_sdxl",
         "ohwx_krea2",
+        "ohwx_edit",
+        "ohwx_dirty_edit",
     }
 
 
@@ -497,6 +499,65 @@ def test_get_flow_dirty_edit_edits_on_the_dirty_checkpoint():
         and (n.get("inputs") or {}).get("lora_name") == "grokstyle_krea2_v2.safetensors"
         for n in g.values()
     )
+
+
+def test_get_flow_ohwx_edit_swaps_identity_lora_keeps_style():
+    """Ohwx Edit: clon de grok_edit con identidad ohwx y grokstyle intacto."""
+    flow = get_flow("ohwx_edit")
+    assert flow is not None
+    assert flow.name == "Ohwx Edit"
+    assert flow.media_type is MediaType.IMAGE
+    assert flow.supports_source is True
+    assert flow.requires_source is True
+    assert flow.source_node == "1"
+    assert flow.source_input == "image"
+    assert flow.positive_node == "8"
+    assert flow.positive_input == "prompt"
+    assert flow.seed_nodes == ("13",)
+    assert flow.save_nodes == ("15",)
+
+    g = flow.graph
+    assert g["2"]["inputs"]["unet_name"] == "krea2_turbo_fp8_scaled.safetensors"
+    assert g["5"]["class_type"] == "LoraLoaderModelOnly"
+    assert g["5"]["inputs"]["lora_name"] == "ohwx_krea2.safetensors"
+    assert g["5"]["inputs"]["strength_model"] == 1.0
+    assert g["6"]["inputs"]["lora_name"] == "grokstyle_krea2_v2.safetensors"
+    assert g["6"]["inputs"]["strength_model"] == 0.6
+    assert g["6"]["inputs"]["model"] == ["5", 0]
+    assert g["7"]["inputs"]["model"] == ["6", 0]
+    assert g["13"]["inputs"]["steps"] == 10
+    assert g["13"]["inputs"]["cfg"] == 1.0
+
+
+def test_get_flow_ohwx_dirty_edit_is_identity_only_on_dirty():
+    """Ohwx Dirty Edit: clon de dirty_edit; único LoRA ohwx_krea2, sin grokstyle."""
+    flow = get_flow("ohwx_dirty_edit")
+    assert flow is not None
+    assert flow.name == "Ohwx Dirty Edit"
+    assert flow.supports_source is True
+    assert flow.requires_source is True
+    assert flow.source_node == "1"
+    assert flow.source_input == "image"
+    assert flow.positive_node == "8"
+    assert flow.positive_input == "prompt"
+
+    g = flow.graph
+    assert g["2"]["inputs"]["unet_name"] == "krea2SATDirtyRealism_uncut_fp8.safetensors"
+    assert g["5"]["class_type"] == "LoraLoaderModelOnly"
+    assert g["5"]["inputs"]["lora_name"] == "ohwx_krea2.safetensors"
+    assert g["5"]["inputs"]["strength_model"] == 1.0
+    assert g["7"]["inputs"]["model"] == ["5", 0]
+    assert not any(
+        isinstance(n, dict)
+        and (n.get("inputs") or {}).get("lora_name") == "grokstyle_krea2_v2.safetensors"
+        for n in g.values()
+    )
+    loras = [
+        (n.get("inputs") or {}).get("lora_name")
+        for n in g.values()
+        if isinstance(n, dict) and n.get("class_type") == "LoraLoaderModelOnly"
+    ]
+    assert loras == ["ohwx_krea2.safetensors"]
 
 
 def test_get_flow_wan_i2v_supports_source_video():
