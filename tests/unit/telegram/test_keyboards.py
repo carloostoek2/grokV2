@@ -90,6 +90,7 @@ def test_config_comfyui_keyboard_lists_only_flow():
         "cfg:comfyui:flow:dirty_edit",
         "cfg:comfyui:flow:qwen21_t2i",
         "cfg:comfyui:flow:flux1_dev_t2i",
+        "cfg:comfyui:flow:minimax_h3_i2v",
         "cfg:comfyui:flow:face_detail_impact",
         "cfg:comfyui:flow:instantid_sdxl",
         "cfg:comfyui:flow:ohwx_krea2",
@@ -99,6 +100,7 @@ def test_config_comfyui_keyboard_lists_only_flow():
         "cfg:close",
     ]
     assert "cfg:comfyui:flow:flux1_dev_t2i" in data
+    assert "cfg:comfyui:flow:minimax_h3_i2v" in data
     assert "cfg:comfyui:flow:face_detail_impact" in data
     assert "cfg:comfyui:flow:instantid_sdxl" in data
     assert "cfg:comfyui:flow:donut_face" not in data

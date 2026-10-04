@@ -39,6 +39,7 @@ def _cfg(**over):
 def test_is_comfy_video_model():
     assert is_comfy_video_model("wan_i2v") is True
     assert is_comfy_video_model("minimax_i2v") is True
+    assert is_comfy_video_model("minimax_h3_i2v") is True
     assert is_comfy_video_model("krea2") is False
     assert is_comfy_video_model("qwen") is False
     assert is_comfy_video_model("qwen_aio") is False
@@ -47,7 +48,7 @@ def test_is_comfy_video_model():
 def test_comfy_video_models_tuple():
     from grokbot.domain import COMFY_VIDEO_MODELS
 
-    assert COMFY_VIDEO_MODELS == ("wan_i2v", "minimax_i2v")
+    assert COMFY_VIDEO_MODELS == ("wan_i2v", "minimax_i2v", "minimax_h3_i2v")
 
 
 # --- D12: video provider + Kie aspect fallback -----------------------------
