@@ -93,6 +93,8 @@ def test_config_comfyui_keyboard_lists_only_flow():
         "cfg:comfyui:flow:face_detail_impact",
         "cfg:comfyui:flow:instantid_sdxl",
         "cfg:comfyui:flow:ohwx_krea2",
+        "cfg:comfyui:flow:ohwx_edit",
+        "cfg:comfyui:flow:ohwx_dirty_edit",
         "cfg:back:model",
         "cfg:close",
     ]
@@ -214,8 +216,13 @@ def test_comfy_result_keyboard_is_stage_gated():
     assert instant == ["regen", "pipe:detail"]
     assert "pipe:retake" not in instant
     ohwx = flat_callback_data(kb.comfy_result_keyboard("ohwx_krea2"))
-    assert ohwx == ["regen", "pipe:detail", "pipe:retake"]
-    assert "pipe:edit" not in ohwx
+    assert ohwx == ["regen", "pipe:edit", "pipe:detail", "pipe:retake"]
+    ohwx_edit = flat_callback_data(kb.comfy_result_keyboard("ohwx_edit"))
+    assert ohwx_edit == ["regen", "pipe:detail"]
+    ohwx_dirty = flat_callback_data(kb.comfy_result_keyboard("ohwx_dirty_edit"))
+    assert ohwx_dirty == ["regen", "pipe:detail"]
+    assert "pipe:edit" not in ohwx_dirty
+    assert "pipe:retake" not in ohwx_edit
     # Unknown / non-catalog ids stay regen-only (Grok results never use this builder).
     assert flat_callback_data(kb.comfy_result_keyboard("krea2")) == ["regen"]
     assert flat_callback_data(kb.comfy_result_keyboard(None)) == ["regen"]

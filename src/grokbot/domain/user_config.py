@@ -62,6 +62,8 @@ COMFYUI_FLOWS = (
     ("face_detail_impact", "Face Detail"),
     ("instantid_sdxl", "InstantID SDXL"),
     ("ohwx_krea2", "Ohwx"),
+    ("ohwx_edit", "Ohwx Edit"),
+    ("ohwx_dirty_edit", "Ohwx Dirty Edit"),
 )
 DEFAULT_COMFYUI_MODEL = COMFYUI_FLOWS[0][0]
 VALID_COMFYUI_MODELS = tuple(_id for _id, _label in COMFYUI_FLOWS)
@@ -85,6 +87,7 @@ COMFYUI_EDIT_SIBLINGS = {
     "agil_solo": "agil_edit_qwen",
     "agil_moody": "agil_edit_qwen",
     "agil_nsfw": "agil_edit_nsfw",
+    "ohwx_krea2": "ohwx_edit",
 }
 
 
