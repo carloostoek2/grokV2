@@ -61,6 +61,7 @@ COMFYUI_FLOWS = (
     ("flux1_dev_t2i", "Flux.1 Dev"),
     ("face_detail_impact", "Face Detail"),
     ("instantid_sdxl", "InstantID SDXL"),
+    ("ohwx_krea2", "Ohwx"),
 )
 DEFAULT_COMFYUI_MODEL = COMFYUI_FLOWS[0][0]
 VALID_COMFYUI_MODELS = tuple(_id for _id, _label in COMFYUI_FLOWS)
