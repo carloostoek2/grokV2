@@ -59,6 +59,7 @@ COMFYUI_FLOWS = (
     ("wan_i2v", "Wan I2V"),
     ("qwen21_t2i", "Qwen 2.1"),
     ("flux1_dev_t2i", "Flux.1 Dev"),
+    ("minimax_h3_i2v", "MiniMax H3"),
     ("face_detail_impact", "Face Detail"),
     ("instantid_sdxl", "InstantID SDXL"),
     ("ohwx_krea2", "Ohwx"),
@@ -151,7 +152,7 @@ AWAITING_SOURCE = "AWAITING_SOURCE"
 # Mirrors the private provider constant ``providers/comfyui/provider.py`` but
 # lives in domain so the application layer can validate media_type (M2) without
 # importing a transport provider (layering rule).
-COMFY_VIDEO_MODELS = ("wan_i2v", "minimax_i2v")
+COMFY_VIDEO_MODELS = ("wan_i2v", "minimax_i2v", "minimax_h3_i2v")
 
 
 def is_comfy_video_model(model: str) -> bool:
