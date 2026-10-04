@@ -28,6 +28,23 @@ def test_get_flow_grok_style_returns_flow():
     assert flow.supports_source is False
 
 
+def test_get_flow_ohwx_krea2_is_t2i_without_baked_trigger():
+    """Identity LoRA clone of grok_style. Trigger stays in the user prompt."""
+    flow = get_flow("ohwx_krea2")
+    assert flow is not None
+    assert flow.name == "Ohwx"
+    assert flow.media_type is MediaType.IMAGE
+    assert flow.supports_source is False
+    assert flow.requires_source is False
+    assert flow.positive_node == "4"
+    assert flow.graph["4"]["inputs"]["text"] == ""
+    assert flow.graph["100"]["class_type"] == "LoraLoader"
+    assert flow.graph["100"]["inputs"]["lora_name"] == "ohwx_krea2.safetensors"
+    assert flow.graph["100"]["inputs"]["strength_model"] == 1.0
+    assert flow.graph["100"]["inputs"]["strength_clip"] == 1.0
+    assert "ohwx woman" not in flow.graph["4"]["inputs"]["text"]
+
+
 def test_flows_returns_registered_flows():
     ids = {f.id for f in flows()}
     assert ids == {
@@ -46,6 +63,7 @@ def test_flows_returns_registered_flows():
         "flux1_dev_t2i",
         "face_detail_impact",
         "instantid_sdxl",
+        "ohwx_krea2",
     }
 
 
@@ -366,7 +384,7 @@ def test_get_flow_agil_edit_nsfw_supports_source():
 
 def test_txt2img_flows_do_not_require_source():
     """requires_source is only for flows that make no sense without a photo."""
-    for flow_id in ("grok_style", "agil_solo", "agil_moody", "qwen21_t2i", "flux1_dev_t2i"):
+    for flow_id in ("grok_style", "agil_solo", "agil_moody", "qwen21_t2i", "flux1_dev_t2i", "ohwx_krea2"):
         flow = get_flow(flow_id)
         assert flow.supports_source is False, flow_id
         assert flow.requires_source is False, flow_id
