@@ -52,7 +52,7 @@
         0
       ],
       "lora_name": "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
-      "strength_model": 1.0
+      "strength_model": 0
     }
   },
   "6": {
@@ -95,13 +95,13 @@
     "class_type": "KSampler",
     "inputs": {
       "seed": 0,
-      "steps": 4,
-      "cfg": 1.0,
+      "steps": 20,
+      "cfg": 4.0,
       "sampler_name": "euler",
       "scheduler": "simple",
       "denoise": 1.0,
       "model": [
-        "5",
+        "16",
         0
       ],
       "positive": [
@@ -197,6 +197,16 @@
         "4",
         0
       ]
+    }
+  },
+  "16": {
+    "class_type": "CFGNorm",
+    "inputs": {
+      "model": [
+        "5",
+        0
+      ],
+      "strength": 1
     }
   }
 }
