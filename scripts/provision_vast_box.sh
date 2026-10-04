@@ -11,6 +11,7 @@
 #   scripts/provision_vast_box.sh --only verify      # report only, changes nothing
 #   scripts/provision_vast_box.sh --skip models      # skip the big downloads
 #   scripts/provision_vast_box.sh --only env,links
+#   scripts/provision_vast_box.sh --skip-ohwx       # verify warns instead of failing
 #
 # Secrets (never hardcoded here; pass through the environment):
 #   CIVITAI_TOKEN   required for the Civitai downloads (401 without it)
@@ -78,16 +79,23 @@ c_err()  { printf '\033[31m%s\033[0m\n' "$*" >&2; }
 step()   { printf '\n\033[1m== %s\033[0m\n' "$*"; }
 
 usage() {
-  sed -n '3,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  sed -n '3,21p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
   printf '\nFases: %s\n' "$PHASES_DEFAULT"
   exit "${1:-0}"
 }
 
 ONLY=""; SKIP=""
+# Identity LoRA is not in the download manifest (Drive, split parts). verify fails
+# closed unless this is set. See docs/comfyui/INVENTARIO_BOX_VAST.md §9.
+OHWX_REQUIRED=1
+OHWX_REL="loras/ohwx_krea2.safetensors"
+OHWX_SHA256="d453337ccb17ae1696b763c1315ca606baf3907ffe6b75beb493a327c40e488e"
+OHWX_BYTES="457111520"
 while [ $# -gt 0 ]; do
   case "$1" in
     --only) ONLY="${2:-}"; shift 2 ;;
     --skip) SKIP="${2:-}"; shift 2 ;;
+    --skip-ohwx) OHWX_REQUIRED=0; shift ;;
     --host) BOX_HOST="${2:-}"; shift 2 ;;
     --port) BOX_PORT="${2:-}"; shift 2 ;;
     -h|--help) usage 0 ;;
@@ -267,7 +275,7 @@ fi
 
 # --------------------------------------------------------------------- workflows
 if enabled workflows; then
-  step "workflows — desplegar templates al box (nombrados por _meta.id)"
+  step "workflows — desplegar templates al box (nombrados por _meta.id, incluye ohwx_*)"
   count=0
   for tpl in "$TEMPLATES_DIR"/*.json; do
     id="$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['_meta']['id'])" "$tpl" 2>/dev/null || true)"
@@ -298,8 +306,8 @@ fi
 
 # ------------------------------------------------------------------------ verify
 if enabled verify; then
-  step "verify — chequeos del inventario §8"
-  box_script <<'EOF'
+  step "verify — chequeos del inventario §8 + LoRA Ohwx"
+  box_script "OHWX_REL='$OHWX_REL' OHWX_SHA256='$OHWX_SHA256' OHWX_BYTES='$OHWX_BYTES' OHWX_REQUIRED='$OHWX_REQUIRED'" <<'EOF'
 set -uo pipefail
 echo "  torch          : $($BOX_PY -c 'import torch;print(torch.__version__)' 2>/dev/null || echo FALLA)"
 echo "  cuda disponible: $($BOX_PY -c 'import torch;print(torch.cuda.is_available())' 2>/dev/null || echo FALLA)"
@@ -335,6 +343,32 @@ echo "  --- pesos sin origen verificado (cargar a mano) ---"
 for w in $MANUAL_LIST; do
   if [ -s "$BOX_COMFYUI_DIR/models/$w" ]; then echo "    ok     $w"; else echo "    FALTA  $w"; fi
 done
+echo "  --- LoRA Ohwx (manual: Drive + join; no está en la fase models) ---"
+dest="$BOX_COMFYUI_DIR/models/$OHWX_REL"
+if [ ! -s "$dest" ]; then
+  if [ "${OHWX_REQUIRED:-1}" = "0" ]; then
+    echo "    OMITIDA  $OHWX_REL (--skip-ohwx). ohwx_krea2 / ohwx_edit / ohwx_dirty_edit no van a correr."
+  else
+    echo "    FALTA    $dest"
+    echo "    ERROR: la LoRA de identidad Ohwx no está. No se descarga sola."
+    echo "    Unir las 5 partes de Drive y dejar el archivo en models/loras/ (457111520 bytes)."
+    echo "    SHA-256 esperado: $OHWX_SHA256"
+    echo "    Receta: docs/comfyui/INVENTARIO_BOX_VAST.md §9. Para no abortar: --skip-ohwx"
+    exit 1
+  fi
+else
+  bytes=$(stat -Lc %s "$dest")
+  sum=$(sha256sum "$dest" | awk '{print $1}')
+  if [ "$bytes" != "$OHWX_BYTES" ] || [ "$sum" != "$OHWX_SHA256" ]; then
+    echo "    CORRUPTA $OHWX_REL"
+    echo "    bytes=$bytes (esperado $OHWX_BYTES)"
+    echo "    sha256=$sum"
+    echo "    esperado=$OHWX_SHA256"
+    echo "    ERROR: no uses este archivo. Vuelve a unir las partes de Drive."
+    exit 1
+  fi
+  echo "    ok       $OHWX_REL ($bytes bytes, sha256 coincide)"
+fi
 EOF
 fi
 
