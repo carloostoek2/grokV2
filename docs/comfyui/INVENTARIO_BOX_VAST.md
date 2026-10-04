@@ -181,15 +181,15 @@ runtime); el fallback embebido está en `src/grokbot/providers/comfyui/workflows
 
 | id | Nombre UI | Media | Foto | Modelo principal | Sampler / steps / cfg | Resolución | Estado |
 |---|---|---|---|---|---|---|---|
-| `grok_style` | Grok Style | image | — | `krea2_turbo_fp8_scaled` + LoRA `grokstyle_krea2_v2` + VAE **Wan** | euler/simple · 3 · 1 | 2:3 @ 1.2 MP | ✅ |
+| `grok_style` | Grok Style | image | — | `krea2_turbo_fp8_scaled` + LoRA `grokstyle_krea2_v2` **0.6/0.6** + VAE `qwen_image_vae.safetensors` (antes `Wan2_1_VAE_fp32`; solo en el box, no en git) | euler/simple · 3 · 1 | 2:3 @ 1.2 MP | ✅ |
 | `agil_solo` | Ágil solo | image | — | `krea2_turbo_fp8_scaled` | euler/simple · 8 · 1 | fija 896×1600 (1.43 MP) | ✅ |
 | `agil_nsfw` | Ágil NSFW | image | — | `krea2_turbo_fp8_scaled` + LoRA `Krea2NSFWV4` | euler/simple · 8 · 1 | fija 896×1600 (1.43 MP) | ✅ |
 | `agil_moody` | Ágil Moody | image | — | `Moody-Krea-Mix-…nvfp4` | euler_ancestral/beta · 8 · 1 | 9:16 @ 1.4 MP → 896×1600 | ✅ |
-| `agil_edit_qwen` | Ágil Edit | image | ✔ | `qwen-image-edit-2511-Q4_K_M.gguf` + LoRA `…Lightning-4steps` | euler/simple · 4 · 1 | según foto | ✅ |
+| `agil_edit_qwen` | Ágil Edit | image | ✔ | `qwen-image-edit-2511-Q4_K_M.gguf` + Lightning `strength_model` **0** (nodo conservado; embed, no en Vast) | euler/simple · 20 · 4.0 · denoise 1.0 | según foto | ✅ |
 | `agil_edit_nsfw` | Ágil Edit NSFW | image | ✔ | `Qwen-Rapid-AIO-NSFW-v23` (checkpoint) | euler/simple · 4 · 1 | según foto | ✅ |
-| `grok_edit` | Grok Style Edit | image | ✔ | `krea2_turbo_fp8_scaled` + LoRAs `krea2_identity_edit_v1_2` **y** `grokstyle_krea2_v2` | euler/simple · 10 · 1 | 9:16 @ 1.0 MP | ✅ |
-| `dirty_realism` | Dirty Realism | image | — | `krea2SATDirtyRealism_uncut_fp8` (el checkpoint **es** el look, sin LoRA) | euler/simple · 20 · 1 | 9:16 @ 1.0 MP | ✅ |
-| `dirty_edit` | Dirty Realism Edit | image | ✔ | `krea2SATDirtyRealism_uncut_fp8` + LoRA `krea2_identity_edit_v1_2` | euler/simple · 10 · 1 | 9:16 @ 1.0 MP | ✅ |
+| `grok_edit` | Grok Style Edit | image | ✔ | `krea2_turbo_fp8_scaled` + identidad **1.0** y `grokstyle_krea2_v2` `strength_model` **0.6** + VAE `qwen_image_vae` | euler/simple · 10 · 1 | 9:16 @ 1.0 MP | ✅ |
+| `dirty_realism` | Dirty Realism | image | — | `krea2SATDirtyRealism_uncut_fp8` (el checkpoint **es** el look, sin LoRA) | euler/simple · 8 · 1 · denoise 1 | 9:16 @ 1.0 MP | ✅ |
+| `dirty_edit` | Dirty Realism Edit | image | ✔ | `krea2SATDirtyRealism_uncut_fp8` + LoRA `krea2_identity_edit_v1_2` **1.0** | euler/simple · 8 · 1 | 9:16 @ 1.0 MP | ✅ |
 | `qwen21_t2i` | Qwen 2.1 | image | — | `qwen_image_2.1_int8_convrot` | euler/simple · 25 · 1 | 2:3 @ 2.0 MP | ✅ |
 | `donut_face` | Donut Face | image | — | `krea2_turbo_fp8_scaled` | — | 9:16 @ 1 MP | ❌ roto |
 | `wan_i2v` | Wan I2V | video | ✔ | `wan2.2_ti2v_5B_fp16` | uni_pc/simple · 20 · 5 | — | ❌ roto |
@@ -200,6 +200,24 @@ Excepciones: `qwen21_t2i` usa los `_int8_convrot` + `qwen_image_2.1_vae_bf16`; `
 usa `qwen_2.5_vl_7b_fp8_scaled`; `agil_edit_nsfw` usa un **checkpoint todo-en-uno** sin encoder
 ni VAE sueltos; `wan_i2v` usa `umt5_xxl` (faltante).
 
+### `agil_edit_qwen` — Ágil Edit (embed, `b54a103`)
+
+No está en Vast: el resolver cae al template embebido
+`src/grokbot/providers/comfyui/workflows/templates/agil_edit_qwen.json` (commit `b54a103`).
+
+- UNET sigue `qwen-image-edit-2511-Q4_K_M.gguf`.
+- LoRA Lightning: el nodo se conserva, `strength_model` **0**.
+- KSampler: steps **20**, cfg **4.0**, euler, simple, denoise **1.0**.
+- `CFGNorm` nodo 16, strength **1**, después de la LoRA.
+- `ModelSamplingAuraFlow` shift **3.1**.
+
+### `grok_style` — Grok Style (solo en el box)
+
+Graph en `/workspace/ComfyUI/user/default/api_workflows/grok_style.json`. **No está en git.**
+
+- LoRA `grokstyle_krea2_v2`: `strength_model` **0.6** y `strength_clip` **0.6**.
+- VAE `qwen_image_vae.safetensors` (antes `Wan2_1_VAE_fp32`).
+
 ### `grok_edit` — particularidades (medidas en vivo el 2026-10-03)
 
 Es el único flujo que **edita sobre Krea 2**, y tiene dos diferencias que importan:
@@ -208,7 +226,9 @@ Es el único flujo que **edita sobre Krea 2**, y tiene dos diferencias que impor
    (input `prompt`), no a un `CLIPTextEncode`: el text encoder *ve* la imagen mientras lee la
    instrucción. Escribir "mujer en una playa" en vez de "cambia el fondo a una playa al
    atardecer" no da el resultado esperado. Las instrucciones conviene darlas en inglés.
-2. **Necesita DOS LoRAs apiladas**, y esto se verificó empíricamente:
+2. **Necesita DOS LoRAs apiladas**, y esto se verificó empíricamente.
+   En vivo (`grok_edit.json`): la de estilo va a `strength_model` **0.6**; la de identidad
+   sigue en **1.0**; el VAE ya es `qwen_image_vae`.
    - `krea2/krea2_identity_edit_v1_2.safetensors` — es la que **habilita editar**. Sin ella el
      modelo ignora la instrucción y además produce artefactos.
    - `grokstyle_krea2_v2.safetensors` — aporta el look Grok Style.
@@ -227,6 +247,9 @@ Costo: ~12–16 s con los modelos en caché, ~40 s en frío. Turbo, 10 pasos, CF
 
 ### `dirty_realism` / `dirty_edit` — el checkpoint Dirty (medido 2026-10-03)
 
+- **En vivo**: `dirty_realism.json` — KSampler steps **8** (antes 20), cfg **1**, euler, simple,
+  denoise **1**. Checkpoint sigue `krea2SATDirtyRealism_uncut_fp8`. `dirty_edit.json` — steps
+  **8** (antes 10); LoRA de identidad sigue en **1.0**.
 - **Origen**: Civitai **2796522** / modelVersion **3372523** ("Krea2-SAT-DirtyUncut", autor
   Sateluco), fp8 de 12.24 GB. **La descarga exige token de Civitai** (401 sin él); la metadata
   de la API es pública y no lo necesita.
