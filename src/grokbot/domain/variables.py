@@ -148,10 +148,11 @@ def combo_label(values: Mapping[str, str]) -> str:
 
 
 # --- Batch constants (D11, item 4). ---
-# Transcribed from grok bot.py:77 / variables_store.py (parity ranges 340-353,
-# 374-417). Range/derangement limits used by the batch strategies live here so
-# the application layer never redefines them.
-VARIABLES_MAX = 10
+# Transcribed from grok variables_store.py (parity ranges 340-353, 374-417).
+# Derangement/batch limits used by the batch strategies live here so the
+# application layer never redefines them. The number of generations per batch
+# (``/variables N`` / ``/var N``) has no upper bound (grok's VARIABLES_MAX = 10
+# cap was removed on purpose).
 MAX_COMBO_ATTEMPTS = 30
 MULTIPOSE_BATCH_SIZE = 5
 

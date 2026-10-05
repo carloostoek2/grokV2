@@ -19,7 +19,6 @@ from conftest import (
     message_update,
     text_message,
 )
-from grokbot.domain.variables import VARIABLES_MAX
 from grokbot.telegram.handlers._common import (
     SOURCE_MEDIA_UNAVAILABLE_MSG,
     parse_var_count_and_text,
@@ -52,13 +51,17 @@ def _use_seedream(deps) -> None:
 def test_parse_variables_count():
     assert parse_variables_count("/variables") == 1
     assert parse_variables_count("/variables 5") == 5
-    assert parse_variables_count("/variables 99") == VARIABLES_MAX
+    assert parse_variables_count("/variables 12") == 12
+    assert parse_variables_count("/variables 99") == 99
+    assert parse_variables_count("/variables 0") is None
     assert parse_variables_count("/variables abc") is None
 
 
 def test_parse_var_count_and_text():
     assert parse_var_count_and_text("/var de pie") == (1, "de pie")
     assert parse_var_count_and_text("/var 3 de pie") == (3, "de pie")
+    assert parse_var_count_and_text("/var 25 de pie") == (25, "de pie")
+    assert parse_var_count_and_text("/var 0 de pie") == (1, "0 de pie")
     assert parse_var_count_and_text("/var") == (1, None)
     assert parse_var_prompt("/var una foto cualquiera") == "una foto cualquiera"
 
@@ -73,6 +76,24 @@ async def test_variables_bare_text_generates_random():
     texts = _texts(deps)
     assert any(t.startswith("🎲 <b>Variables</b>: generando 0/1 imágenes con Seedream 5.0...") for t in texts)
     assert deps.gateway.calls_by_method("send_photo")
+
+
+async def test_variables_more_than_ten_generates_all():
+    """Sin tope por tirada: /variables 12 genera y envía las 12 imágenes (antes se recortaba a 10)."""
+    deps = make_deps()
+    _use_seedream(deps)
+    deps = await _msg(deps, text_message("/variables 12"))
+    texts = _texts(deps)
+    assert any(t.startswith("🎲 <b>Variables</b>: generando 0/12 imágenes con Seedream 5.0...") for t in texts)
+    assert len(deps.gateway.calls_by_method("send_photo")) == 12
+
+
+async def test_var_more_than_ten_generates_all():
+    """Sin tope por tirada: /var 25 texto genera 25 imágenes (antes el 25 caía al prompt)."""
+    deps = make_deps()
+    _use_seedream(deps)
+    deps = await _msg(deps, text_message("/var 25 de pie"))
+    assert len(deps.gateway.calls_by_method("send_photo")) == 25
 
 
 async def test_variables_non_numeric_shows_help():

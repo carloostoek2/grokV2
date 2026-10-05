@@ -105,6 +105,30 @@ async def test_random_success_event_order_and_unique_combos(sessions, variables_
     assert jm.active_count(USER_ID) == 0
 
 
+# --- random: sin tope de generaciones por tirada ------------------------------
+
+async def test_random_batch_accepts_more_than_ten(sessions, variables_repo, fast_sleep):
+    """Una tirada con N>10 genera N jobs (antes VARIABLES_MAX=10 truncaba)."""
+    outcomes = [_ok_result(i) for i in range(1, 13)]
+    prov = FakeImageProvider(name="kie", outcomes=outcomes)
+    reg = make_registry(kie=prov)
+    uc, jm = _uc(sessions, reg, variables_repo)
+
+    events = await _collect(
+        uc, user_id=USER_ID, count=12, strategy=RandomComboStrategy(variables_repo)
+    )
+
+    started = events[0]
+    assert isinstance(started, BatchStarted)
+    assert started.total == 12
+    results = [ev for ev in events if isinstance(ev, ItemResult)]
+    assert len(results) == 12
+    summary = events[-1]
+    assert isinstance(summary, BatchSummary)
+    assert (summary.completed, summary.failed, summary.total) == (12, 0, 12)
+    assert jm.active_count(USER_ID) == 0
+
+
 # --- random: skip-on-fail (un ítem falla y el siguiente corre) ----------------
 
 async def test_random_partial_skip_on_fail(sessions, variables_repo, fast_sleep):
