@@ -110,7 +110,7 @@ def is_variables_command(text: str | None) -> bool:
 
 
 def parse_variables_count(text: str | None) -> int | None:
-    """Parse '/variables N' → N clamp [1, VARIABLES_MAX]; bare → 1; inválido → None."""
+    """Parse '/variables N' → N (≥ 1, sin tope); bare → 1; inválido → None."""
     if not text:
         return None
     m = _VARIABLES_RE.match(text.strip())
@@ -121,9 +121,7 @@ def parse_variables_count(text: str | None) -> int | None:
     n = int(m.group(1))
     if n < 1:
         return None
-    from grokbot.domain.variables import VARIABLES_MAX
-
-    return min(n, VARIABLES_MAX)
+    return n
 
 
 def is_var_command(text: str | None) -> bool:
@@ -149,12 +147,10 @@ def parse_var_count_and_text(text: str | None) -> tuple[int, str | None]:
     prompt = parse_var_prompt(text)
     if prompt is None:
         return 1, None
-    from grokbot.domain.variables import VARIABLES_MAX
-
     parts = prompt.split(maxsplit=1)
     if len(parts) == 2 and parts[0].isdigit():
         n = int(parts[0])
-        if 1 <= n <= VARIABLES_MAX:
+        if n >= 1:
             return n, parts[1].strip()
     return 1, prompt
 

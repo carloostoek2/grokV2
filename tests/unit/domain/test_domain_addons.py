@@ -23,7 +23,6 @@ from grokbot.domain.user_config import (
 from grokbot.domain.variables import (
     MAX_COMBO_ATTEMPTS,
     MULTIPOSE_BATCH_SIZE,
-    VARIABLES_MAX,
     PromptTemplate,
     build_shuffled_prompt,
     combo_key,
@@ -125,9 +124,17 @@ def test_kie_aspect_ratio_fallback_valid_aspect_returns_none():
 # --- D11: batch constants + derangement ------------------------------------
 
 def test_batch_constants():
-    assert VARIABLES_MAX == 10
     assert MAX_COMBO_ATTEMPTS == 30
     assert MULTIPOSE_BATCH_SIZE == 5
+
+
+def test_variables_batch_has_no_count_cap():
+    """El tope de 10 generaciones por tirada (VARIABLES_MAX) se quitó a propósito."""
+    import grokbot.domain as domain
+    import grokbot.domain.variables as variables
+
+    assert not hasattr(variables, "VARIABLES_MAX")
+    assert "VARIABLES_MAX" not in domain.__all__
 
 
 def test_build_shuffled_prompt_derangement_two_fields():
