@@ -9,7 +9,7 @@ from grokbot.repositories.base import IntegrateRefsRepository, SessionRepository
 
 REQUIRES_XAI_MSG = (
     "La edición con referencia (/s) requiere el proveedor "
-    "<b>xAI (oficial)</b>. Cambialo en /config."
+    "<b>xAI (oficial)</b>. Cámbialo en /config."
 )
 NO_REFERENCE_MSG = (
     "No hay imagen de referencia configurada. "

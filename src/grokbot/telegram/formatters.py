@@ -4,7 +4,7 @@ Funciones/labels sin negocio: formateo de captions, mensajes de status,
 resúmenes y pantallas de config/listas. Los strings de alto valor se
 transcriben byte a byte de grok bot.py / config_flow.py / variables_flow.py
 (los rangos citados en PLAN.md) — NO se "corrigen" tildes ni typos originales
-("Enviame", "Tambien", ...).
+("Tambien", ...).
 
 Nunca formatean prompts/payloads pagos fuera de la pantalla correspondiente
 (R6/R8); ``escape`` se usa antes de interpolar prompts en HTML.

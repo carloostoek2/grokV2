@@ -64,7 +64,7 @@ _TEXT_WITH_SOURCE = (
 )
 _TEXT_NO_SOURCE = (
     "Primero configura tu cara fuente con /cambiar_source.\n"
-    "Luego enviame fotos para intercambiar las caras."
+    "Luego envíame fotos para intercambiar las caras."
 )
 _REPLY_NOT_USED = (
     "En modo Face Swap no se usa reply con texto.\n"

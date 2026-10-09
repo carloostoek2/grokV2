@@ -113,7 +113,7 @@ async def test_text_guidance_without_source():
     last = deps.gateway.calls_by_method("send_message")[-1]
     assert last["text"] == (
         "Primero configura tu cara fuente con /cambiar_source.\n"
-        "Luego enviame fotos para intercambiar las caras."
+        "Luego envíame fotos para intercambiar las caras."
     )
 
 
