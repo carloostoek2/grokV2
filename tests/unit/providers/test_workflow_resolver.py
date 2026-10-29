@@ -378,7 +378,7 @@ def test_get_flow_agil_edit_qwen_supports_source():
     assert flow.id == "agil_edit_qwen"
     assert flow.supports_source is True
     assert flow.requires_source is True
-    assert flow.source_node == "1"
+    assert flow.source_node == "78"
     assert flow.positive_input == "prompt"
 
 
