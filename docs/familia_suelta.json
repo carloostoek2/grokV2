@@ -1,0 +1,39 @@
+{
+  "label": "Mirror / Selfie",
+  "description": "Autofotos y fotos frente al espejo.",
+  "pools": {
+    "locations": [
+      "bathroom mirror",
+      "bedroom",
+      "apartment hallway"
+    ],
+    "camera": [
+      "mirror selfie photograph",
+      "front-facing smartphone camera"
+    ],
+    "framing": [
+      "mirror full-body photograph",
+      "three-quarter body shot"
+    ],
+    "poses": [
+      "standing naturally with relaxed posture",
+      "standing with one leg slightly bent"
+    ],
+    "actions": [
+      "looking naturally toward the camera",
+      "adjusting her hair",
+      "checking her phone",
+      "smiling naturally"
+    ],
+    "angles": [
+      "front-facing view",
+      "three-quarter view from the left",
+      "slightly high angle"
+    ]
+  },
+  "avoid": {
+    "actions": [
+      "walking casually"
+    ]
+  }
+}

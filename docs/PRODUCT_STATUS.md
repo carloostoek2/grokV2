@@ -117,8 +117,9 @@ por la calle). Modelo (`domain/families.py`):
   un paquete **sin** `families` se conservan las definiciones existentes y solo se
   limpia la familia activa (cambiar de paquete no destruye familias hechas a mano).
 - Retrocompatible: documentos y paquetes sin `families` siguen funcionando igual.
-- Esqueleto de JSON: `docs/familias_variables.esqueleto.json` — forma de una
-  familia suelta y de un paquete con **varias familias** en el mismo `families`.
+- Esqueletos listos para pegar: `docs/familia_suelta.json` (flujo
+  `/listas` → Familias) y `docs/paquete_con_familias.json` (flujo
+  `/listas` → Paquetes; incluye **varias familias** en el mismo `families`).
 - El pre-check del batch ahora solo mira los campos **referenciados** por la plantilla
   (una lista vacía no usada ya no aborta). Si un campo queda sin valores permitidos
   bajo la familia, el batch degrada con `EmptyList` antes de registrar el job.
