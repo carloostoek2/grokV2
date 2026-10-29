@@ -5,7 +5,7 @@
 > HEAD verificado: `622ee5e` + fix Replicate i2i — suite completa **682 passed** · baseline `grok/**` intacto.
 > Wave de hardening R8/R9/R10 + smoke live + deploy (2026-09-04) cerrados (detalle §3/§5) y
 > **wave-2/R4 cerrada 2026-09-05**: los **9 flujos** que degradaban D8 ya NO degradan —
-> operan con copy byte-parity de grok (§2/§3). `D8_COMMANDS == ()`. **Deploy: grokV2 corre
+> operan con backing completo (§2/§3). `D8_COMMANDS == ()`. **Deploy: grokV2 corre
 > permanente** como `grok-bot.service`, administrado por el shell `grokbot` (detalle §3/§4.2).
 > **Slice ComfyUI HTTP/WS (2026-09-05)**: `aa65651`→`e5ead0e` — el provider ComfyUI conduce
 > la API nativa (REST+WS) vía túnel SSH; **refine 2-stage fuera del alcance (dormido)**.
@@ -40,9 +40,10 @@ READ-ONLY; su baseline pre-existente se mantuvo intacto en todo momento.
 
 ### Características clave
 
-- **Comandos funcionales**: `/start`, `/config` (FSM), `/listas` (CRUD paquetes/plantillas y
-  creación pegando JSON), `/estado` (tarjeta de configuración), `/variables` + `/var`
-  (batch random + prompt fijo, multipose, shuffle/blacklist, skip-on-fail, cancel),
+- **Comandos funcionales**: `/start`, `/config` (FSM), `/listas` (CRUD paquetes/plantillas,
+  creación pegando JSON y **familias de coherencia**), `/estado` (tarjeta de configuración),
+  `/variables` + `/var` (batch random + prompt fijo, **`/variables N familia`**,
+  multipose, shuffle/blacklist, skip-on-fail, cancel),
   generación de imagen (xai/replicate), video (kie/comfyui), comfyui (imagen por API
   HTTP/WS vía túnel SSH — por **flujos**: **Grok Style**, **Donut Face**, **Ágil solo** y
   **Ágil NSFW**; refine 2-stage
@@ -53,7 +54,7 @@ READ-ONLY; su baseline pre-existente se mantuvo intacto en todo momento.
 - **Perímetro (R9, bot single-owner)**: SOLO chat privado (gate global en message y callback);
   sin límites de uso por decisión (sin tope de procesos activos ni cuota horaria); con la
   allowlist vacía el boot avisa y el bot queda abierto a quien te escriba en privado.
-- **Calidad**: **659 tests passed**, política **0-red / 0-mock** — el bot se prueba 100%
+- **Calidad**: **828 tests passed**, política **0-red / 0-mock** — el bot se prueba 100%
   offline contra `FakeTelegramGateway` grabador; el review de cierre del pool rearch (3
   reviewers: general + security + plan) fue íntegramente offline y terminó en **0 issues
   (Round 3)**; cada ítem de la wave-2/R4 cerró su review-loop en **0 issues** tras fix
@@ -67,7 +68,9 @@ READ-ONLY; su baseline pre-existente se mantuvo intacto en todo momento.
 
 ### Flujos operativos (no degradados)
 
-Operan con backing completo y copy byte-parity de grok (0-red/0-mock). Los flujos con
+Operan con backing completo (0-red/0-mock). La paridad byte a byte con grok fue una
+condición del desarrollo por capas y se retiró: el copy de usuario puede evolucionar.
+Los flujos con
 marca **[R4]** son exactamente los que en la wave rearch degradaban **D8** (respondían
 "no disponible" user-safe) y que la **wave-2/R4** resolvió (2026-09-05,
 `fa2d1e0`→`841df64`, suite **653 passed**):
@@ -96,6 +99,31 @@ marca **[R4]** son exactamente los que en la wave rearch degradaban **D8** (resp
 Backing completo de capa `application` para los flujos R4 (use cases `faceswap` /
 `integrate_refs`, repos binarios atómicos, seams de providers `swap_face` /
 `edit_with_reference`).
+
+### Familias de variables — coherencia entre campos (2026-10-28)
+
+Una **familia** agrupa los valores que tienen sentido juntos para que el batch no
+combine opciones incoherentes (p. ej. un selfie frente al espejo no sale caminando
+por la calle). Modelo (`domain/families.py`):
+
+- `pools`: por campo, la lista de valores **permitidos** (restricción dura, no un
+  sesgo). Si un campo no declara pool, usa la lista completa.
+- `avoid`: valores **vetados** por campo, aplicados aunque haya pool.
+- La familia **activa** se guarda en el documento (`_family`) y se usa por defecto en
+  `/variables N`; `/variables N familia` la sobrescribe puntualmente.
+- Gestión en `/listas` → **Familias**: listar, ver, activar/desactivar, eliminar y
+  crear/reemplazar pegando JSON (`fam_name` → `fam_json`). Los paquetes aceptan
+  `families` (y `family` activa) y los validan contra sus propias listas. Al activar
+  un paquete **sin** `families` se conservan las definiciones existentes y solo se
+  limpia la familia activa (cambiar de paquete no destruye familias hechas a mano).
+- Retrocompatible: documentos y paquetes sin `families` siguen funcionando igual.
+- Esqueleto de JSON: `docs/familias_variables.esqueleto.json` — forma de una
+  familia suelta y de un paquete con **varias familias** en el mismo `families`.
+- El pre-check del batch ahora solo mira los campos **referenciados** por la plantilla
+  (una lista vacía no usada ya no aborta). Si un campo queda sin valores permitidos
+  bajo la familia, el batch degrada con `EmptyList` antes de registrar el job.
+- Switch visual por campo (aleatorio/fijo/anulado): **pendiente** para una iteración
+  posterior; hoy se consigue quitando/poniendo placeholders en la plantilla.
 
 ### Integración ComfyUI por API HTTP/WS — slice 2026-09-05 (`aa65651`→`e5ead0e`)
 
@@ -148,8 +176,10 @@ local-forward** (`transport.py` → `client.py` → plantillas API-format en
   edición usado sin foto corría con el **placeholder horneado** (`example.png`, presente en el
   `input/` del box) y devolvía un resultado incorrecto **en silencio** — afectaba a los 4 flujos
   con `supports_source`. Es independiente de `supports_source`, que solo dice "admite".
-  **Ojo**: el `_meta` que se usa en runtime vive en el `api_workflows/` del box; cambiarlo exige
-  **desplegarlo**, no basta con el template del repo.
+  **Ojo**: con `COMFYUI_WORKFLOW_SOURCE=remote` el `_meta` de runtime vive en el
+  `api_workflows/` del box y cambiarlo exige **desplegarlo**. En el deploy actual
+  (`source=embed`, Colab) la fuente es `workflows/templates/` del repo; el aviso aplica
+  al modo remoto histórico.
 - **Dirty Realism (`dirty_realism` + `dirty_edit`, 2026-10-03)**: el finetune
   **Krea2-SAT-DirtyRealism "DirtyUncut"** (Civitai 2796522 / version 3372523, autor Sateluco) —
   realismo fotográfico crudo, sin pulir, sin censura. Es un **checkpoint, no una LoRA**:
@@ -161,11 +191,26 @@ local-forward** (`transport.py` → `client.py` → plantillas API-format en
   diferencia del modelo *Raw* que menciona krea2edit), y **la LoRA de identidad transfiere al
   finetune** (la instrucción se cumple). 12 s txt2img / 16 s edición; la variante CFG 3 + 20
   pasos da algo más de detalle a ~3× el tiempo. **La descarga exige token de Civitai.**
-- **Alcance actual**: **12 flujos** — 11 de imagen (Grok Style, Grok Style Edit, Dirty Realism,
-  Dirty Realism Edit, Donut Face, Ágil solo, Ágil NSFW, Ágil Moody, Ágil Edit, Ágil Edit NSFW,
-  Qwen 2.1) y 1 de video (Wan I2V). Salud real de cada uno y pesos que faltan:
-  `docs/comfyui/INVENTARIO_BOX_VAST.md` (a 2026-10-03: 10 ejecutables; `donut_face` bloqueado por
-  nodos de un pack privado y `wan_i2v` por 3 pesos).
+- **Bloque HQ + migración a Colab (2026-10-24/25)**: el menú activo suma **7 flujos
+  `*_hq`** (Grok Style, Ágil Solo, Ágil NSFW, Ágil Moody, Dirty Realism, Dirty Edit,
+  Grok Edit) en **bf16** (Krea/Moody) o **fp8** (Dirty) y 1.5-2.0 MP, pensados para la
+  **A100-SXM4-80GB de Colab**
+  (runtime actual; ver `docs/comfyui/INVENTARIO_BOX_COLAB.md`). Ajuste **candid**
+  (foto de teléfono, sin piel pulida): Dirty HQ 10 pasos/cfg 1.0 (negativo inerte a
+  cfg 1.0); Grok Style HQ LoRA 0.5/refine 0.25/1.2 MP; Grok Edit HQ 10 pasos/LoRA 0.5;
+  Ágil HQ 8 pasos; NSFW HQ LoRA 0.8. **Salud en Colab** (smoke 2026-10-25, 7/7): `grok_style_hq` 33.7 s,
+  `agil_solo_hq` 12.5 s, `agil_nsfw_hq` 12.4 s, `agil_moody_hq` 29.8 s,
+  `dirty_realism_hq` 19.8 s (B; A 23.5 s), `grok_edit_hq` 30.1 s
+  (54.7 s en frío) y `dirty_edit_hq` 52.9 s (67.3 s en frío). El checkpoint Dirty
+  (13.14 GB) y la LoRA de identidad (1.83 GB) se instalaron en la VM el 2026-10-25.
+  A/B 2026-10-25 (seed 77777): se adopta B en ambos (Dirty 10/cfg 1.0; Grok refine
+  0.25) por una textura un poco más suave; A queda como referencia.
+  El bot usa `COMFYUI_WORKFLOW_SOURCE=embed`, así que los
+  cambios de template aplican sin desplegar al box.
+- **Alcance actual**: **26 flujos registrados** en `COMFYUI_FLOWS` y **16 visibles** en el
+  `/config` (9 base + 7 `*_hq`); el resto son legacy/ocultos
+  (`COMFYUI_MENU_HIDDEN_FLOWS`). Salud real de cada flujo y pesos instalados:
+  `docs/comfyui/INVENTARIO_BOX_COLAB.md`; el inventario Vast queda como histórico.
 
 ### Flujos degradados D8 — ninguno (wave-2/R4 resuelta 2026-09-05)
 

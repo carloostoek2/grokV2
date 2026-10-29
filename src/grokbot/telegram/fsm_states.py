@@ -28,6 +28,8 @@ class VarStates(StatesGroup):
     template = State()
     pack_name = State()
     pack_json = State()
+    fam_name = State()
+    fam_json = State()
 
 
 # Entradas de texto del panel /listas (add/edit/template/paquete). Mientras el
@@ -40,6 +42,8 @@ VAR_TEXT_ENTRY_STATES: frozenset[str] = frozenset(
         VarStates.template.state,
         VarStates.pack_name.state,
         VarStates.pack_json.state,
+        VarStates.fam_name.state,
+        VarStates.fam_json.state,
     }
 )
 

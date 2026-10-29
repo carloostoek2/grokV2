@@ -90,16 +90,24 @@ def _pluralized(count: int) -> str:
     return "s" if count != 1 else "n"
 
 
-def _menu_text(lists: dict[str, list[str]], template: str) -> str:
+def _menu_text(
+    lists: dict[str, list[str]],
+    template: str,
+    families: dict[str, Family] | None = None,
+    active_family: str | None = None,
+) -> str:
     lines = [
         "<b>🎛 Listas de variables</b>\n",
-        "Se usan en <b>/variables N</b> para editar imágenes combinando "
-        "una opción aleatoria de cada lista.\n",
+        "Se usan en <b>/variables N [familia]</b> para editar imágenes "
+        "combinando una opción aleatoria de cada lista.\n",
     ]
     for name, items in lists.items():
         count = len(items)
         label = LIST_LABELS.get(name, name)
         lines.append(f"• <b>{label}</b>: {count} opcione{_pluralized(count)}")
+    families = families or {}
+    active = _esc(active_family) if active_family else "ninguna"
+    lines.append(f"\n👪 <b>Familias:</b> {len(families)} · activa: <b>{active}</b>")
     lines.append(f"\n<b>Plantilla:</b> <code>{_esc(_truncate(template, 80))}</code>")
     lines.append(
         "\n<i>Placeholders: {pose}, {angle}, {action}.</i> "
@@ -147,6 +155,16 @@ def _package_view_text(payload: dict) -> str:
             f"• <b>{label}</b> (<code>{_esc(str(field))}</code>): "
             f"{count} opcione{_pluralized(count)}"
         )
+    families = payload.get("families") or {}
+    if families:
+        active = payload.get("family")
+        lines.append("\n<b>Familias:</b>")
+        for family_id, entry in families.items():
+            label = entry.get("label") if isinstance(entry, dict) else family_id
+            mark = " ✅" if family_id == active else ""
+            lines.append(
+                f"• <b>{_esc(str(label))}</b> (<code>{_esc(str(family_id))}</code>){mark}"
+            )
     lines.append(f"\n<b>Plantilla:</b> <code>{_esc(_truncate(template, 200))}</code>")
     return "\n".join(lines)
 
@@ -245,17 +263,20 @@ async def _set_panel(state: FSMContext, message: types.Message) -> None:
     await state.update_data(
         vars_message_id=message.message_id,
         vars_chat_id=message.chat.id,
+        fam_id=None,
     )
 
 
 async def _show_menu(target: types.Message, state: FSMContext, deps: BotDeps) -> None:
     lists = deps.variables.get_lists()
     template = deps.variables.get_template()
+    families = deps.manage_lists.list_families()
+    active = deps.manage_lists.active_family_name()
     await _set_panel(state, target)
     ui = ChatUI.for_message(deps.gateway, target)
     await ui.edit_text(
         target.message_id,
-        _menu_text(lists, template),
+        _menu_text(lists, template, families, active),
         reply_markup=variables_menu_keyboard(lists, LIST_LABELS),
     )
 
@@ -310,6 +331,7 @@ async def _show_new_panel(message: types.Message, state: FSMContext, deps: BotDe
     await state.update_data(
         vars_message_id=new_msg.message_id,
         vars_chat_id=new_msg.chat_id,
+        fam_id=None,
     )
     if old_chat_id and old_message_id:
         try:
@@ -329,10 +351,12 @@ async def cmd_listas(message: types.Message, state: FSMContext, deps: BotDeps) -
     await state.clear()
     lists = deps.variables.get_lists()
     template = deps.variables.get_template()
+    families = deps.manage_lists.list_families()
+    active = deps.manage_lists.active_family_name()
     await state.set_state(VarStates.menu)
     ui = ChatUI.for_message(deps.gateway, message)
     sent = await ui.send_text(
-        _menu_text(lists, template),
+        _menu_text(lists, template, families, active),
         reply_markup=variables_menu_keyboard(lists, LIST_LABELS),
     )
     await state.update_data(vars_message_id=sent.message_id, vars_chat_id=sent.chat_id)
@@ -665,9 +689,11 @@ async def handle_template_text(message: types.Message, state: FSMContext, deps: 
         return
     lists = deps.variables.get_lists()
     template = deps.variables.get_template()
+    families = deps.manage_lists.list_families()
+    active = deps.manage_lists.active_family_name()
     await _show_new_panel(
         message, state, deps,
-        _menu_text(lists, template),
+        _menu_text(lists, template, families, active),
         variables_menu_keyboard(lists, LIST_LABELS),
     )
 
@@ -831,14 +857,16 @@ async def handle_pack_json_text(message: types.Message, state: FSMContext, deps:
     ok, err = deps.variables.save_package(name, payload)
     if not ok:
         ui = ChatUI.for_message(deps.gateway, message)
-        await ui.send_text(f"No se pudo guardar el paquete: {err}")
+        await ui.send_text(f"No se pudo guardar el paquete: {_esc(str(err))}")
         return
     deps.variables.activate_package(name)  # el repo slugifica internamente (A1)
     lists = deps.variables.get_lists()
     template = deps.variables.get_template()
+    families = deps.manage_lists.list_families()
+    active = deps.manage_lists.active_family_name()
     await _show_new_panel(
         message, state, deps,
-        _menu_text(lists, template),
+        _menu_text(lists, template, families, active),
         variables_menu_keyboard(lists, LIST_LABELS),
     )
     ui = ChatUI.for_message(deps.gateway, message)

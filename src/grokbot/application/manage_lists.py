@@ -8,6 +8,12 @@ no-editable sin tocar el repo — nunca KeyError ni contaminación del archivo.
 
 from __future__ import annotations
 
+from grokbot.domain.families import (
+    Family,
+    family_payload_error,
+    normalize_family,
+    validate_family,
+)
 from grokbot.repositories.base import VariablesRepository
 
 _ITEM_TOO_SHORT_MSG = "El texto es demasiado corto (mínimo 2 caracteres)."
@@ -83,6 +89,58 @@ class ManageListsUseCase:
 
     def blacklist_clear(self) -> None:
         return self._variables.blacklist_clear()
+
+    # -- familias -----------------------------------------------------------
+
+    def list_families(self) -> dict[str, Family]:
+        """Familias definidas en el archivo activo, por id."""
+        return self._variables.get_families()
+
+    def get_family(self, family_id: str) -> Family | None:
+        return self._variables.get_family(family_id)
+
+    def active_family_name(self) -> str | None:
+        return self._variables.active_family_name()
+
+    def active_family(self) -> Family | None:
+        """Familia activa resuelta, o None si no hay o ya no existe."""
+        family_id = self._variables.active_family_name()
+        return self._variables.get_family(family_id) if family_id else None
+
+    def save_family(self, family_id: str, payload: dict) -> tuple[bool, str | None]:
+        """Create/replace a family, validating its shape and active-list values."""
+        shape_err = family_payload_error(payload)
+        if shape_err:
+            return False, shape_err
+        family = normalize_family(family_id, payload)
+        if family is None:
+            return False, "Los datos de la familia no son válidos."
+        err = validate_family(family, self._variables.get_lists())
+        if err:
+            return False, err
+        if not self._variables.save_family(family):
+            return False, "No se pudo guardar la familia."
+        return True, None
+
+    def delete_family(self, family_id: str) -> bool:
+        return self._variables.delete_family(family_id)
+
+    def activate_family(self, family_id: str | None) -> tuple[bool, str | None]:
+        """Activate a family, re-validating it against the current lists.
+
+        A family kept across a package switch may reference fields/values the
+        new dataset does not have; activating it silently would ignore the
+        restriction, so it fails closed with Spanish copy.
+        """
+        if family_id is None:
+            return self._variables.set_active_family(None), None
+        family = self._variables.get_family(family_id)
+        if family is None:
+            return False, "La familia ya no existe."
+        err = validate_family(family, self._variables.get_lists())
+        if err:
+            return False, f"La familia no encaja con las listas activas: {err}"
+        return self._variables.set_active_family(family_id), None
 
     # -- paquetes (delegan al repo) ----------------------------------------
 

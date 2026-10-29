@@ -16,10 +16,19 @@ import re
 import threading
 from pathlib import Path
 
+from grokbot.domain.families import (
+    Family,
+    family_payload_error,
+    family_to_record,
+    normalize_family,
+    validate_family,
+)
 from grokbot.domain.variables import DEFAULT_TEMPLATE, LIST_NAMES, normalize_items
 from grokbot.repositories.base import write_json_atomic
 
 _ACTIVE_PACKAGE_KEY = "_package"
+_FAMILIES_KEY = "families"
+_ACTIVE_FAMILY_KEY = "_family"
 
 # Seed content for a brand-new/empty active file (transcribed verbatim from
 # grok variables_store.py:38-70 as seed data — NOT domain constants).
@@ -190,6 +199,62 @@ class JsonVariablesRepository:
             data["blacklist"] = []
             self._save(data)
 
+    # -- public API: families ----------------------------------------------
+
+    def get_families(self) -> dict[str, Family]:
+        """Every readable family stored in the active file, keyed by id."""
+        raw = self._data().get(_FAMILIES_KEY, {})
+        out: dict[str, Family] = {}
+        if isinstance(raw, dict):
+            for family_id, entry in raw.items():
+                family = normalize_family(str(family_id), entry)
+                if family is not None:
+                    out[family.id] = family
+        return out
+
+    def get_family(self, family_id: str) -> Family | None:
+        return self.get_families().get(family_id)
+
+    def save_family(self, family: Family) -> bool:
+        """Create or overwrite a family. Returns False for an empty id."""
+        if not isinstance(family, Family) or not family.id.strip():
+            return False
+        with self._lock:
+            data = self._load()
+            self._ensure_full(data)
+            data[_FAMILIES_KEY][family.id] = family_to_record(family)
+            self._save(data)
+        return True
+
+    def delete_family(self, family_id: str) -> bool:
+        """Delete a family. False when missing or when it is the active family."""
+        with self._lock:
+            data = self._load()
+            self._ensure_full(data)
+            families = data[_FAMILIES_KEY]
+            if family_id not in families:
+                return False
+            if data.get(_ACTIVE_FAMILY_KEY) == family_id:
+                return False
+            del families[family_id]
+            self._save(data)
+        return True
+
+    def active_family_name(self) -> str | None:
+        name = self._data().get(_ACTIVE_FAMILY_KEY)
+        return name if isinstance(name, str) and name else None
+
+    def set_active_family(self, family_id: str | None) -> bool:
+        """Persist the active family (``None`` clears it). False when unknown."""
+        with self._lock:
+            data = self._load()
+            self._ensure_full(data)
+            if family_id is not None and family_id not in data[_FAMILIES_KEY]:
+                return False
+            data[_ACTIVE_FAMILY_KEY] = family_id
+            self._save(data)
+        return True
+
     # -- public API: packages (D3/D7) --------------------------------------
 
     def list_packages(self) -> list[str]:
@@ -232,18 +297,33 @@ class JsonVariablesRepository:
         return name if isinstance(name, str) and name else None
 
     def activate_package(self, name: str) -> bool:
-        """Copy a package's content into the active file, clearing the blacklist."""
+        """Copy a package's content into the active file, clearing the blacklist.
+
+        Unknown top-level keys of the current document are preserved. Family
+        definitions are replaced only when the package carries a ``families``
+        key; otherwise they are kept (stale pools intersect away on draw and the
+        active pointer is cleared), so switching to a legacy package never
+        destroys hand-authored families.
+        """
         payload = self.load_package(name)
         if payload is None:
             return False
         slug = self._slugify(name)
         with self._lock:
-            data = {
-                "lists": payload["lists"],
-                "template": payload["template"],
-                "blacklist": [],
-                _ACTIVE_PACKAGE_KEY: slug,
-            }
+            data = dict(self._load())
+            data["lists"] = payload["lists"]
+            data["template"] = payload["template"]
+            data["blacklist"] = []
+            data[_ACTIVE_PACKAGE_KEY] = slug
+            if _FAMILIES_KEY in payload:
+                data[_FAMILIES_KEY] = payload[_FAMILIES_KEY] or {}
+            elif not isinstance(data.get(_FAMILIES_KEY), dict):
+                data[_FAMILIES_KEY] = {}
+            active = payload.get("family")
+            known = data[_FAMILIES_KEY]
+            data[_ACTIVE_FAMILY_KEY] = (
+                active if isinstance(active, str) and active in known else None
+            )
             self._save(data)
         return True
 
@@ -298,6 +378,9 @@ class JsonVariablesRepository:
         if not isinstance(data.get("blacklist"), list):
             data["blacklist"] = []
             changed = True
+        if not isinstance(data.get(_FAMILIES_KEY), dict):
+            data[_FAMILIES_KEY] = {}
+            changed = True
         return changed
 
     def _data(self) -> dict:
@@ -315,10 +398,11 @@ class JsonVariablesRepository:
         return slug
 
     def _normalize_package_payload(self, raw: object) -> tuple[dict | None, str | None]:
-        """Validate/normalize a raw payload into {"lists": {...}, "template": str}.
+        """Validate/normalize a raw payload into lists, template and families.
 
-        Accepts both the ``lists`` and the ``fields`` top-level key. Returns
-        (payload, None) or (None, error) mirroring grok 497-519.
+        Accepts both the ``lists`` and the ``fields`` top-level key, and an
+        optional ``families`` map validated against the package's own lists.
+        Returns (payload, None) or (None, error) mirroring grok 497-519.
         """
         if not isinstance(raw, dict):
             return None, "El paquete debe ser un objeto JSON."
@@ -338,4 +422,36 @@ class JsonVariablesRepository:
         template = raw.get("template")
         if not isinstance(template, str) or not template.strip():
             return None, "Falta 'template' (texto del prompt)."
-        return {"lists": lists, "template": template.strip()}, None
+        payload: dict = {"lists": lists, "template": template.strip()}
+        if _FAMILIES_KEY in raw:
+            families_raw = raw[_FAMILIES_KEY]
+            if not isinstance(families_raw, dict):
+                return None, "'families' debe ser un objeto {id: {...}}."
+            if families_raw:
+                families: dict[str, dict] = {}
+                for family_id, entry in families_raw.items():
+                    slug = self._slugify(str(family_id))[:40]
+                    if not slug:
+                        return None, f"El identificador de familia '{family_id}' no es válido."
+                    if slug in families:
+                        return None, (
+                            "Identificadores de familia duplicados tras normalizar: "
+                            f"'{slug}'."
+                        )
+                    shape_err = family_payload_error(entry)
+                    if shape_err:
+                        return None, f"Familia '{slug}': {shape_err}"
+                    family = normalize_family(slug, entry)
+                    if family is None:
+                        return None, f"La familia '{slug}' no es válida."
+                    err = validate_family(family, lists)
+                    if err:
+                        return None, f"Familia '{family.id}': {err}"
+                    families[family.id] = family_to_record(family)
+                payload[_FAMILIES_KEY] = families
+                active = raw.get("family", raw.get(_ACTIVE_FAMILY_KEY))
+                if isinstance(active, str):
+                    active_slug = self._slugify(active)[:40]
+                    if active_slug in families:
+                        payload["family"] = active_slug
+        return payload, None

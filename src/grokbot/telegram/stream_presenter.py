@@ -48,6 +48,7 @@ from grokbot.domain.generation import MediaType
 from grokbot.telegram.chat_ui import ChatUI
 from grokbot.telegram.formatters import (
     LIST_LABELS,
+    escape,
     format_failed_item_message,
     format_multipose_summary,
     format_variables_batch_summary,
@@ -64,9 +65,14 @@ if TYPE_CHECKING:
     from grokbot.domain.job import Job
     from grokbot.domain.user_config import UserConfig
 
-# Copy de lista vacía (grok 2168-2172 multipose / 2304-2308 variables).
-_EMPTY_LIST_MSG = "La lista de <b>{label}</b> está vacía.\nUsa <b>/listas</b> para añadir opciones antes de usar {target}."
-_EMPTY_DRAW_MSG = "No se pudo construir el prompt: alguna lista está vacía. Usa /listas."
+# Copy de campo sin valores: la lista puede estar vacía o la familia activa
+# puede haber vetado todos sus valores.
+_EMPTY_LIST_MSG = (
+    "La lista de <b>{label}</b> no tiene valores disponibles.\nUsa "
+    "<b>/listas</b> para añadir opciones o ajustar la familia antes de usar "
+    "{target}."
+)
+_EMPTY_DRAW_MSG = "No se pudo construir el prompt: no hay valores disponibles. Usa /listas."
 
 
 def _batch_title(style: str, total: int) -> str:
@@ -99,7 +105,7 @@ def _batch_item_prefix(style: str, total: int, index: int | None = None) -> str:
 def _empty_list_text(name: str, style: str) -> str:
     if not name:
         return _EMPTY_DRAW_MSG
-    label = LIST_LABELS.get(name, name)
+    label = escape(LIST_LABELS.get(name, name))
     target = "el modo Multi-pose" if style == "multipose" else "/variables"
     return _EMPTY_LIST_MSG.format(label=label, target=target)
 

@@ -1,0 +1,189 @@
+{
+  "_instrucciones": [
+    "Archivo de referencia: no se carga tal cual en el bot.",
+    "Familia suelta: copia SOLO el objeto de 'familia_suelta' y pégalo en /listas -> Familias -> Nueva familia.",
+    "Paquete con familias: copia SOLO el objeto de 'paquete_con_familias' y pégalo en /listas -> Paquetes -> Crear paquete.",
+    "En 'families' cada clave es el identificador (slug) de la familia; 'family' marca la que queda activa al activar el paquete.",
+    "Se pueden definir varias familias dentro del mismo paquete: una clave por familia.",
+    "'pools' es una restricción dura: el batch solo elige valores de esas listas.",
+    "'avoid' veta valores aunque no declares 'pools' para ese campo.",
+    "Los campos sin 'pools' usan la lista completa (menos los valores de 'avoid').",
+    "Todo valor de 'pools' y 'avoid' debe existir en la lista del mismo nombre del documento/paquete.",
+    "Un mismo valor no puede estar a la vez en 'pools' y 'avoid' del mismo campo."
+  ],
+
+  "familia_suelta": {
+    "label": "Mirror / Selfie",
+    "description": "Autofotos y fotos frente al espejo.",
+    "pools": {
+      "locations": [
+        "bathroom mirror",
+        "bedroom",
+        "apartment hallway"
+      ],
+      "camera": [
+        "mirror selfie photograph",
+        "front-facing smartphone camera"
+      ],
+      "framing": [
+        "mirror full-body photograph",
+        "three-quarter body shot"
+      ],
+      "poses": [
+        "standing naturally with relaxed posture",
+        "standing with one leg slightly bent"
+      ],
+      "actions": [
+        "looking naturally toward the camera",
+        "adjusting her hair",
+        "checking her phone",
+        "smiling naturally"
+      ],
+      "angles": [
+        "front-facing view",
+        "three-quarter view from the left",
+        "slightly high angle"
+      ]
+    },
+    "avoid": {
+      "actions": [
+        "walking casually"
+      ]
+    }
+  },
+
+  "paquete_con_familias": {
+    "lists": {
+      "poses": [
+        "standing naturally with relaxed posture",
+        "standing with one leg slightly bent",
+        "walking naturally",
+        "lying naturally on her side"
+      ],
+      "angles": [
+        "front-facing view",
+        "three-quarter view from the left",
+        "slightly high angle"
+      ],
+      "actions": [
+        "looking naturally toward the camera",
+        "adjusting her hair",
+        "checking her phone",
+        "smiling naturally",
+        "walking casually",
+        "looking at something nearby"
+      ],
+      "outfits": [
+        "plain white t-shirt and casual jeans",
+        "simple summer dress",
+        "casual oversized sweatshirt and leggings"
+      ],
+      "locations": [
+        "bathroom mirror",
+        "bedroom",
+        "apartment hallway",
+        "quiet residential street",
+        "urban sidewalk",
+        "park"
+      ],
+      "camera": [
+        "mirror selfie photograph",
+        "front-facing smartphone camera",
+        "casual street photograph",
+        "candid photograph"
+      ],
+      "framing": [
+        "mirror full-body photograph",
+        "three-quarter body shot",
+        "full-body shot",
+        "candid environmental photograph"
+      ],
+      "lighting": [
+        "soft natural window light",
+        "overcast outdoor daylight",
+        "neutral daylight"
+      ]
+    },
+    "template": "{pose}, {angle}, {action}, {outfit}, {location}, {camera}, {framing}, {lighting}",
+    "families": {
+      "mirror": {
+        "label": "Mirror / Selfie",
+        "description": "Autofotos y fotos frente al espejo.",
+        "pools": {
+          "locations": [
+            "bathroom mirror",
+            "bedroom",
+            "apartment hallway"
+          ],
+          "camera": [
+            "mirror selfie photograph",
+            "front-facing smartphone camera"
+          ],
+          "framing": [
+            "mirror full-body photograph",
+            "three-quarter body shot"
+          ],
+          "poses": [
+            "standing naturally with relaxed posture",
+            "standing with one leg slightly bent"
+          ],
+          "actions": [
+            "looking naturally toward the camera",
+            "adjusting her hair",
+            "checking her phone",
+            "smiling naturally"
+          ],
+          "angles": [
+            "front-facing view",
+            "three-quarter view from the left",
+            "slightly high angle"
+          ]
+        },
+        "avoid": {
+          "actions": [
+            "walking casually"
+          ]
+        }
+      },
+      "street_candid": {
+        "label": "Street Candid",
+        "description": "Fotografía casual en exteriores, sin apariencia editorial.",
+        "pools": {
+          "locations": [
+            "quiet residential street",
+            "urban sidewalk",
+            "park"
+          ],
+          "camera": [
+            "casual street photograph",
+            "candid photograph"
+          ],
+          "framing": [
+            "full-body shot",
+            "candid environmental photograph"
+          ],
+          "poses": [
+            "walking naturally",
+            "standing naturally with relaxed posture"
+          ],
+          "actions": [
+            "walking casually",
+            "looking at something nearby",
+            "checking her phone"
+          ],
+          "lighting": [
+            "overcast outdoor daylight",
+            "neutral daylight"
+          ]
+        },
+        "avoid": {
+          "locations": [
+            "bathroom mirror",
+            "bedroom"
+          ]
+        }
+      }
+    },
+    "family": "mirror"
+  }
+}

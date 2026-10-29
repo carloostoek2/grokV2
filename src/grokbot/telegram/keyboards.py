@@ -320,6 +320,9 @@ def variables_menu_keyboard(lists: dict[str, list[str]], labels: dict[str, str])
             )
         ])
     buttons.append([
+        InlineKeyboardButton(text="👪 Familias", callback_data="var:fam:list"),
+    ])
+    buttons.append([
         InlineKeyboardButton(text="✏️ Plantilla", callback_data="var:tmpl"),
         InlineKeyboardButton(text="📦 Paquetes", callback_data="var:packs"),
     ])
@@ -381,6 +384,37 @@ def packages_keyboard(packages: list[str]) -> InlineKeyboardMarkup:
     buttons.append([InlineKeyboardButton(text="➕ Crear paquete", callback_data="var:pack:new")])
     buttons.append([InlineKeyboardButton(text="← Menú", callback_data="var:pack:back")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def families_keyboard(families: dict[str, str]) -> InlineKeyboardMarkup:
+    """Pantalla de familias: una fila por familia (id → label) + crear/volver."""
+    buttons = [
+        [InlineKeyboardButton(text=f"👪 {label}", callback_data=f"var:fam:view:{family_id}")]
+        for family_id, label in families.items()
+    ]
+    buttons.append([InlineKeyboardButton(text="➕ Nueva familia", callback_data="var:fam:new")])
+    buttons.append([InlineKeyboardButton(text="← Menú", callback_data="var:back")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def family_view_keyboard(family_id: str, active_id: str | None) -> InlineKeyboardMarkup:
+    """Pantalla de una familia: activar/desactivar, reemplazar, eliminar, volver."""
+    rows = []
+    if active_id == family_id:
+        rows.append([InlineKeyboardButton(text="✖ Desactivar", callback_data="var:fam:off")])
+    else:
+        rows.append([
+            InlineKeyboardButton(text="✔ Activar", callback_data=f"var:fam:on:{family_id}")
+        ])
+    rows.append([
+        InlineKeyboardButton(text="✏️ Reemplazar JSON", callback_data=f"var:fam:edit:{family_id}"),
+        InlineKeyboardButton(text="🗑 Eliminar", callback_data=f"var:fam:del:{family_id}"),
+    ])
+    rows.append([
+        InlineKeyboardButton(text="← Familias", callback_data="var:fam:list"),
+        InlineKeyboardButton(text="← Menú", callback_data="var:back"),
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def package_view_keyboard(slug: str, active_slug: str | None) -> InlineKeyboardMarkup:

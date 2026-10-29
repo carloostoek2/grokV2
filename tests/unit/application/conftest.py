@@ -68,12 +68,16 @@ class FakeVariablesRepo:
         blacklist: set[tuple[str, ...]] | None = None,
         packages: dict[str, dict] | None = None,
         active_package: str | None = None,
+        families: dict[str, object] | None = None,
+        active_family: str | None = None,
     ) -> None:
         self._lists = {name: list(items) for name, items in (lists or {}).items()}
         self._template = template
         self._blacklist: set[tuple[str, ...]] = set(blacklist or [])
         self._packages = {name: dict(payload) for name, payload in (packages or {}).items()}
         self._active_package = active_package
+        self._families = dict(families or {})
+        self._active_family = active_family
         # Spies.
         self.blacklist_add_calls: list[tuple[str, ...]] = []
         self.add_item_calls: list[tuple[str, str]] = []
@@ -154,6 +158,32 @@ class FakeVariablesRepo:
     def blacklist_clear(self) -> None:
         self._blacklist = set()
 
+    # -- families -------------------------------------------------------------
+    def get_families(self) -> dict[str, object]:
+        return dict(self._families)
+
+    def get_family(self, family_id: str) -> object | None:
+        return self._families.get(family_id)
+
+    def save_family(self, family: object) -> bool:
+        self._families[family.id] = family
+        return True
+
+    def delete_family(self, family_id: str) -> bool:
+        if family_id not in self._families or self._active_family == family_id:
+            return False
+        del self._families[family_id]
+        return True
+
+    def active_family_name(self) -> str | None:
+        return self._active_family
+
+    def set_active_family(self, family_id: str | None) -> bool:
+        if family_id is not None and family_id not in self._families:
+            return False
+        self._active_family = family_id
+        return True
+
     # -- packages ------------------------------------------------------------
     @staticmethod
     def _slugify(name: str) -> str:
@@ -189,6 +219,8 @@ class FakeVariablesRepo:
         self._template = str(payload.get("template", self._template))
         self._blacklist = set()
         self._active_package = slug
+        self._families = dict(payload.get("families") or {})
+        self._active_family = payload.get("family")
         return True
 
     def delete_package(self, name: str) -> bool:

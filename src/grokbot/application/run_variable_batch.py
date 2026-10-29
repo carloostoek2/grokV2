@@ -27,6 +27,7 @@ from grokbot.application.events import (
 )
 from grokbot.application.generate_image import GenerateImageUseCase
 from grokbot.application.job_manager import JobManager
+from grokbot.domain.families import Family, allowed_values
 from grokbot.domain.job import Job
 from grokbot.domain.user_config import UserConfig, is_comfy_video_model
 from grokbot.domain.variables import (
@@ -78,13 +79,24 @@ class RandomComboStrategy:
 
     style = "variables"
 
-    def __init__(self, variables: VariablesRepository, *, rng: random.Random | None = None) -> None:
+    def __init__(
+        self,
+        variables: VariablesRepository,
+        *,
+        rng: random.Random | None = None,
+        family: Family | None = None,
+    ) -> None:
         self._variables = variables
         self._rng = rng if rng is not None else random.Random()
+        self._family = family
 
     def draw(self, *, exclude: set[tuple[str, ...]]) -> DrawnCombo | None:
         lists = self._variables.get_lists()
-        usable = {name: items for name, items in lists.items() if items}
+        usable = {
+            name: values
+            for name, items in lists.items()
+            if (values := allowed_values(self._family, name, items))
+        }
         if not usable:
             return None
         template = self._variables.get_template()
@@ -158,6 +170,33 @@ def _batch_model_reject(cfg: UserConfig, registry: ProviderRegistry) -> str | No
     return None
 
 
+def _first_unusable_field(
+    lists: dict[str, list[str]],
+    template: str,
+    family: Family | None,
+) -> str | None:
+    """First referenced field with no allowed value under ``family``.
+
+    Only template-referenced fields are checked (a template without placeholders
+    falls back to every list). Unreferenced empty lists no longer abort a batch:
+    they do not participate in the prompt.
+    """
+    pt = PromptTemplate(template)
+    placeholders = [] if pt.has_format_expr() else pt.fields()
+    if not placeholders:
+        return next(
+            (name for name, items in lists.items() if not allowed_values(family, name, items)),
+            None,
+        )
+    for placeholder in placeholders:
+        resolved = list_for_placeholder(placeholder, lists)
+        if resolved is None:
+            continue
+        if not allowed_values(family, resolved, lists[resolved]):
+            return resolved
+    return None
+
+
 def _qwen_aio_prompt(draw: DrawnCombo) -> str:
     """Instrucción directa de Qwen AIO (grok bot.py 2355-2364).
 
@@ -202,6 +241,7 @@ class RunVariableBatchUseCase:
         source_image: bytes | None = None,
         source_file_id: str | None = None,
         mode: str = "edit",
+        family: Family | None = None,
     ) -> AsyncIterator[BatchStarted | ItemStarted | RetryScheduled | ItemResult | ItemFailed | BatchCancelled | BatchSummary | EmptyList | BatchRejected]:
         cfg = self._sessions.get_config(user_id)
 
@@ -222,18 +262,22 @@ class RunVariableBatchUseCase:
                 source_image=source_image,
                 source_file_id=source_file_id,
                 mode=mode,
+                family=family,
             ):
                 yield ev
             return
 
-        # 3. Pre-check de listas vacías SOLO random (paridad 2301-2310).
+        # 3. Pre-check de campos inutilizables SOLO random (paridad 2301-2310).
+        # Con familia, el campo puede estar vacío por veto/pool aunque la lista
+        # tenga valores: se reporta igual antes de registrar el job.
         if strategy.style == "variables":
-            first_empty = next(
-                (name for name, items in self._variables.get_lists().items() if not items),
-                None,
+            unusable = _first_unusable_field(
+                self._variables.get_lists(),
+                self._variables.get_template(),
+                family,
             )
-            if first_empty is not None:
-                yield EmptyList(name=first_empty)
+            if unusable is not None:
+                yield EmptyList(name=unusable)
                 return
 
         # 4. Registrar job activo (para Cancelar / refine). Sin tope (R9).
@@ -358,6 +402,7 @@ class RunVariableBatchUseCase:
         source_image: bytes | None,
         source_file_id: str | None,
         mode: str,
+        family: Family | None = None,
     ) -> AsyncIterator[BatchStarted | BatchCancelled | BatchSummary | ItemResult | ItemFailed | EmptyList]:
         """Reproduce grok ``_run_multipose_batch`` (2145-2253) como eventos.
 
@@ -369,22 +414,23 @@ class RunVariableBatchUseCase:
             yield ItemFailed(reason=_MULTIPOSE_PHOTO_MSG, prompt="", terminal=True)
             return
 
-        # Paridad grok 2165-2174: lista vacía aborta antes de registrar job.
-        first_empty = next(
-            (name for name, items in self._variables.get_lists().items() if not items),
-            None,
+        # Paridad grok 2165-2174: campo inutilizable aborta antes de registrar job.
+        unusable = _first_unusable_field(
+            self._variables.get_lists(),
+            self._variables.get_template(),
+            family,
         )
-        if first_empty is not None:
+        if unusable is not None:
             # C15: el precheck corre ANTES del BatchStarted; el EmptyList transporta
             # el estilo para que el presenter diga "modo Multi-pose" y no "/variables".
-            yield EmptyList(name=first_empty, style="multipose")
+            yield EmptyList(name=unusable, style="multipose")
             return
 
         job = self._job_manager.start(user_id, "variables")
 
         try:
             yield BatchStarted(style="multipose", total=MULTIPOSE_BATCH_SIZE, job_id=job.job_id)
-            strategy = RandomComboStrategy(self._variables)
+            strategy = RandomComboStrategy(self._variables, family=family)
             used: set[tuple[str, ...]] = set()
             combos: list[DrawnCombo] = []
             for _ in range(MULTIPOSE_BATCH_SIZE):

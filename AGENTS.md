@@ -9,12 +9,15 @@ listas (`/listas`), configuración por usuario (`/config`), Face Swap
 (`/cambiar_source`) y edición con referencia (`/s` `/cambiar_referencia`).
 
 Es la re-implementación *por capas* de un monstruo de 5.497 líneas (`grok/bot.py`,
-repo hermano usado como referencia **read-only**). Los flujos no degradados operan
-con **copy byte-parity** de grok: no se toca ese copy.
+repo hermano usado como referencia **read-only**). La **paridad byte a byte** con grok
+fue una condición del desarrollo por capas y **ya no aplica**: el copy de usuario
+puede evolucionar. `D8_COMMANDS` debe seguir vacío (ningún flujo degradado).
 
 - Arquitectura objetivo (capas, contratos, decisiones): `docs/SPEC_REFACTOR.md`.
 - Estado de producto y flujos operativos: `docs/PRODUCT_STATUS.md`.
 - Avance del slice ComfyUI HTTP/WS: `docs/comfyui/AVANCE_VAST_HTTP.md`.
+- Runtime ComfyUI actual (Colab + A100 80 GB): `docs/comfyui/INVENTARIO_BOX_COLAB.md`.
+  `docs/comfyui/INVENTARIO_BOX_VAST.md` queda como receta histórica del box Vast.
 
 ## Cómo correrlo
 
@@ -35,7 +38,7 @@ grokbot                   # console script → polling; sin webhook
   absoluto en deploy.
 - Boot: `load_dotenv` → `Settings` fail-fast (pydantic) → `build_deps` (lanza
   `ValueError` si el token está vacío) → `assemble_dispatcher` → `start_polling`.
-- Tests: `.venv/bin/pytest` (suite completa; hoy **655 passed**).
+- Tests: `.venv/bin/pytest` (suite completa; hoy **828 passed**).
 
 ## Estructura del repo
 
@@ -123,9 +126,10 @@ en `telegram/`/`application/`: no se migran en masa; la regla se aplica al códi
 
 ## Límites — qué no hacer sin pensarlo dos veces
 
-- **No cambiar el copy byte-parity** de los flujos operativos (marcado en
-  `PRODUCT_STATUS.md §2`). Si un flujo va a degradar, se registra ahí; hoy
-  `D8_COMMANDS == ()` y debe seguir vacío.
+- **El copy de usuario puede evolucionar** — la paridad byte a byte con grok era una
+  condición del desarrollo y se retiró. Los tests siguen fijando strings para detectar
+  cambios accidentales, no como contrato externo. Si un flujo va a degradar, se registra
+  en `PRODUCT_STATUS.md §2`; hoy `D8_COMMANDS == ()` y debe seguir vacío.
 - **Nunca filtrar secretos/IDs/file_ids/payloads** en logs ni en errores: los mensajes
   user-safe listan solo nombres de campo o `type(exception).__name__` (C3/R6/R8). Un
   `ProviderError`/`MediaFetchError` lleva `user_message` seguro; el `file_id` nunca se expone.

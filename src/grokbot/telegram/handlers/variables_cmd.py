@@ -17,11 +17,14 @@ acepta ``KieTaskRef``); reply a foto del bot incluido. 0 JSON/red directa (R9).
 
 from __future__ import annotations
 
+import html
+import re
 from functools import partial
 
 from aiogram import Dispatcher, types
 from aiogram.filters import Command
 
+from grokbot.domain.families import Family
 from grokbot.domain.variables import VARIABLES_MAX, PromptTemplate
 from grokbot.telegram.chat_ui import ChatUI
 from grokbot.telegram.deps import BotDeps
@@ -35,6 +38,7 @@ from grokbot.telegram.handlers._common import (
     parse_var_count_and_text,
     parse_var_prompt,
     parse_variables_count,
+    parse_variables_request,
 )
 from grokbot.telegram.stream_presenter import present_batch
 
@@ -45,6 +49,9 @@ _VARIABLES_USAGE = (
     "aleatoriamente poses, ángulos y acciones.\n"
     "• Envía <b>/variables N</b> como mensaje de texto para generar N imágenes "
     "directamente desde la combinación de listas.\n"
+    "• Añade una familia para mantener la coherencia: <b>/variables N "
+    "familia</b> (p. ej. <b>/variables 4 mirror</b>). Sin familia se usa la "
+    "activa de <b>/listas</b>.\n"
     "• ¿Prefieres un texto fijo? Usa <b>/var texto</b> para inyectarlo "
     "directamente en la plantilla, sin listas.\n\n"
     "Gestiona las listas con <b>/listas</b>."
@@ -87,6 +94,34 @@ async def _source_bytes_or_degrade(gateway, ui, file_id: str | None) -> tuple[by
     return source_image, False
 
 
+def _resolve_family(deps: BotDeps, family_id: str | None) -> tuple[Family | None, str | None]:
+    """Resolve the requested family (or the active one) and its user-safe error."""
+    if family_id is None:
+        active_id = deps.manage_lists.active_family_name()
+        if active_id is None:
+            return None, None
+        family = deps.manage_lists.get_family(active_id)
+        if family is None:
+            return None, (
+                f"La familia activa '{html.escape(active_id)}' ya no existe. "
+                "Desactívala o elige otra en <b>/listas</b>."
+            )
+        return family, None
+    family = deps.manage_lists.get_family(family_id)
+    if family is None:
+        # Forgiving lookup: family ids are stored slugified (mirror, street_candid).
+        slug = re.sub(r"\W+", "_", family_id.strip().lower()).strip("_")
+        if slug and slug != family_id:
+            family = deps.manage_lists.get_family(slug)
+    if family is not None:
+        return family, None
+    available = ", ".join(
+        html.escape(family_id) for family_id in sorted(deps.manage_lists.list_families())
+    )
+    hint = f" Disponibles: {available}." if available else " No hay familias creadas."
+    return None, f"No existe la familia '{html.escape(family_id)}'.{hint}"
+
+
 async def _run_variables_batch(
     deps: BotDeps,
     message: types.Message,
@@ -95,6 +130,7 @@ async def _run_variables_batch(
     source_image: bytes | None,
     source_file_id: str | None,
     mode: str,
+    family: Family | None = None,
 ) -> None:
     ui = ChatUI.for_message(deps.gateway, message)
     uid = message.from_user.id
@@ -104,10 +140,11 @@ async def _run_variables_batch(
     events = deps.run_batch.run(
         user_id=uid,
         count=count,
-        strategy=RandomComboStrategy(deps.variables),
+        strategy=RandomComboStrategy(deps.variables, family=family),
         source_image=source_image,
         source_file_id=source_file_id,
         mode=mode,
+        family=family,
     )
     is_text = mode == "text"
     await present_batch(
@@ -181,10 +218,17 @@ async def cmd_variables(message: types.Message, deps: BotDeps) -> None:
     if message.photo and not (isinstance(message.media_group_id, str) and message.media_group_id):
         await cmd_variables_photo(message, deps)
         return
-    count = parse_variables_count(message.text) if isinstance(message.text, str) else None
-    if count is not None:
+    request = parse_variables_request(message.text) if isinstance(message.text, str) else None
+    if request is not None:
+        count, family_id = request
+        family, family_err = _resolve_family(deps, family_id)
+        if family_err:
+            ui = ChatUI.for_message(deps.gateway, message)
+            await ui.send_text(family_err)
+            return
         await _run_variables_batch(
-            deps, message, count, source_image=None, source_file_id=None, mode="text"
+            deps, message, count,
+            source_image=None, source_file_id=None, mode="text", family=family,
         )
         return
     ui = ChatUI.for_message(deps.gateway, message)
@@ -193,13 +237,20 @@ async def cmd_variables(message: types.Message, deps: BotDeps) -> None:
 
 async def cmd_variables_photo(message: types.Message, deps: BotDeps) -> None:
     """Foto con caption '/variables N'."""
-    count = parse_variables_count(message.caption)
-    if count is None:
+    request = parse_variables_request(message.caption)
+    if request is None:
         ui = ChatUI.for_message(deps.gateway, message)
         await ui.send_text(
-            f"Uso: envía la foto con el caption <b>/variables N</b> (N = 1-{VARIABLES_MAX}).\n\n"
+            f"Uso: envía la foto con el caption <b>/variables N [familia]</b> "
+            f"(N = 1-{VARIABLES_MAX}).\n\n"
             "Gestiona las listas con <b>/listas</b>."
         )
+        return
+    count, family_id = request
+    family, family_err = _resolve_family(deps, family_id)
+    if family_err:
+        ui = ChatUI.for_message(deps.gateway, message)
+        await ui.send_text(family_err)
         return
     file_id = largest_photo(message)
     ui = ChatUI.for_message(deps.gateway, message)
@@ -208,19 +259,26 @@ async def cmd_variables_photo(message: types.Message, deps: BotDeps) -> None:
         return
     await _run_variables_batch(
         deps, message, count,
-        source_image=source_image, source_file_id=file_id, mode="edit",
+        source_image=source_image, source_file_id=file_id, mode="edit", family=family,
     )
 
 
 async def cmd_variables_reply(message: types.Message, deps: BotDeps) -> None:
     """'/variables N' como reply a una foto."""
-    count = parse_variables_count(message.text or message.caption)
-    if count is None:
+    request = parse_variables_request(message.text or message.caption)
+    if request is None:
         ui = ChatUI.for_message(deps.gateway, message)
         await ui.send_text(
-            f"Uso: responde a una foto con <b>/variables N</b> (N = 1-{VARIABLES_MAX}).\n\n"
+            f"Uso: responde a una foto con <b>/variables N [familia]</b> "
+            f"(N = 1-{VARIABLES_MAX}).\n\n"
             "Gestiona las listas con <b>/listas</b>."
         )
+        return
+    count, family_id = request
+    family, family_err = _resolve_family(deps, family_id)
+    if family_err:
+        ui = ChatUI.for_message(deps.gateway, message)
+        await ui.send_text(family_err)
         return
     reply = message.reply_to_message
     if reply is None or not reply.photo:
@@ -234,7 +292,7 @@ async def cmd_variables_reply(message: types.Message, deps: BotDeps) -> None:
         return
     await _run_variables_batch(
         deps, message, count,
-        source_image=source_image, source_file_id=file_id, mode="edit",
+        source_image=source_image, source_file_id=file_id, mode="edit", family=family,
     )
 
 

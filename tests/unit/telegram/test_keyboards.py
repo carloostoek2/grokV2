@@ -77,7 +77,7 @@ def test_config_variant_keyboard():
 def test_config_comfyui_keyboard_lists_only_flow():
     cfg = ComfyUIConfig(model="grok_style")
     data = flat_callback_data(kb.config_comfyui_keyboard(cfg))
-    # Flujos del menú + navegación; sin legacy ni flujos ocultos.
+    # Flujos del menú (hasta dirty_edit) + navegación; sin legacy ni flujos ocultos.
     assert data == [
         "cfg:comfyui:flow:grok_style",
         "cfg:comfyui:flow:agil_solo",
@@ -88,23 +88,20 @@ def test_config_comfyui_keyboard_lists_only_flow():
         "cfg:comfyui:flow:grok_edit",
         "cfg:comfyui:flow:dirty_realism",
         "cfg:comfyui:flow:dirty_edit",
-        "cfg:comfyui:flow:qwen21_t2i",
-        "cfg:comfyui:flow:flux1_dev_t2i",
-        "cfg:comfyui:flow:minimax_h3_i2v",
-        "cfg:comfyui:flow:face_detail_impact",
-        "cfg:comfyui:flow:instantid_sdxl",
-        "cfg:comfyui:flow:ohwx_krea2",
-        "cfg:comfyui:flow:ohwx_edit",
-        "cfg:comfyui:flow:ohwx_dirty_edit",
+        "cfg:comfyui:flow:grok_style_hq",
+        "cfg:comfyui:flow:agil_solo_hq",
+        "cfg:comfyui:flow:agil_nsfw_hq",
+        "cfg:comfyui:flow:agil_moody_hq",
+        "cfg:comfyui:flow:dirty_realism_hq",
+        "cfg:comfyui:flow:dirty_edit_hq",
+        "cfg:comfyui:flow:grok_edit_hq",
         "cfg:back:model",
         "cfg:close",
     ]
-    assert "cfg:comfyui:flow:flux1_dev_t2i" in data
-    assert "cfg:comfyui:flow:minimax_h3_i2v" in data
-    assert "cfg:comfyui:flow:face_detail_impact" in data
-    assert "cfg:comfyui:flow:instantid_sdxl" in data
     assert "cfg:comfyui:flow:donut_face" not in data
     assert "cfg:comfyui:flow:wan_i2v" not in data
+    assert "cfg:comfyui:flow:flux1_dev_t2i" not in data
+    assert "cfg:comfyui:flow:ohwx_krea2" not in data
 
 
 def test_config_comfyui_has_no_legacy_model_lora_refine_rows():
@@ -149,7 +146,8 @@ def test_variables_menu_keyboard():
     labels = {"poses": "Poses", "angles": "Ángulos", "actions": "Acciones"}
     data = flat_callback_data(kb.variables_menu_keyboard(lists, labels))
     assert data[:3] == ["var:open:poses", "var:open:angles", "var:open:actions"]
-    assert data[3:5] == ["var:tmpl", "var:packs"]
+    assert data[3] == "var:fam:list"
+    assert data[4:6] == ["var:tmpl", "var:packs"]
     assert data[-1] == "var:close"
 
 

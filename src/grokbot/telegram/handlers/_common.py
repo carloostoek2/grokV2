@@ -98,7 +98,10 @@ def largest_photo(message: types.Message) -> str | None:
 
 
 # --- Paridad de parse de captions /var y /variables (bot.py 2019-2045/2532-2578)
-_VARIABLES_RE = re.compile(r"^/variables(?:@[A-Za-z0-9_]+)?(?:\s+(\d+))?\s*$", re.IGNORECASE)
+_VARIABLES_REQUEST_RE = re.compile(
+    r"^/variables(?:@[A-Za-z0-9_]+)?(?:\s+(\d+))?(?:\s+(\S+))?\s*$",
+    re.IGNORECASE,
+)
 _VAR_CMD_RE = re.compile(r"^/var(?:@[A-Za-z0-9_]+)?(?:\s+(.*))?$", re.IGNORECASE | re.DOTALL)
 
 
@@ -110,20 +113,41 @@ def is_variables_command(text: str | None) -> bool:
 
 
 def parse_variables_count(text: str | None) -> int | None:
-    """Parse '/variables N' → N clamp [1, VARIABLES_MAX]; bare → 1; inválido → None."""
+    """Parse '/variables N' → N clamp [1, VARIABLES_MAX]; bare → 1; inválido → None.
+
+    Kept for callers/tests that only care about the count: a family token makes
+    this return None, while :func:`parse_variables_request` exposes both.
+    """
+    parsed = parse_variables_request(text)
+    if parsed is None:
+        return None
+    count, family = parsed
+    return count if family is None else None
+
+
+def parse_variables_request(text: str | None) -> tuple[int, str | None] | None:
+    """Parse '/variables [N] [familia]' → (count, family_id) or None.
+
+    Additive over :func:`parse_variables_count`: a family token after the count
+    selects a coherent pool. Bare ``/variables`` and ``/variables familia`` use
+    count 1. Invalid counts return None.
+    """
     if not text:
         return None
-    m = _VARIABLES_RE.match(text.strip())
+    m = _VARIABLES_REQUEST_RE.match(text.strip())
     if not m:
         return None
     if m.group(1) is None:
-        return 1
-    n = int(m.group(1))
-    if n < 1:
-        return None
-    from grokbot.domain.variables import VARIABLES_MAX
+        count = 1
+    else:
+        count = int(m.group(1))
+        if count < 1:
+            return None
+        from grokbot.domain.variables import VARIABLES_MAX
 
-    return min(n, VARIABLES_MAX)
+        count = min(count, VARIABLES_MAX)
+    family = m.group(2).strip() if m.group(2) else None
+    return count, family
 
 
 def is_var_command(text: str | None) -> bool:
@@ -294,5 +318,6 @@ __all__ = [
     "parse_var_count_and_text",
     "parse_var_prompt",
     "parse_variables_count",
+    "parse_variables_request",
     "resolve_reply_kie_ref",
 ]

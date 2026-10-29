@@ -75,6 +75,7 @@ grok-bot/
 │       │   ├── generation.py          # GenerationRequest, GenerationResult, MediaType
 │       │   ├── user_config.py         # UserConfig, VideoConfig, ComfyUIConfig
 │       │   ├── variables.py           # VariableList, PromptTemplate, Combo
+│       │   ├── families.py            # Family (pools permitidos + vetados) y selección coherente
 │       │   └── job.py                 # Job, JobStatus
 │       │
 │       ├── application/               # casos de uso, orquestación, sin detalles de infraestructura
@@ -83,7 +84,7 @@ grok-bot/
 │       │   ├── generate_video.py      # GenerateVideoUseCase
 │       │   ├── run_variable_batch.py  # RunVariableBatchUseCase (unifica /variables y /var)
 │       │   ├── manage_config.py       # UpdateUserConfigUseCase
-│       │   ├── manage_lists.py        # CRUD de listas/paquetes (para /listas)
+│       │   ├── manage_lists.py        # CRUD de listas/paquetes/familias (para /listas)
 │       │   ├── refine_flow.py         # ResolveRefineUseCase (ComfyUI 2-stage)
 │       │   └── job_manager.py         # JobManager: crear/cancelar/limitar jobs concurrentes
 │       │
@@ -118,6 +119,7 @@ grok-bot/
 │       │   │   ├── variables_cmd.py   # /variables /var
 │       │   │   ├── config_cmd.py      # /config /model /imaginess /video
 │       │   │   ├── listas_cmd.py      # /listas (admin panel FSM)
+│       │   │   ├── familias_cmd.py    # sub-panel /listas → Familias (pools coherentes)
 │       │   │   ├── jobs.py            # botón Cancelar, callbacks de refine
 │       │   │   └── album.py           # media groups
 │       │   └── fsm_states.py          # StatesGroup centralizados

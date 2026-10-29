@@ -18,6 +18,7 @@ from grokbot.telegram.deps import BotDeps
 from grokbot.telegram.handlers import (
     config_cmd,
     faceswap,
+    familias_cmd,
     generation,
     integrate_ref,
     jobs,
@@ -36,6 +37,7 @@ def register_all(dp: Dispatcher, deps: BotDeps) -> None:
     start.register_start(dp, deps)
     config_cmd.register_config(dp, deps)
     listas_cmd.register_listas(dp, deps)
+    familias_cmd.register_familias(dp, deps)
     variables_cmd.register_variables(dp, deps)
     # Flujos de generación (texto/foto/reply/video) después de los comandos.
     video.register_video(dp, deps)

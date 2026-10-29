@@ -78,7 +78,7 @@ async def test_variables_bare_text_generates_random():
 async def test_variables_non_numeric_shows_help():
     deps = make_deps()
     _use_seedream(deps)
-    deps = await _msg(deps, text_message("/variables abc"))
+    deps = await _msg(deps, text_message("/variables abc def"))
     assert any("Para usar <b>/variables</b>:" in t for t in _texts(deps))
 
 
@@ -183,5 +183,5 @@ async def test_variables_empty_list_message():
     _use_seedream(deps)
     deps = await _msg(deps, text_message("/variables"))
     texts = _texts(deps)
-    assert any("La lista de <b>Acciones</b> está vacía." in t for t in texts)
+    assert any("La lista de <b>Acciones</b> no tiene valores disponibles" in t for t in texts)
     assert not deps.gateway.calls_by_method("send_photo")

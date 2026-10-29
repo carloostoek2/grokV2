@@ -63,12 +63,12 @@ POSES = ("de pie", "sentada", "perfil", "mirando", "corriendo")
 # Copy de presenters (no corregir typos originales de grok).
 _VAR_HEADER = "🎲 <b>Variables</b>: {verb} {i}/{n} imágenes con {name}..."
 _EMPTY_LIST_VAR = (
-    "La lista de <b>Poses</b> está vacía.\n"
-    "Usa <b>/listas</b> para añadir opciones antes de usar /variables."
+    "La lista de <b>Poses</b> no tiene valores disponibles.\n"
+    "Usa <b>/listas</b> para añadir opciones o ajustar la familia antes de usar /variables."
 )
 _EMPTY_LIST_MULTIPOSE = (
-    "La lista de <b>Poses</b> está vacía.\n"
-    "Usa <b>/listas</b> para añadir opciones antes de usar el modo Multi-pose."
+    "La lista de <b>Poses</b> no tiene valores disponibles.\n"
+    "Usa <b>/listas</b> para añadir opciones o ajustar la familia antes de usar el modo Multi-pose."
 )
 
 

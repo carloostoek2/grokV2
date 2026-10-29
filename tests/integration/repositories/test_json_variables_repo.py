@@ -44,7 +44,7 @@ def test_new_file_seeds_defaults(tmp_path):
     assert repo.get_blacklist() == set()
     assert path.exists()
     raw = json.loads(path.read_text(encoding="utf-8"))
-    assert set(raw) == {"lists", "template", "blacklist"}
+    assert set(raw) == {"lists", "template", "blacklist", "families"}
 
 
 def test_empty_and_corrupt_file_seed_without_raise(tmp_path):
