@@ -49,15 +49,22 @@ def test_flows_returns_registered_flows():
     ids = {f.id for f in flows()}
     assert ids == {
         "grok_style",
+        "grok_style_hq",
         "donut_face",
         "agil_solo",
+        "agil_solo_hq",
         "agil_nsfw",
+        "agil_nsfw_hq",
         "agil_moody",
+        "agil_moody_hq",
         "agil_edit_qwen",
         "agil_edit_nsfw",
         "grok_edit",
+        "grok_edit_hq",
         "dirty_realism",
+        "dirty_realism_hq",
         "dirty_edit",
+        "dirty_edit_hq",
         "wan_i2v",
         "qwen21_t2i",
         "flux1_dev_t2i",
@@ -469,7 +476,7 @@ def test_get_flow_dirty_realism_uses_checkpoint_as_the_look():
     assert g["1"]["class_type"] == "UNETLoader"
     assert g["1"]["inputs"]["unet_name"] == "krea2SATDirtyRealism_uncut_fp8.safetensors"
     assert g["2"]["inputs"]["type"] == "krea2"
-    assert g["7"]["inputs"]["steps"] == 20
+    assert g["7"]["inputs"]["steps"] == 8
     assert g["7"]["inputs"]["cfg"] == 1.0
     # Sin LoRA de estilo: apilar una competiria con el finetune.
     assert not any(

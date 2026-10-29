@@ -1,5 +1,10 @@
 # Inventario de ComfyUI en el box Vast — configuración, pesos y flujos
 
+> **Histórico (Vast).** Desde el 2026-10-24 el bot corre en **Google Colab + A100-SXM4-80GB**.
+> El estado actual (túnel, ComfyUI, pesos, bloque HQ y salud de cada flujo) está en
+> [INVENTARIO_BOX_COLAB.md](./INVENTARIO_BOX_COLAB.md). Este documento se conserva como
+> receta histórica del box Vast; sus §1-§6 **no** describen el runtime actual.
+
 > **Alcance.** Este documento describe lo **constante**: la configuración de ComfyUI, las
 > **versiones del software** que se usan, los pesos instalados y los flujos registrados.
 >

@@ -1,0 +1,158 @@
+{
+  "_meta": {
+    "id": "agil_moody_hq",
+    "name": "Ágil Moody (HQ A100)",
+    "media_type": "image",
+    "positive_node": "5",
+    "positive_input": "text",
+    "negative_node": "6",
+    "seed_nodes": [
+      "8"
+    ],
+    "save_nodes": [
+      "10"
+    ],
+    "supports_source": false,
+    "source": "Synced 2026-10-25 from the graph the owner runs in the ComfyUI browser on Colab: Moody-Krea-Mix-v7_00002__clean_fp8 + Krea2-realism-V2 (1.0/1.0) + Krea2NSFWV4 (model-only 1.0), KSampler er_sde/simple, 8 steps, cfg 1.0. Resolution raised to 9:16 @ 2.0 MP via ResolutionSelector (the browser graph was fixed at 896x1600); the 2 MP ceiling is intentional. Positive/negative prompts are blank on purpose: the bot patches the positive node per request, and at cfg 1.0 the negative branch has no effect."
+  },
+  "1": {
+    "inputs": {
+      "unet_name": "Moody-Krea-Mix-v7_00002__clean_fp8.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader"
+  },
+  "2": {
+    "inputs": {
+      "clip_name": "qwen3vl_4b_bf16.safetensors",
+      "type": "krea2",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader"
+  },
+  "3": {
+    "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
+    },
+    "class_type": "VAELoader"
+  },
+  "4": {
+    "inputs": {
+      "model": [
+        "100",
+        0
+      ],
+      "clip": [
+        "2",
+        0
+      ],
+      "lora_name": "Krea2-realism-V2.safetensors",
+      "strength_model": 1.0,
+      "strength_clip": 1.0
+    },
+    "class_type": "LoraLoader"
+  },
+  "5": {
+    "inputs": {
+      "text": "",
+      "clip": [
+        "4",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "6": {
+    "inputs": {
+      "text": "",
+      "clip": [
+        "4",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "7": {
+    "inputs": {
+      "width": [
+        "857",
+        0
+      ],
+      "height": [
+        "857",
+        1
+      ],
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage"
+  },
+  "8": {
+    "inputs": {
+      "seed": 0,
+      "steps": 8,
+      "cfg": 1.0,
+      "sampler_name": "er_sde",
+      "scheduler": "simple",
+      "denoise": 1.0,
+      "model": [
+        "4",
+        0
+      ],
+      "positive": [
+        "5",
+        0
+      ],
+      "negative": [
+        "6",
+        0
+      ],
+      "latent_image": [
+        "7",
+        0
+      ]
+    },
+    "class_type": "KSampler"
+  },
+  "9": {
+    "inputs": {
+      "samples": [
+        "8",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "10": {
+    "inputs": {
+      "filename_prefix": "grokbot/comfyui",
+      "images": [
+        "9",
+        0
+      ]
+    },
+    "class_type": "SaveImage"
+  },
+  "100": {
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "lora_name": "Krea2NSFWV4.safetensors",
+      "strength_model": 1.0
+    },
+    "class_type": "LoraLoaderModelOnly"
+  },
+  "857": {
+    "inputs": {
+      "aspect_ratio": "9:16 (Portrait Widescreen)",
+      "megapixels": 2.0,
+      "multiple": 32
+    },
+    "class_type": "ResolutionSelector"
+  }
+}

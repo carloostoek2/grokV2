@@ -56,6 +56,13 @@ COMFYUI_FLOWS = (
     ("grok_edit", "Grok Style Edit"),
     ("dirty_realism", "Dirty Realism"),
     ("dirty_edit", "Dirty Realism Edit"),
+    ("grok_style_hq", "Grok Style (HQ A100)"),
+    ("agil_solo_hq", "Ágil Solo (HQ A100)"),
+    ("agil_nsfw_hq", "Ágil NSFW (HQ A100)"),
+    ("agil_moody_hq", "Ágil Moody (HQ A100)"),
+    ("dirty_realism_hq", "Dirty Realism (HQ A100)"),
+    ("dirty_edit_hq", "Dirty Edit (HQ A100)"),
+    ("grok_edit_hq", "Grok Edit (HQ A100)"),
     ("wan_i2v", "Wan I2V"),
     ("qwen21_t2i", "Qwen 2.1"),
     ("flux1_dev_t2i", "Flux.1 Dev"),
@@ -70,8 +77,20 @@ DEFAULT_COMFYUI_MODEL = COMFYUI_FLOWS[0][0]
 VALID_COMFYUI_MODELS = tuple(_id for _id, _label in COMFYUI_FLOWS)
 COMFYUI_FLOW_LABELS = dict(COMFYUI_FLOWS)
 # Still valid saved configs (see VALID_COMFYUI_MODELS). Hidden from the
-# Telegram config keyboard until the graphs actually run.
-COMFYUI_MENU_HIDDEN_FLOWS = frozenset({"donut_face", "wan_i2v"})
+# Telegram config keyboard by explicit list; the HQ block after dirty_edit stays
+# visible because it is the active menu.
+COMFYUI_MENU_HIDDEN_FLOWS = frozenset({
+    "donut_face",
+    "wan_i2v",
+    "qwen21_t2i",
+    "flux1_dev_t2i",
+    "minimax_h3_i2v",
+    "face_detail_impact",
+    "instantid_sdxl",
+    "ohwx_krea2",
+    "ohwx_edit",
+    "ohwx_dirty_edit",
+})
 
 # Result-chain stages (Telegram buttons under a ComfyUI image). The callback
 # does not generate; it only selects the destination flow.
@@ -84,6 +103,11 @@ FACE_DETAIL_FLOW_ID = "face_detail_impact"
 COMFYUI_EDIT_SIBLINGS = {
     "grok_style": "grok_edit",
     "dirty_realism": "dirty_edit",
+    "grok_style_hq": "grok_edit_hq",
+    "dirty_realism_hq": "dirty_edit_hq",
+    "agil_solo_hq": "agil_edit_qwen",
+    "agil_moody_hq": "agil_edit_qwen",
+    "agil_nsfw_hq": "agil_edit_nsfw",
     "qwen21_t2i": "agil_edit_qwen",
     "agil_solo": "agil_edit_qwen",
     "agil_moody": "agil_edit_qwen",

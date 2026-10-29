@@ -20,7 +20,7 @@ import logging
 import socket
 from collections import deque
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Callable, Protocol
 
 from grokbot.providers.base import (
     ProviderNotConfiguredError,
@@ -70,10 +70,22 @@ class ProcessLike(Protocol):
     def stderr(self): ...
 
 
+def _is_local_port_open(port: int) -> bool:
+    """Check if 127.0.0.1:<port> is accepting TCP connections."""
+    if not port or port <= 0:
+        return False
+    try:
+        with socket.create_connection(("127.0.0.1", int(port)), timeout=0.5):
+            return True
+    except OSError:
+        return False
+
+
 async def _default_spawner(argv: list[str]) -> ProcessLike:
     """Spawn the real ``ssh`` binary with stderr piped (drained to a tail log)."""
     return await asyncio.create_subprocess_exec(
         *argv,
+        stdin=asyncio.subprocess.DEVNULL,
         stdout=asyncio.subprocess.DEVNULL,
         stderr=asyncio.subprocess.PIPE,
     )
@@ -88,12 +100,15 @@ class SshLocalForward:
         *,
         spawner=None,
         grace: float = _SSH_GRACE_SEC,
+        port_checker: Callable[[int], bool] | None = None,
     ) -> None:
         self._cfg = config
         self._spawner = spawner if spawner is not None else _default_spawner
         self._grace = grace
+        self._port_checker = port_checker if port_checker is not None else _is_local_port_open
         self._proc: ProcessLike | None = None
         self._bound: int | None = None
+        self._direct: bool = False
         self._drain_task: asyncio.Task | None = None
         self._tail: deque[str] = deque(maxlen=_DRAIN_LIMIT)
 
@@ -104,6 +119,8 @@ class SshLocalForward:
 
     @property
     def running(self) -> bool:
+        if self._direct:
+            return self._bound is not None and self._port_checker(self._bound)
         return self._proc is not None and self._proc.returncode is None
 
     @property
@@ -168,6 +185,10 @@ class SshLocalForward:
 
     async def close(self) -> None:
         """Stop the tunnel and release the local port."""
+        if self._direct:
+            self._direct = False
+            self._bound = None
+            return
         proc = self._proc
         if proc is None:
             return
@@ -195,6 +216,22 @@ class SshLocalForward:
         if self._proc is not None and self._drain_task is not None:
             self._drain_task.cancel()
             self._drain_task = None
+        self._direct = False
+
+        # If ComfyUI is already accessible on localhost (e.g. existing Colab SSH tunnel,
+        # local instance, or local_port), reuse it directly without spawning a child tunnel.
+        target_port = self._cfg.local_port or self._cfg.remote_port
+        if target_port and self._port_checker(target_port):
+            logger.info("ComfyUI port %d is already open locally; using direct connection.", target_port)
+            self._bound = target_port
+            self._direct = True
+            return
+
+        # If host is localhost/loopback and port is not open, don't try ssh to root@localhost.
+        if self._cfg.host.lower() in ("127.0.0.1", "localhost", "0.0.0.0"):
+            logger.warning("ComfyUI local port %s is not responding.", target_port)
+            raise ProviderUnavailableError(_TUNNEL_DOWN_MSG, user_message=_TUNNEL_DOWN_MSG)
+
         local = self._resolve_local_port()
         proc = await self._spawner(self._argv(local))
         if proc.returncode is not None:
@@ -207,6 +244,11 @@ class SshLocalForward:
             await asyncio.sleep(self._grace)
         if proc.returncode is not None:
             # Died during the grace window (auth refused, forward failure...).
+            logger.warning(
+                "comfyui tunnel died during grace window (rc=%s). stderr: %s",
+                proc.returncode,
+                list(self._tail),
+            )
             await self.close()
             raise ProviderUnavailableError(_TUNNEL_DOWN_MSG, user_message=_TUNNEL_DOWN_MSG)
 

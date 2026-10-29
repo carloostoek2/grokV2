@@ -63,7 +63,7 @@
         0
       ],
       "lora_name": "grokstyle_krea2_v2.safetensors",
-      "strength_model": 1.0
+      "strength_model": 0.6
     },
     "class_type": "LoraLoaderModelOnly"
   },

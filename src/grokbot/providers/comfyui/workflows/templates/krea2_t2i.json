@@ -61,7 +61,7 @@
   },
   "9": {
     "inputs": {
-      "vae_name": "Wan2_1_VAE_fp32.safetensors"
+      "vae_name": "qwen_image_vae.safetensors"
     },
     "class_type": "VAELoader"
   },
@@ -127,8 +127,8 @@
   "100": {
     "inputs": {
       "lora_name": "grokstyle_krea2_v2.safetensors",
-      "strength_model": 1,
-      "strength_clip": 1,
+      "strength_model": 0.6,
+      "strength_clip": 0.6,
       "model": ["2", 0],
       "clip": ["3", 0]
     },

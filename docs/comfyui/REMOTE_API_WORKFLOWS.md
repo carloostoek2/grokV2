@@ -1,4 +1,10 @@
-# Remote API workflows (Vast source of truth)
+# Remote API workflows (modo `remote`; histórico Vast)
+
+> **Histórico / modo `remote`.** El deploy actual (Colab + A100, desde 2026-10-24) usa
+> `COMFYUI_WORKFLOW_SOURCE=embed`: los templates de
+> `src/grokbot/providers/comfyui/workflows/templates/` son la fuente de verdad y este
+> mecanismo **no** se usa. Se conserva para el modo remoto (Vast u otro box con SSH).
+> Estado actual del runtime: [INVENTARIO_BOX_COLAB.md](./INVENTARIO_BOX_COLAB.md).
 
 Stock ComfyUI `POST /prompt` **always** needs an API-format graph in the body.
 There is no “run workflow by name” endpoint. grokV2 therefore stores API-format
@@ -14,9 +20,10 @@ JSON files **on the Vast box** and fetches them at runtime.
   grok_style.json       qwen21_t2i.json       wan_i2v.json
 ```
 
-> El listado completo, con pesos/sampler/resolución y **cuáles flujos están rotos hoy**, vive
-> en [INVENTARIO_BOX_VAST.md](./INVENTARIO_BOX_VAST.md) (foto del 2026-10-03: 10 de 12 OK;
-> `donut_face` y `wan_i2v` no son ejecutables por nodos/pesos faltantes).
+> Para el runtime actual (Colab), el listado de pesos/flujos vive en
+> [INVENTARIO_BOX_COLAB.md](./INVENTARIO_BOX_COLAB.md). La foto histórica del box Vast, con
+> el detalle de los flujos rotos en ese entonces, sigue en
+> [INVENTARIO_BOX_VAST.md](./INVENTARIO_BOX_VAST.md).
 
 Each file is ComfyUI **API format** (flat `{node_id: {class_type, inputs}}`) plus
 a top-level `_meta` block (`id`, `name`, `media_type`, `positive_node`,

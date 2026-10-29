@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dataset Prompt Composer — Demo</title>
+<style>
+:root{--bg:#0d0f12;--panel:#15181d;--panel2:#1b1f26;--text:#e9edf2;--muted:#929aa7;--line:#2a3039;--accent:#d6a85f;--good:#72c99a;--bad:#e47d7d}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif}
+header{padding:24px 28px;border-bottom:1px solid var(--line);background:#101216}
+h1,h2,h3{margin:0 0 8px}h1{font-size:22px}.sub{color:var(--muted)}
+.app{display:grid;grid-template-columns:290px 1fr 360px;min-height:calc(100vh - 91px)}
+aside,.right{padding:18px;border-right:1px solid var(--line)}.right{border-left:1px solid var(--line);border-right:0}
+main{padding:18px;min-width:0}.section{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+label{display:block;color:var(--muted);font-size:12px;margin:12px 0 5px}
+select,textarea,input,button{font:inherit}
+select,input,textarea{width:100%;background:#0f1216;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:9px}
+textarea{min-height:390px;resize:vertical;font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace}
+button{border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:8px;padding:9px 12px;cursor:pointer}
+button:hover{border-color:#56606d}button.primary{background:var(--accent);color:#16120b;border-color:var(--accent);font-weight:700}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.actions{display:flex;gap:8px;flex-wrap:wrap}
+.family{width:100%;text-align:left;margin:5px 0}.family.active{border-color:var(--accent);background:#262116}
+.badge{display:inline-block;border:1px solid var(--line);border-radius:99px;padding:3px 8px;color:var(--muted);font-size:11px;margin:2px}
+.rule{font-size:12px;color:var(--muted);padding:7px 0;border-bottom:1px solid var(--line)}.rule:last-child{border:0}
+.prompt{background:#0b0e11;border:1px solid var(--line);border-radius:9px;padding:13px;font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap}
+.card{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:11px;margin:7px 0;display:flex;gap:10px;align-items:flex-start}
+.card .txt{flex:1;min-width:0}
+.copy-btn{flex:none;width:28px;height:28px;padding:0;display:grid;place-items:center;color:var(--muted);line-height:0}
+.copy-btn:hover{color:var(--accent)}.copy-btn.done{color:var(--good);border-color:var(--good)}
+.copy-btn svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.fhead{display:flex;justify-content:space-between;align-items:center;margin-top:12px}
+.fhead label{margin:0;transition:.15s}
+.seg{display:flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+.seg button{border:0;border-radius:0;padding:0;width:27px;height:24px;display:grid;place-items:center;background:transparent;color:var(--muted);line-height:0}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.seg button:hover{color:var(--text)}
+.seg button.on{color:#16120b;background:var(--muted)}
+.field[data-mode=fixed] .seg button.on{background:var(--accent)}
+.field[data-mode=off] .seg button.on{background:var(--bad)}
+.field[data-mode=fixed] select{border-color:var(--accent)}
+.field[data-mode=fixed] label{color:var(--accent)}
+.field[data-mode=off] select{opacity:.35}
+.field[data-mode=off] label{text-decoration:line-through;opacity:.6}
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin:2px 0 4px}
+.legend span{display:inline-flex;gap:5px;align-items:center}
+.legend svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.linkbtn{padding:4px 9px;font-size:12px;color:var(--muted)}
+.ok{color:var(--good)}.warn{color:var(--bad)}
+.small{font-size:12px;color:var(--muted)}
+#status{min-height:18px;margin-top:8px}
+@media(max-width:1050px){.app{grid-template-columns:240px 1fr}.right{grid-column:1/-1;border-left:0;border-top:1px solid var(--line)}}
+@media(max-width:700px){.app{display:block}aside,.right{border:0;border-bottom:1px solid var(--line)}.row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Dataset Prompt Composer</h1>
+  <div class="sub">Demo conceptual: las familias definen el contexto y las reglas deciden qué combinaciones tienen sentido.</div>
+</header>
+
+<div class="app">
+<aside>
+  <div class="section">
+    <h3>1. Familia fotográfica</h3>
+    <div id="families"></div>
+  </div>
+  <div class="section">
+    <h3>Reglas activas</h3>
+    <div id="rules"></div>
+  </div>
+</aside>
+
+<main>
+  <div class="section">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <h2 style="margin:0">2. Variables de la escena</h2>
+      <button class="linkbtn" onclick="releaseAll()" title="Poner todas las variables en aleatorio">Liberar todo</button>
+    </div>
+    <div class="legend small" style="margin-top:8px">
+      <span><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1"/><circle cx="15" cy="15" r="1"/></svg>Aleatorio</span>
+      <span><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Fijo</span>
+      <span><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M6.3 6.3l11.4 11.4"/></svg>Anulado</span>
+    </div>
+    <div id="controls"></div>
+  </div>
+
+  <div class="section">
+    <h2>3. Prompt resultante</h2>
+    <div id="prompt" class="prompt"></div>
+    <div class="actions" style="margin-top:10px">
+      <button class="primary" onclick="randomize()">Generar candidato</button>
+      <button onclick="copyPrompt()">Copiar prompt</button>
+      <button onclick="generateBatch()">Generar 10 candidatos</button>
+    </div>
+    <div id="status"></div>
+  </div>
+
+  <div class="section">
+    <h2>Batch</h2>
+    <div class="small">Los candidatos se generan respetando la familia y sus reglas, no como un producto cartesiano ciego.</div>
+    <div id="batch"></div>
+  </div>
+</main>
+
+<div class="right">
+  <div class="section">
+    <h3>JSON editable</h3>
+    <div class="small">Puedes reemplazar el JSON completo. La estructura contiene listas, familias y reglas de compatibilidad.</div>
+    <textarea id="jsonEditor"></textarea>
+    <div class="actions" style="margin-top:10px">
+      <button class="primary" onclick="loadJSON()">Cargar JSON</button>
+      <button onclick="resetJSON()">Restaurar demo</button>
+    </div>
+    <div id="jsonStatus"></div>
+  </div>
+</div>
+
+<script>
+const DEMO = {
+  lists:{
+    poses:[
+      "standing naturally with relaxed posture",
+      "standing with one leg slightly bent",
+      "standing with weight shifted to one side",
+      "sitting upright on a chair",
+      "sitting casually with one leg crossed",
+      "sitting on the edge of a bed",
+      "leaning casually against a wall",
+      "walking naturally",
+      "kneeling casually on a soft surface",
+      "lying naturally on her side"
+    ],
+    angles:[
+      "front-facing view","three-quarter view from the left","three-quarter view from the right",
+      "left side profile","right side profile","slightly low angle","slightly high angle",
+      "over-the-shoulder view","rear three-quarter view","rear view"
+    ],
+    actions:[
+      "looking naturally toward the camera","looking away from the camera","adjusting her hair",
+      "checking her phone","holding a coffee cup","walking casually","looking at something nearby",
+      "adjusting her clothing naturally","resting one hand casually on a nearby surface","smiling naturally"
+    ],
+    outfits:[
+      "plain white t-shirt and casual jeans","plain black t-shirt and casual jeans",
+      "simple fitted neutral-colored top and jeans","casual oversized sweatshirt and leggings",
+      "light sweater and casual pants","simple blouse and jeans","casual tank top and loose trousers",
+      "simple summer dress","casual jacket over a basic t-shirt","simple athletic outfit"
+    ],
+    locations:[
+      "bedroom","living room","bathroom mirror","apartment hallway","kitchen",
+      "coffee shop","quiet residential street","urban sidewalk","park","car interior"
+    ],
+    camera:[
+      "casual smartphone photograph","front-facing smartphone camera","rear smartphone camera photograph",
+      "mirror selfie photograph","casual handheld photograph","amateur indoor photograph",
+      "casual street photograph","35mm film photograph","compact digital camera photograph","candid photograph"
+    ],
+    framing:[
+      "close-up portrait","head and shoulders","chest-up portrait","waist-up portrait",
+      "three-quarter body shot","full-body shot","wide environmental portrait","medium shot",
+      "mirror full-body photograph","candid environmental photograph"
+    ],
+    lighting:[
+      "soft natural window light","diffused daylight","indirect indoor daylight","overcast outdoor daylight",
+      "soft morning light","soft afternoon light","warm indoor ambient light",
+      "mixed natural and indoor light","subtle evening light","neutral daylight"
+    ]
+  },
+  families:{
+    mirror:{
+      label:"Mirror / Selfie",
+      description:"Autofotos y fotografías frente al espejo.",
+      preferred:{
+        locations:["bathroom mirror","bedroom","apartment hallway"],
+        camera:["mirror selfie photograph","front-facing smartphone camera","casual smartphone photograph"],
+        framing:["mirror full-body photograph","three-quarter body shot","full-body shot"],
+        actions:["checking her phone","adjusting her hair","looking naturally toward the camera","smiling naturally"],
+        angles:["front-facing view","three-quarter view from the left","three-quarter view from the right","slightly high angle"],
+        poses:["standing naturally with relaxed posture","standing with one leg slightly bent","standing with weight shifted to one side","sitting on the edge of a bed"]
+      }
+    },
+    indoor_candid:{
+        label:"Indoor Candid",
+        description:"Momentos cotidianos dentro de casa.",
+        preferred:{
+          locations:["bedroom","living room","kitchen","apartment hallway"],
+          camera:["casual smartphone photograph","rear smartphone camera photograph","amateur indoor photograph","candid photograph"],
+          framing:["medium shot","waist-up portrait","three-quarter body shot","wide environmental portrait"],
+          actions:["looking at something nearby","adjusting her hair","holding a coffee cup","resting one hand casually on a nearby surface"],
+          angles:["three-quarter view from the left","three-quarter view from the right","front-facing view","slightly high angle","over-the-shoulder view"]
+        },
+        avoid:{actions:["walking casually"],locations:["park","urban sidewalk","quiet residential street"]}
+      },
+      street_candid:{
+        label:"Street Candid",
+        description:"Fotografía casual en exteriores, sin apariencia editorial.",
+        preferred:{
+          locations:["quiet residential street","urban sidewalk","park","coffee shop"],
+          camera:["casual street photograph","casual handheld photograph","candid photograph","rear smartphone camera photograph"],
+          framing:["three-quarter body shot","full-body shot","wide environmental portrait","candid environmental photograph"],
+          actions:["walking casually","looking at something nearby","looking away from the camera","holding a coffee cup"],
+          poses:["walking naturally","standing naturally with relaxed posture","standing with weight shifted to one side"],
+          lighting:["overcast outdoor daylight","soft morning light","soft afternoon light","neutral daylight","subtle evening light"]
+        },
+        avoid:{locations:["bathroom mirror","bedroom"],camera:["mirror selfie photograph","front-facing smartphone camera"]}
+      },
+      portrait:{
+        label:"Portrait / Identity",
+        description:"Imágenes destinadas a reforzar identidad facial y expresiones.",
+        preferred:{
+          framing:["close-up portrait","head and shoulders","chest-up portrait","waist-up portrait"],
+          angles:["front-facing view","three-quarter view from the left","three-quarter view from the right","left side profile","right side profile"],
+          actions:["looking naturally toward the camera","looking away from the camera","smiling naturally"],
+          camera:["casual smartphone photograph","compact digital camera photograph","35mm film photograph"],
+          lighting:["soft natural window light","diffused daylight","indirect indoor daylight","neutral daylight"]
+        }
+      },
+      full_body:{
+        label:"Full Body",
+        description:"Cobertura corporal y postura.",
+        preferred:{
+          framing:["full-body shot","three-quarter body shot","wide environmental portrait","mirror full-body photograph"],
+          angles:["front-facing view","three-quarter view from the left","three-quarter view from the right","rear three-quarter view","rear view"],
+          poses:["standing naturally with relaxed posture","standing with one leg slightly bent","standing with weight shifted to one side","walking naturally","leaning casually against a wall"],
+          actions:["walking casually","looking naturally toward the camera","looking away from the camera","adjusting her clothing naturally"]
+        }
+      },
+      everyday:{
+        label:"Everyday Activity",
+        description:"Situaciones normales que hacen que la identidad parezca una persona real y no una ficha de catálogo.",
+        preferred:{
+          actions:["checking her phone","holding a coffee cup","looking at something nearby","adjusting her hair","resting one hand casually on a nearby surface"],
+          locations:["kitchen","coffee shop","living room","urban sidewalk","park","car interior"],
+          camera:["casual smartphone photograph","rear smartphone camera photograph","candid photograph","casual handheld photograph"],
+          framing:["medium shot","waist-up portrait","three-quarter body shot","candid environmental photograph"]
+        }
+      }
+  },
+  template:"{pose}, {angle}, {action}, {outfit}, {location}, {camera}, {framing}, {lighting}"
+};
+
+let data = structuredClone(DEMO);
+let currentFamily = "mirror";
+let current = {};
+
+function singular(k){return k.endsWith("ies")?k.slice(0,-3)+"y":(k.endsWith("s")?k.slice(0,-1):k)}
+function fill(tpl,vals){
+  return tpl.replace(/\{(\w+)\}/g,(m,name)=>{
+    for(const [k,v] of Object.entries(vals)){
+      if(k===name||singular(k)===name) return v;
+    }
+    return m;
+  }).replace(/\s*,(\s*,)+/g,",").replace(/^[\s,]+|[\s,]+$/g,"");
+}
+function valuesFor(field){
+  const preferred = data.families[currentFamily]?.preferred?.[field];
+  return (preferred && preferred.length) ? preferred : (data.lists[field] || []);
+}
+function pick(arr){return arr[Math.floor(Math.random()*arr.length)]}
+function forbidden(field,value){
+  const avoid = data.families[currentFamily]?.avoid?.[field] || [];
+  return avoid.includes(value);
+}
+function validValue(field){
+  let arr = valuesFor(field).filter(v=>!forbidden(field,v));
+  return pick(arr.length ? arr : data.lists[field]);
+}
+function renderFamilies(){
+  const box=document.getElementById("families"); box.innerHTML="";
+  for(const [key,f] of Object.entries(data.families)){
+    const b=document.createElement("button");
+    b.className="family"+(key===currentFamily?" active":"");
+    b.innerHTML=`<strong>${f.label}</strong><br><span class="small">${f.description}</span>`;
+    b.onclick=()=>{currentFamily=key;render();randomize()};
+    box.appendChild(b);
+  }
+}
+function renderRules(){
+  const f=data.families[currentFamily]||{};
+  const box=document.getElementById("rules"); box.innerHTML="";
+  const p=f.preferred||{}, a=f.avoid||{};
+  for(const [field,vals] of Object.entries(p))
+    box.innerHTML+=`<div class="rule"><span class="badge">${field}</span> prioriza ${vals.length} opciones</div>`;
+  for(const [field,vals] of Object.entries(a))
+    box.innerHTML+=`<div class="rule warn"><span class="badge">${field}</span> evita ${vals.join(", ")}</div>`;
+}
+const lock={}; // campo -> {mode:"random"|"fixed"|"off", value}
+const ICONS={
+  random:'<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1"/><circle cx="15" cy="9" r="1"/><circle cx="9" cy="15" r="1"/><circle cx="15" cy="15" r="1"/></svg>',
+  fixed:'<svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
+  off:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M6.3 6.3l11.4 11.4"/></svg>'
+};
+const MODE_TITLES={random:"Aleatorio",fixed:"Fijo: conserva este valor",off:"Anulado: no aparece en el prompt"};
+function modeOf(f){return lock[f]?.mode||"random"}
+function applyModeUI(field){
+  const w=document.getElementById("fld_"+field); if(!w)return;
+  const m=modeOf(field);
+  w.dataset.mode=m;
+  w.querySelectorAll(".seg button").forEach(b=>b.classList.toggle("on",b.dataset.mode===m));
+  w.querySelector("select").disabled=(m==="off");
+}
+function setMode(field,mode){
+  const sel=document.getElementById("sel_"+field);
+  lock[field]={mode,value:sel?sel.value:lock[field]?.value};
+  applyModeUI(field);
+  updatePrompt();
+}
+function releaseAll(){
+  for(const f of Object.keys(data.lists)){lock[f]={mode:"random"};applyModeUI(f)}
+  randomize();
+}
+function renderControls(){
+  const box=document.getElementById("controls"); box.innerHTML="";
+  for(const field of Object.keys(data.lists)){
+    const wrap=document.createElement("div"); wrap.className="field"; wrap.id="fld_"+field;
+    const head=document.createElement("div"); head.className="fhead";
+    const lab=document.createElement("label"); lab.textContent=field;
+    const seg=document.createElement("div"); seg.className="seg";
+    for(const m of ["random","fixed","off"]){
+      const b=document.createElement("button"); b.dataset.mode=m; b.title=MODE_TITLES[m]; b.innerHTML=ICONS[m];
+      b.onclick=()=>setMode(field,m);
+      seg.appendChild(b);
+    }
+    head.appendChild(lab); head.appendChild(seg);
+    const sel=document.createElement("select"); sel.id="sel_"+field;
+    data.lists[field].forEach(v=>{const o=document.createElement("option");o.value=v;o.textContent=v;sel.appendChild(o)});
+    // restaurar valor fijo si el valor sigue existiendo en la lista
+    const l=lock[field];
+    if(l?.value!==undefined){sel.value=l.value; if(sel.value!==l.value&&l.mode==="fixed")lock[field]={mode:"random"};}
+    // elegir a mano un valor = dejarlo fijo
+    sel.onchange=()=>{lock[field]={mode:"fixed",value:sel.value};applyModeUI(field);updatePrompt()};
+    wrap.appendChild(head); wrap.appendChild(sel); box.appendChild(wrap);
+    applyModeUI(field);
+  }
+}
+function pickFor(field){
+  const l=lock[field];
+  if(l?.mode==="off") return "";
+  if(l?.mode==="fixed"&&l.value!==undefined) return l.value;
+  return validValue(field);
+}
+function setSelect(field,value){
+  const s=document.getElementById("sel_"+field); if(!s)return;
+  s.value=value;
+  if(s.value!==value)s.selectedIndex=0;
+}
+function randomize(){
+  current={};
+  for(const field of Object.keys(data.lists)){
+    current[field]=pickFor(field);
+    if(current[field])setSelect(field,current[field]);
+  }
+  updatePrompt();
+}
+function updatePrompt(){
+  for(const field of Object.keys(data.lists)){
+    const s=document.getElementById("sel_"+field);
+    if(s)current[field]=(modeOf(field)==="off")?"":s.value;
+  }
+  document.getElementById("prompt").textContent=fill(data.template,current);
+}
+const ICON_COPY='<svg viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
+const ICON_OK='<svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>';
+function generateBatch(){
+  const box=document.getElementById("batch"); box.innerHTML="";
+  for(let i=0;i<10;i++){
+    const item={};
+    for(const field of Object.keys(data.lists)) item[field]=pickFor(field);
+    const p=fill(data.template,item);
+    const div=document.createElement("div");div.className="card";
+    const txt=document.createElement("div");txt.className="txt";txt.textContent=`${i+1}. ${p}`;
+    const btn=document.createElement("button");btn.className="copy-btn";btn.title="Copiar este prompt";btn.innerHTML=ICON_COPY;
+    btn.onclick=async()=>{
+      try{await navigator.clipboard.writeText(p);}catch(e){return}
+      btn.classList.add("done");btn.innerHTML=ICON_OK;
+      setTimeout(()=>{btn.classList.remove("done");btn.innerHTML=ICON_COPY},1200);
+    };
+    div.appendChild(txt);div.appendChild(btn);box.appendChild(div);
+  }
+}
+async function copyPrompt(){
+  await navigator.clipboard.writeText(document.getElementById("prompt").textContent);
+  document.getElementById("status").innerHTML='<span class="ok">Prompt copiado.</span>';
+}
+function loadJSON(){
+  try{
+    const parsed=JSON.parse(document.getElementById("jsonEditor").value);
+    if(!parsed.lists||!parsed.families||!parsed.template)throw new Error("Faltan lists, families o template.");
+    data=parsed;
+    currentFamily=Object.keys(data.families)[0];
+    render();randomize();
+    document.getElementById("jsonStatus").innerHTML='<span class="ok">JSON cargado correctamente.</span>';
+  }catch(e){document.getElementById("jsonStatus").innerHTML='<span class="warn">Error: '+e.message+'</span>'}
+}
+function resetJSON(){
+  data=structuredClone(DEMO);currentFamily="mirror";
+  document.getElementById("jsonEditor").value=JSON.stringify(data,null,2);
+  render();randomize();
+  document.getElementById("jsonStatus").textContent="Demo restaurado.";
+}
+function render(){
+  renderFamilies();renderRules();renderControls();
+  document.getElementById("jsonEditor").value=JSON.stringify(data,null,2);
+}
+render();randomize();
+</script>
+</body>
+</html>

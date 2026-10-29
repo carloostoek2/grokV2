@@ -1,10 +1,21 @@
-> **Update:** runtime source of truth for API graphs is now on Vast (`api_workflows/{flow_id}.json`, SSH fetch). See [REMOTE_API_WORKFLOWS.md](./REMOTE_API_WORKFLOWS.md). Embed `templates/` remains the offline fallback.
+> **Update 2026-10-25 — runtime actual: Google Colab + A100-SXM4-80GB (no Vast).**
+> ComfyUI 0.42.0 escucha en `127.0.0.1:8188`; el bot entra por
+> `ssh -N -L 127.0.0.1:8188:127.0.0.1:8188` vía `colab ssh --proxy-mode`, y
+> `COMFYUI_WORKFLOW_SOURCE=embed` (los templates del repo son la fuente de verdad).
+> Estado del runtime, pesos y salud de cada flujo:
+> [INVENTARIO_BOX_COLAB.md](./INVENTARIO_BOX_COLAB.md).
 >
-> **Estado real del box (config, pesos, custom nodes y salud de cada flujo):**
-> [INVENTARIO_BOX_VAST.md](./INVENTARIO_BOX_VAST.md) — foto del 2026-10-03. Las secciones
-> §3-§6 de abajo son del 2026-09-05 y quedaron desactualizadas en el **inventario de flujos**
-> (hoy son 10, no 4) y en el contrato `_meta` (falta `requires_source`, ya documentado en §5).
-> El resto del diseño (transporte, cliente, render, descarga) sigue vigente.
+> **Bloque HQ (2026-10-25):** los 7 flujos `*_hq` se afinaron para **candid/phone**
+> (piel con textura, sin retoque): Dirty HQ 10 pasos/cfg 1.0,
+> Grok Style HQ LoRA 0.5 + refine 0.25, Grok Edit HQ 10 pasos/LoRA 0.5, Ágil HQ 8 pasos,
+> NSFW HQ LoRA 0.8. En la VM actual corren **7/7**: el checkpoint Dirty (13.14 GB) y la
+> LoRA de identidad (1.83 GB) se instalaron el 2026-10-25; smoke con `success` en los 7,
+> ver el inventario Colab.
+>
+> **Histórico Vast:** las secciones §1-§6 describen el box Vast (`18188`,
+> `/workspace/ComfyUI`, pesos fp8). Se conservan como receta histórica; donde digan
+> Vast/18188, leer Colab/8188. El diseño del slice (transporte, cliente, render,
+> descarga) sigue vigente.
 
 # ComfyUI en grokV2 — integración por API HTTP/WS (avance y estado)
 
@@ -79,7 +90,7 @@ Detalles del flujo por generación:
    request **no** es soportado (`supports()==False` → mensaje user-safe) o
    `ProviderInputError` directo.
 3. `transport.ensure()` devuelve `http://127.0.0.1:<puerto_local>` (túnel al
-   `COMFYUI_REMOTE_PORT` dentro del box, en el box real **18188**).
+   `COMFYUI_REMOTE_PORT` dentro del box; **Colab actual: 8188**, Vast histórico: 18188).
 4. `render()` copia la plantilla, pone el prompt del usuario en el nodo positivo y
    randomiza los seeds de los nodos KSampler.
 5. `run_workflow()` encola con `client_id`; escucha `/ws` hasta `executing node=None`
@@ -93,7 +104,8 @@ Detalles del flujo por generación:
    meta={"file_paths": [...] , "download_allowlist": None})`. **Sin `comfyui_remotes`.**
 
 Settings/env: `COMFYUI_HOST`/`COMFYUI_PORT` = SSH al box (host vacío = deshabilitado);
-`COMFYUI_REMOTE_PORT` = puerto HTTP de ComfyUI dentro del box (default 18188);
+`COMFYUI_REMOTE_PORT` = puerto HTTP de ComfyUI dentro del box (default 18188;
+Colab actual: **8188**);
 `COMFYUI_TUNNEL_LOCAL_PORT` = puerto local a bindear (0 = efímero).
 
 ## 3. Qué se validó (smoke en vivo)

@@ -160,3 +160,56 @@ def test_resolve_local_port_ephemeral_is_free_port():
     )
     port = fwd._resolve_local_port()
     assert isinstance(port, int) and 1024 <= port <= 65535
+
+
+@pytest.mark.asyncio
+async def test_ensure_uses_direct_connection_when_port_open():
+    spawner = FakeSpawner()
+    fwd = SshLocalForward(
+        TunnelConfig(host="colab-comfy", remote_port=8188, local_port=0),
+        spawner=spawner,
+        grace=0.0,
+        port_checker=lambda p: p == 8188,
+    )
+
+    url = await fwd.ensure()
+
+    assert url == "http://127.0.0.1:8188"
+    assert fwd.running is True
+    assert fwd.bound_port == 8188
+    assert len(spawner.calls) == 0  # No SSH process spawned
+
+
+@pytest.mark.asyncio
+async def test_close_and_restart_with_direct_connection():
+    spawner = FakeSpawner()
+    fwd = SshLocalForward(
+        TunnelConfig(host="colab-comfy", remote_port=8188, local_port=0),
+        spawner=spawner,
+        grace=0.0,
+        port_checker=lambda p: p == 8188,
+    )
+
+    assert await fwd.ensure() == "http://127.0.0.1:8188"
+    await fwd.close()
+    assert fwd.running is False
+    assert fwd.bound_port is None
+
+    assert await fwd.restart() == "http://127.0.0.1:8188"
+    assert fwd.running is True
+    assert len(spawner.calls) == 0
+
+
+@pytest.mark.asyncio
+async def test_ensure_localhost_with_port_closed_raises():
+    spawner = FakeSpawner()
+    fwd = SshLocalForward(
+        TunnelConfig(host="127.0.0.1", remote_port=8188, local_port=0),
+        spawner=spawner,
+        grace=0.0,
+        port_checker=lambda p: False,
+    )
+
+    with pytest.raises(ProviderUnavailableError):
+        await fwd.ensure()
+    assert len(spawner.calls) == 0

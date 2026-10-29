@@ -1,0 +1,129 @@
+{
+  "_meta": {
+    "id": "dirty_realism_hq",
+    "name": "Dirty Realism (HQ A100)",
+    "media_type": "image",
+    "positive_node": "4",
+    "seed_nodes": [
+      "7"
+    ],
+    "save_nodes": [
+      "10"
+    ],
+    "supports_source": false,
+    "source": "Krea2-SAT-DirtyRealism 'DirtyUncut' (civitai 2796522 / modelVersion 3372523) fp8 UNET-only, drop-in for krea2_turbo. Uncensored photographic realism, candid and unpolished. No style LoRA: the checkpoint IS the look. Candid tuning 2026-10-25: 10 steps, cfg 1.0, euler/simple, 9:16 @ 1.5 MP. A/B 2026-10-25 chose this B variant over 12/cfg2.0 for a slightly softer, more natural skin texture; at cfg 1.0 the negative prompt is inert (Turbo path), so skin texture comes from the checkpoint + positive prompt. krea2SATDirtyRealism_uncut_fp8.safetensors was downloaded and installed on the Colab A100 VM on 2026-10-25 (comfyui-workflow-models-downloader)."
+  },
+  "1": {
+    "inputs": {
+      "unet_name": "krea2SATDirtyRealism_uncut_fp8.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader"
+  },
+  "2": {
+    "inputs": {
+      "clip_name": "qwen3vl_4b_bf16.safetensors",
+      "type": "krea2",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader"
+  },
+  "3": {
+    "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
+    },
+    "class_type": "VAELoader"
+  },
+  "4": {
+    "inputs": {
+      "text": "",
+      "clip": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "5": {
+    "inputs": {
+      "text": "worst quality, low quality, watermark, airbrushed skin, plastic skin, waxy skin, smooth featureless skin, beauty filter, retouched, studio lighting, softbox, glossy skin, oversharpened, hdr glow, cgi, 3d render, illustration",
+      "clip": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "6": {
+    "inputs": {
+      "width": [
+        "8",
+        0
+      ],
+      "height": [
+        "8",
+        1
+      ],
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage"
+  },
+  "7": {
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "positive": [
+        "4",
+        0
+      ],
+      "negative": [
+        "5",
+        0
+      ],
+      "latent_image": [
+        "6",
+        0
+      ],
+      "seed": 0,
+      "steps": 10,
+      "cfg": 1.0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1.0
+    },
+    "class_type": "KSampler"
+  },
+  "8": {
+    "inputs": {
+      "aspect_ratio": "9:16 (Portrait Widescreen)",
+      "megapixels": 1.5,
+      "multiple": 32
+    },
+    "class_type": "ResolutionSelector"
+  },
+  "9": {
+    "inputs": {
+      "samples": [
+        "7",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "10": {
+    "inputs": {
+      "images": [
+        "9",
+        0
+      ],
+      "filename_prefix": "grokbot/dirty_realism"
+    },
+    "class_type": "SaveImage"
+  }
+}
