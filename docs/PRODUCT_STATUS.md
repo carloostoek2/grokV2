@@ -232,6 +232,18 @@ local-forward** (`transport.py` → `client.py` → plantillas API-format en
   0.25) por una textura un poco más suave; A queda como referencia.
   El bot usa `COMFYUI_WORKFLOW_SOURCE=embed`, así que los
   cambios de template aplican sin desplegar al box.
+- **Ágil Edit reemplazado (`agil_edit_qwen`, 2026-10-29, commit directo `7c018bf`)**: el grafo pasa
+  de Qwen-Image-Edit-2511 GGUF Q4_K_M a **Qwen-Image-Edit-2509 fp8** (`qwen_image_edit_2509_fp8_e4m3fn`)
+  con la LoRA **Qwen-Image-Edit-2509-Lightning-4steps**. Un `ComfySwitchNode` (booleano `433:443`)
+  alterna Lightning (4 pasos / cfg 1.0, el valor del template) y base (20 pasos / cfg 4.0). El `_meta`
+  apunta a los ids del nuevo export: positivo `433:111`, negativo `433:110`, seed `433:3`, save `469`
+  y fuente `78` (`LoadImage` → `FluxKontextImageScale`). Las entradas anteriores que describen
+  Ágil Edit como 2511 GGUF quedan como histórico. Con `COMFYUI_WORKFLOW_SOURCE=embed` el repo es
+  la fuente de verdad, y aplicar el cambio incluye reiniciar `grok-bot.service` (skill `comfy-add-flow`,
+  modo «reemplazar»).
+- **MiniMax H3 (`minimax_h3_i2v`, 2026-10-04, commit directo `f6bbae3`)**: se registra en
+  `COMFYUI_FLOWS` como flujo de video (también en `COMFY_VIDEO_MODELS`). Desde `737944c`
+  está en `COMFYUI_MENU_HIDDEN_FLOWS`, así que no aparece en el teclado de `/config`.
 - **Alcance actual**: **26 flujos registrados** en `COMFYUI_FLOWS` y **16 visibles** en el
   `/config` (9 base + 7 `*_hq`); el resto son legacy/ocultos
   (`COMFYUI_MENU_HIDDEN_FLOWS`). Salud real de cada flujo y pesos instalados:
