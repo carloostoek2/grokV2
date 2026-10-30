@@ -192,6 +192,30 @@ local-forward** (`transport.py` → `client.py` → plantillas API-format en
   diferencia del modelo *Raw* que menciona krea2edit), y **la LoRA de identidad transfiere al
   finetune** (la instrucción se cumple). 12 s txt2img / 16 s edición; la variante CFG 3 + 20
   pasos da algo más de detalle a ~3× el tiempo. **La descarga exige token de Civitai.**
+- **Flux, Face Detail, InstantID y botones de cadena (2026-10-03, PR #11)**: se registran
+  tres flujos con su template embebido: `flux1_dev_t2i` (**Flux.1 Dev**, txt2img),
+  `face_detail_impact` (**Face Detail**, exige foto) e `instantid_sdxl` (**InstantID SDXL**,
+  exige foto de la cara). `donut_face` y `wan_i2v` salen del teclado de `/config`
+  (`COMFYUI_MENU_HIDDEN_FLOWS`), pero siguen en el catálogo y en `VALID_COMFYUI_MODELS`, así
+  que una config guardada con ellos no se pierde. Bajo un resultado de **imagen de ComfyUI**
+  (nunca de Grok/xAI, Kie o Replicate) aparecen botones de cadena. Tocar uno no genera:
+  deja `model=comfyui` con el flujo destino, recuerda en memoria `last_comfy_path` y espera
+  el siguiente texto.
+  - **Editar**: solo si el flujo tiene hermano de edición (`grok_style` → `grok_edit`,
+    `dirty_realism` → `dirty_edit`, `qwen21_t2i` / `agil_solo` / `agil_moody` →
+    `agil_edit_qwen`, `agil_nsfw` → `agil_edit_nsfw`). Flux no tiene, así que no lo muestra.
+  - **Detalle cara**: manda la imagen a `face_detail_impact`; no aparece en video ni sobre
+    un resultado de ese mismo flujo.
+  - **Otra toma**: solo en txt2img; repite el flujo sin foto de entrada.
+  - Editar y Detalle cara usan los bytes de `last_comfy_path` como `source_image` del
+    siguiente prompt.
+- **PNG grande como documento (2026-10-03, PR #12)**: un PNG local de ComfyUI de más de
+  9.5 MiB (`MAX_PHOTO_BYTES`, bajo el tope de 10 MiB de `sendPhoto`) se envía intacto con
+  `sendDocument`, sin reescalar ni pasar a JPEG; los que caben siguen como foto. La regla es
+  por tamaño, no por flujo. Si Telegram rechaza el envío (`TelegramBadRequest`) o el archivo
+  pasa de `MAX_MEDIA_BYTES` (50 MiB), el estado deja de decir «generando» y el usuario ve
+  «No se pudo enviar la imagen por Telegram. Intenta de nuevo.». No se probó contra
+  Telegram real con el PNG de 20–28 MiB de Face Detail.
 - **Bloque HQ + migración a Colab (2026-10-24/25)**: el menú activo suma **7 flujos
   `*_hq`** (Grok Style, Ágil Solo, Ágil NSFW, Ágil Moody, Dirty Realism, Dirty Edit,
   Grok Edit) en **bf16** (Krea/Moody) o **fp8** (Dirty) y 1.5-2.0 MP, pensados para la
