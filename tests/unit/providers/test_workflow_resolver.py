@@ -58,6 +58,7 @@ def test_flows_returns_registered_flows():
         "agil_moody",
         "agil_moody_hq",
         "agil_edit_qwen",
+        "agil_edit_hq",
         "agil_edit_nsfw",
         "grok_edit",
         "grok_edit_hq",

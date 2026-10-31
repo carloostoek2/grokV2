@@ -95,6 +95,7 @@ def test_config_comfyui_keyboard_lists_only_flow():
         "cfg:comfyui:flow:dirty_realism_hq",
         "cfg:comfyui:flow:dirty_edit_hq",
         "cfg:comfyui:flow:grok_edit_hq",
+        "cfg:comfyui:flow:agil_edit_hq",
         "cfg:back:model",
         "cfg:close",
     ]

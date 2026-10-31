@@ -241,11 +241,41 @@ local-forward** (`transport.py` → `client.py` → plantillas API-format en
   Ágil Edit como 2511 GGUF quedan como histórico. Con `COMFYUI_WORKFLOW_SOURCE=embed` el repo es
   la fuente de verdad, y aplicar el cambio incluye reiniciar `grok-bot.service` (skill `comfy-add-flow`,
   modo «reemplazar»).
+- **Ágil Edit HQ + vuelta a 2511 (`agil_edit_hq` nuevo, `agil_edit_qwen` retocado, 2026-10-30)**:
+  el flujo de edición por defecto vuelve a **Qwen-Image-Edit-2511**, ahora en **fp8mixed**
+  (antes 2509 fp8 desde `7c018bf`; el 2511 anterior era GGUF Q4_K_M), portado a mano de la
+  plantilla oficial `image_qwen_image_edit_2511`: se añaden los dos
+  `FluxKontextMultiReferenceLatentMethod` (`index_timestep_zero`, positivo y negativo),
+  `ModelSamplingAuraFlow` shift **3.1**, `CFGNorm` 1/`pre_cfg` false y la rama base pasa a
+  **40 pasos / cfg 3.0** (la plantilla oficial usa cfg 3, no 4). Cambia además el
+  `_meta.timeout` de 600 a **900 s**: medido en el box, una primera pasada en frío (20 GB desde
+  Drive) tardó **585,5 s** con 2509 y **456,3 s** con 2511, así que 600 s dejaba el flujo al
+  borde. En caliente la rama base tarda ~79 s de muestreo.
+  Se registra además **`agil_edit_hq`** («Ágil Edit (HQ A100)»), que usa el mismo grafo 2511
+  con Lightning **apagado** (40 pasos / cfg 3.0), un **negativo** anti-plástico horneado
+  (activo a cfg>1) y una etapa final **SeedVR2 7B int8 ×2** (`ResizeImageMaskNode` multiplier 2,
+  tiles 512/128, `SeedVR2PostProcessing` = `lab`) → PNG ~4 MP. Medido con seed 4242 sobre una
+  fuente de `agil_solo`: **208,7 s en frío** (carga del modelo SeedVR2) y ~4,2 MP de salida;
+  SeedVR2 resultó **estructuralmente fiel** (RMSE 1,9 % contra la salida de 1 MP en un recorte
+  al 100 % de la cara) y aporta detalle real al mirar al 100 %. Los flujos `*_hq` de texto
+  (`agil_solo_hq`, `agil_moody_hq`) encadenan ahora a `agil_edit_hq` con el botón «Editar».
+  **A/B del envoltorio de prompt (descartado)**: mismo seed, añadir
+  «Photorealistic, natural skin texture, visible pores, no retouching» al prompt bajó la
+  microtextura del recorte (edge_std 0,0673 → 0,0648); no se añade prefijo/sufijo automático
+  al resolver. Con `COMFYUI_WORKFLOW_SOURCE=embed` el repo es la fuente de verdad y aplicar el
+  cambio incluye reiniciar `grok-bot.service`.
+- **Pesos bf16 restaurados en el runtime Colab (2026-10-30)**: la VM recreada había perdido
+  `krea2_turbo_bf16` y `qwen3vl_4b_bf16`, así que **los 7 flujos `*_hq` fallaban** con
+  `value_not_in_list`. Se descargaron de `Comfy-Org/Krea-2` (26,3 GB + 8,9 GB) y la
+  comprobación cruzada de plantillas contra `GET /models/*` vuelve a dar 0 flujos de menú con
+  pesos faltantes. Siguen sin pesos (ocultos/legacy): `face_detail_impact`, `instantid_sdxl`,
+  `flux1_dev_t2i`, `qwen21_t2i` y los `ohwx_*` — «Detalle cara» del bot depende de
+  `face_detail_impact` y **fallaría** en esta VM hasta instalar `sd_xl_base_1.0`.
 - **MiniMax H3 (`minimax_h3_i2v`, 2026-10-04, commit directo `f6bbae3`)**: se registra en
   `COMFYUI_FLOWS` como flujo de video (también en `COMFY_VIDEO_MODELS`). Desde `737944c`
   está en `COMFYUI_MENU_HIDDEN_FLOWS`, así que no aparece en el teclado de `/config`.
-- **Alcance actual**: **26 flujos registrados** en `COMFYUI_FLOWS` y **16 visibles** en el
-  `/config` (9 base + 7 `*_hq`); el resto son legacy/ocultos
+- **Alcance actual**: **27 flujos registrados** en `COMFYUI_FLOWS` y **17 visibles** en el
+  `/config` (9 base + 8 `*_hq`); el resto son legacy/ocultos
   (`COMFYUI_MENU_HIDDEN_FLOWS`). Salud real de cada flujo y pesos instalados:
   `docs/comfyui/INVENTARIO_BOX_COLAB.md`; el inventario Vast queda como histórico.
 

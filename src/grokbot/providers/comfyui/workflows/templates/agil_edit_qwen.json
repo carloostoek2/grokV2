@@ -16,8 +16,8 @@
     "requires_source": true,
     "source_node": "78",
     "source_input": "image",
-    "timeout": 600,
-    "source": "Qwen-Image-Edit-2509 fp8 (UNETLoader) + Qwen-Image-Edit-2509-Lightning-4steps LoRA, native TextEncodeQwenImageEditPlus. ComfySwitchNode 433:443 (PrimitiveBoolean) toggles Lightning (4 steps / cfg 1.0) vs base (20 steps / cfg 4.0). Replaced 2026-10-29: was 2511 GGUF Q4_K_M. KSampler.positive <- 433:111 (user prompt), KSampler.negative <- 433:110 (empty). Source: LoadImage 78 -> FluxKontextImageScale -> VAEEncode."
+    "timeout": 900,
+    "source": "Qwen-Image-Edit-2511 fp8mixed (UNETLoader) + Qwen-Image-Edit-2511-Lightning-4steps LoRA, manual port of the official template image_qwen_image_edit_2511 (ids 2511): FluxKontextMultiReferenceLatentMethod index_timestep_zero on both conditionings, ModelSamplingAuraFlow shift 3.1, CFGNorm strength 1 pre_cfg false. ComfySwitchNode 433:443 (PrimitiveBoolean, true) toggles Lightning (4 steps / cfg 1.0) vs base (40 steps / cfg 3.0). Replaced 2026-10-30: was 2509 fp8 + 2509 Lightning. Measured live on the A100: base40 warm ~83 s, cold load ~8 min (hence timeout 900). Source: LoadImage 78 -> FluxKontextImageScale -> VAEEncode."
   },
   "78": {
     "inputs": {
@@ -27,7 +27,7 @@
   },
   "469": {
     "inputs": {
-      "filename_prefix": "Qwen_Image_2509",
+      "filename_prefix": "Qwen_Image_2511",
       "format": "png",
       "format.bit_depth": "8-bit",
       "format.input_color_space": "sRGB",
@@ -38,22 +38,14 @@
     },
     "class_type": "SaveImageAdvanced"
   },
-  "433:75": {
+  "433:117": {
     "inputs": {
-      "strength": 1,
-      "pre_cfg": false,
-      "model": [
-        "433:66",
+      "image": [
+        "78",
         0
       ]
     },
-    "class_type": "CFGNorm"
-  },
-  "433:39": {
-    "inputs": {
-      "vae_name": "qwen_image_vae.safetensors"
-    },
-    "class_type": "VAELoader"
+    "class_type": "FluxKontextImageScale"
   },
   "433:38": {
     "inputs": {
@@ -63,12 +55,36 @@
     },
     "class_type": "CLIPLoader"
   },
+  "433:39": {
+    "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
+    },
+    "class_type": "VAELoader"
+  },
   "433:37": {
     "inputs": {
-      "unet_name": "qwen_image_edit_2509_fp8_e4m3fn.safetensors",
+      "unet_name": "qwen_image_edit_2511_fp8mixed.safetensors",
       "weight_dtype": "default"
     },
     "class_type": "UNETLoader"
+  },
+  "433:111": {
+    "inputs": {
+      "prompt": "",
+      "clip": [
+        "433:38",
+        0
+      ],
+      "vae": [
+        "433:39",
+        0
+      ],
+      "image1": [
+        "433:117",
+        0
+      ]
+    },
+    "class_type": "TextEncodeQwenImageEditPlus"
   },
   "433:110": {
     "inputs": {
@@ -88,137 +104,58 @@
     },
     "class_type": "TextEncodeQwenImageEditPlus"
   },
+  "433:148": {
+    "inputs": {
+      "conditioning": [
+        "433:111",
+        0
+      ],
+      "reference_latents_method": "index_timestep_zero"
+    },
+    "class_type": "FluxKontextMultiReferenceLatentMethod"
+  },
+  "433:147": {
+    "inputs": {
+      "conditioning": [
+        "433:110",
+        0
+      ],
+      "reference_latents_method": "index_timestep_zero"
+    },
+    "class_type": "FluxKontextMultiReferenceLatentMethod"
+  },
   "433:66": {
     "inputs": {
-      "shift": 3,
+      "shift": 3.1,
       "sampling": "flow",
-      "model": [
-        "433:440",
-        0
-      ]
-    },
-    "class_type": "ModelSamplingAuraFlow"
-  },
-  "433:111": {
-    "inputs": {
-      "prompt": "sitting on the edge of a bed with legs crossed high, torso leaning forward, three-quarter view from the left highlighting the curve of the waist, checking her phone with a coy expression, wearing , in bedroom, mirror selfie photograph, three-quarter body shot, golden afternoon light grazing the body",
-      "clip": [
-        "433:38",
-        0
-      ],
-      "vae": [
-        "433:39",
-        0
-      ],
-      "image1": [
-        "433:117",
-        0
-      ]
-    },
-    "class_type": "TextEncodeQwenImageEditPlus"
-  },
-  "433:88": {
-    "inputs": {
-      "pixels": [
-        "433:117",
-        0
-      ],
-      "vae": [
-        "433:39",
-        0
-      ]
-    },
-    "class_type": "VAEEncode"
-  },
-  "433:8": {
-    "inputs": {
-      "samples": [
-        "433:3",
-        0
-      ],
-      "vae": [
-        "433:39",
-        0
-      ]
-    },
-    "class_type": "VAEDecode"
-  },
-  "433:89": {
-    "inputs": {
-      "lora_name": "Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors",
-      "strength_model": 1,
       "model": [
         "433:37",
         0
       ]
     },
-    "class_type": "LoraLoaderModelOnly"
+    "class_type": "ModelSamplingAuraFlow"
   },
-  "433:117": {
+  "433:75": {
     "inputs": {
-      "image": [
-        "78",
+      "strength": 1,
+      "pre_cfg": false,
+      "model": [
+        "433:66",
         0
       ]
     },
-    "class_type": "FluxKontextImageScale"
+    "class_type": "CFGNorm"
   },
-  "433:3": {
+  "433:89": {
     "inputs": {
-      "seed": 737732214243744,
-      "steps": [
-        "433:441",
-        0
-      ],
-      "cfg": [
-        "433:442",
-        0
-      ],
-      "sampler_name": "euler",
-      "scheduler": "simple",
-      "denoise": 1,
+      "lora_name": "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
+      "strength_model": 1,
       "model": [
         "433:75",
         0
-      ],
-      "positive": [
-        "433:111",
-        0
-      ],
-      "negative": [
-        "433:110",
-        0
-      ],
-      "latent_image": [
-        "433:88",
-        0
       ]
     },
-    "class_type": "KSampler"
-  },
-  "433:436": {
-    "inputs": {
-      "value": 4
-    },
-    "class_type": "PrimitiveInt"
-  },
-  "433:437": {
-    "inputs": {
-      "value": 1
-    },
-    "class_type": "PrimitiveFloat"
-  },
-  "433:438": {
-    "inputs": {
-      "value": 20
-    },
-    "class_type": "PrimitiveInt"
-  },
-  "433:439": {
-    "inputs": {
-      "value": 4
-    },
-    "class_type": "PrimitiveFloat"
+    "class_type": "LoraLoaderModelOnly"
   },
   "433:440": {
     "inputs": {
@@ -227,7 +164,7 @@
         0
       ],
       "on_false": [
-        "433:37",
+        "433:75",
         0
       ],
       "on_true": [
@@ -271,10 +208,93 @@
     },
     "class_type": "ComfySwitchNode"
   },
+  "433:436": {
+    "inputs": {
+      "value": 4
+    },
+    "class_type": "PrimitiveInt"
+  },
+  "433:437": {
+    "inputs": {
+      "value": 1
+    },
+    "class_type": "PrimitiveFloat"
+  },
+  "433:438": {
+    "inputs": {
+      "value": 40
+    },
+    "class_type": "PrimitiveInt"
+  },
+  "433:439": {
+    "inputs": {
+      "value": 3
+    },
+    "class_type": "PrimitiveFloat"
+  },
   "433:443": {
     "inputs": {
       "value": true
     },
     "class_type": "PrimitiveBoolean"
+  },
+  "433:88": {
+    "inputs": {
+      "pixels": [
+        "433:117",
+        0
+      ],
+      "vae": [
+        "433:39",
+        0
+      ]
+    },
+    "class_type": "VAEEncode"
+  },
+  "433:3": {
+    "inputs": {
+      "seed": 1,
+      "steps": [
+        "433:441",
+        0
+      ],
+      "cfg": [
+        "433:442",
+        0
+      ],
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "433:440",
+        0
+      ],
+      "positive": [
+        "433:148",
+        0
+      ],
+      "negative": [
+        "433:147",
+        0
+      ],
+      "latent_image": [
+        "433:88",
+        0
+      ]
+    },
+    "class_type": "KSampler"
+  },
+  "433:8": {
+    "inputs": {
+      "samples": [
+        "433:3",
+        0
+      ],
+      "vae": [
+        "433:39",
+        0
+      ]
+    },
+    "class_type": "VAEDecode"
   }
 }

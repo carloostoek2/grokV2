@@ -111,14 +111,15 @@ Verificado por API el 2026-10-25: las 4 clases de Krea2/NAG, `SeedNode`,
 
 ## 5. Pesos instalados (Google Drive)
 
-Listado real (`GET /models/...`), 2026-10-25:
+Listado real (`GET /models/...`), **revisado 2026-10-30** tras recrear la VM (los nombres
+bf16 volvieron a descargarse ese día; ver §6.2):
 
 | Carpeta | Archivos |
 |---|---|
-| `diffusion_models/` | `Moody-Krea-Mix-v4.1MM_00001__clean.safetensors`, `Moody-Krea-Mix-v7_00002__clean_fp8.safetensors`, `krea2_turbo_bf16.safetensors`, `z_image_turbo_bf16.safetensors`, `krea2SATDirtyRealism_uncut_fp8.safetensors` |
-| `text_encoders/` | `qwen3vl_4b_bf16.safetensors`, `qwen3vl_4b_fp8_scaled.safetensors`, `qwen_3_4b.safetensors` |
-| `vae/` | `qwen_image_vae.safetensors`, `Wan2_1_VAE_fp32.safetensors`, `ae.safetensors` |
-| `loras/` | `grokstyle_krea2_v2.safetensors`, `Krea2NSFWV4.safetensors`, `Krea2-realism-V2.safetensors`, `Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors`, `krea2/krea2_identity_edit_v1_2.safetensors` |
+| `diffusion_models/` | `Moody-Krea-Mix-v4.1G_00001__clean_nvfp4.safetensors`, `Moody-Krea-Mix-v7_00002__clean_fp8.safetensors`, `krea2_turbo_bf16.safetensors`, `krea2_turbo_fp8_scaled.safetensors`, `krea2SATDirtyRealism_uncut_fp8.safetensors`, `z_image_turbo_bf16.safetensors`, `qwen_image_edit_2509_fp8_e4m3fn.safetensors`, `qwen_image_edit_2511_fp8mixed.safetensors`, `qwen-image-2.1-UC-fp8.safetensors`, `qwen_image_2.1_int8_convrot.safetensors`, `moss_image_sft_bf16.safetensors`, `moss_image_sft_int8_convrot.safetensors`, `ernie-image-turbo.safetensors`, `wan2.2_ti2v_5B_fp16.safetensors`, `turbo.safetensors`, **`seedvr2_7b_int8_convrot.safetensors`** |
+| `text_encoders/` | `qwen3vl_4b_bf16.safetensors`, `qwen3vl_4b_fp8_scaled.safetensors`, `qwen_3_4b.safetensors`, `qwen_2.5_vl_7b_fp8_scaled.safetensors`, `umt5_xxl_fp8_e4m3fn_scaled.safetensors`, `qwen3.5_9b_*`, `ministral-3-3b` |
+| `vae/` | `qwen_image_vae.safetensors`, `qwen_image_2.1_vae_bf16.safetensors`, `Wan2_1_VAE_fp32.safetensors`, `wan2.2_vae.safetensors`, `ae.safetensors`, **`seedvr2_ema_vae_fp16.safetensors`** |
+| `loras/` | `grokstyle_krea2_v2.safetensors`, `Krea2NSFWV4.safetensors`, `Krea2-realism-V2.safetensors`, `Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors`, `Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors`, `krea2/krea2_identity_edit_v1_2.safetensors` |
 
 **Instalados el 2026-10-25** (descargados en la VM con
 `comfyui-workflow-models-downloader`; los 7 flujos HQ corren):
@@ -130,8 +131,8 @@ Listado real (`GET /models/...`), 2026-10-25:
 
 ## 6. Flujos: bloque HQ (menú activo)
 
-El `COMFYUI_FLOWS` registra 26 ids; el menú de Telegram oculta 10 y muestra **16**
-(9 base + 7 `*_hq`). El tuning **candid** del 2026-10-25 vive en
+El `COMFYUI_FLOWS` registra **27** ids; el menú de Telegram oculta 10 y muestra **17**
+(9 base + 8 `*_hq`, tras añadir `agil_edit_hq` el 2026-10-30). El tuning **candid** del 2026-10-25 vive en
 `src/grokbot/providers/comfyui/workflows/templates/*_hq.json` y, como el bot está en
 `COMFYUI_WORKFLOW_SOURCE=embed`, **aplica sin desplegar nada al box**. El resolver cachea
 los flujos embebidos por proceso (`_flows_cached`): tras editar un template hay que
@@ -146,6 +147,11 @@ los flujos embebidos por proceso (`_flows_cached`): tras editar un template hay 
 | `dirty_realism_hq` | DirtyUncut fp8, sin LoRA | euler/simple · 10 pasos · cfg 1.0 | 9:16 @ 1.5 MP | ✅ |
 | `dirty_edit_hq` | DirtyUncut fp8 + `krea2_identity_edit_v1_2` 1.0 | euler/simple · 12 pasos · cfg 2.0 | 9:16 @ 1.5 MP | ✅ |
 | `grok_edit_hq` | Krea2 Turbo bf16 + identity 1.0 + `grokstyle` 0.5 | euler/simple · 10 pasos · cfg 1 | 9:16 @ 1.5 MP | ✅ |
+| `agil_edit_hq` | Qwen-Image-Edit-2511 fp8mixed, Lightning **apagado** + negativo anti-plástico, y **SeedVR2 7B int8 ×2** al final | euler/simple · 40 pasos · cfg 3.0 → SeedVR2 1 paso (`lab`) | 1 MP (FluxKontextImageScale) → ~4 MP | ✅ (208,7 s en frío, seed 4242) |
+
+`agil_edit_qwen` (Ágil Edit) pasa el 2026-10-30 a **2511 fp8mixed + Lightning 4 pasos** (era
+2509 fp8); el `_meta.timeout` sube a 900 s porque la primera pasada en frío tarda 456–585 s
+(ver §6.2).
 
 Notas de diseño:
 
@@ -203,6 +209,33 @@ Mismo prompt, seed fijo y resolución comparable. Salidas en `/tmp/ab/` (local) 
   entre sí: ComfyUI reutilizó la primera pasada cacheada; la comparación de calidad sí
   es válida.
 - Un solo seed/prompt: repetir con 2-3 seeds antes de cambiar el default.
+
+### 6.3 A/B edición Qwen (2026-10-30, seed 4242)
+
+Fuente: una salida de `agil_solo` (896×1600) con prompt de retrato y seed 77777. Instrucción
+`Change her grey shirt to a deep red silk blouse.` en los cuatro brazos, misma seed.
+
+| Brazo | Resultado | Tiempo | Nota |
+|---|---|---|---|
+| `agil_edit_qwen` 2509 fp8 + Lightning (4/cfg 1) | ✅ | 585,5 s (frío) | `edge_std` en el recorte 0,0536 |
+| 2511 fp8mixed + Lightning (4/cfg 1) | ✅ | 456,3 s (frío) | `edge_std` 0,0594 |
+| 2511 fp8mixed rama base (40/cfg 3) | ✅ | 82,9 s (caliente) | `edge_std` 0,0673 — el más texturado |
+| 2511 base 40 + SeedVR2 ×2 | ✅ | 208,7 s (frío) | salida 1504×2784; RMSE 1,9 % vs 1 MP; `edge_std` 0,0867 al 100 % |
+
+Conclusiones: **2511 ≥ 2509** en microtextura y el modelo nuevo conserva mejor identidad
+(coincide con la ficha y con la medición previa del owner); la rama base a 40 pasos es la que
+más detalle da; SeedVR2 ×2 **no inventa** (reducido a 1 MP se parece al original, RMSE 1,9 %)
+y aporta detalle real al 100 %. El envoltorio de prompt probado («Photorealistic, natural skin
+texture, visible pores, no retouching») **empeoró** la microtextura (0,0673 → 0,0648) y se
+descartó.
+
+### 6.4 Arranque en frío tras recrear la VM
+
+Tras un reinicio del runtime, la primera pasada de un flujo que carga 20 GB desde Drive tarda
+**7–10 min** (ComfyUI 0.43 los lee de Drive con `fast_disk=False`); las siguientes son
+rápidas (la rama base de 2511: 79 s de muestreo). Por eso `agil_edit_qwen` lleva
+`timeout: 900` y `agil_edit_hq` `timeout: 1200`. `colab-comfy status` + `curl /system_stats`
+siguen siendo el chequeo previo a cualquier smoke.
 
 ## 7. Gotchas operativos
 

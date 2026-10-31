@@ -1,0 +1,423 @@
+{
+  "_meta": {
+    "id": "agil_edit_hq",
+    "name": "Ágil Edit (HQ A100)",
+    "media_type": "image",
+    "positive_node": "433:111",
+    "positive_input": "prompt",
+    "negative_node": "433:110",
+    "seed_nodes": [
+      "433:3",
+      "sv:54"
+    ],
+    "save_nodes": [
+      "469"
+    ],
+    "supports_source": true,
+    "requires_source": true,
+    "source_node": "78",
+    "source_input": "image",
+    "timeout": 1200,
+    "source": "Qwen-Image-Edit-2511 fp8mixed, base branch (Lightning switch 433:443 = false): 40 steps / cfg 3.0 at ~1 MP (FluxKontextImageScale), then SeedVR2 7B int8 x2 (ResizeImageMaskNode multiplier 2, tiles 512/128) with SeedVR2PostProcessing color_correction_method=lab -> ~4 MP PNG. Negative baked with the anti-plastic list (meaningful at cfg 3). Measured live on the A100 (2026-10-30, seed 4242): 208.7 s cold (SeedVR2 model load), edit stage 79 s warm; SeedVR2 is structurally faithful (RMSE 1.9% vs the 1 MP output on a 100% face crop)."
+  },
+  "78": {
+    "inputs": {
+      "image": "example.png"
+    },
+    "class_type": "LoadImage"
+  },
+  "469": {
+    "inputs": {
+      "filename_prefix": "Qwen_Image_2511_HQ",
+      "format": "png",
+      "format.bit_depth": "8-bit",
+      "format.input_color_space": "sRGB",
+      "images": [
+        "sv:59",
+        0
+      ]
+    },
+    "class_type": "SaveImageAdvanced"
+  },
+  "433:117": {
+    "inputs": {
+      "image": [
+        "78",
+        0
+      ]
+    },
+    "class_type": "FluxKontextImageScale"
+  },
+  "433:38": {
+    "inputs": {
+      "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader"
+  },
+  "433:39": {
+    "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
+    },
+    "class_type": "VAELoader"
+  },
+  "433:37": {
+    "inputs": {
+      "unet_name": "qwen_image_edit_2511_fp8mixed.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader"
+  },
+  "433:111": {
+    "inputs": {
+      "prompt": "",
+      "clip": [
+        "433:38",
+        0
+      ],
+      "vae": [
+        "433:39",
+        0
+      ],
+      "image1": [
+        "433:117",
+        0
+      ]
+    },
+    "class_type": "TextEncodeQwenImageEditPlus"
+  },
+  "433:110": {
+    "inputs": {
+      "prompt": "plastic skin, airbrushed, waxy skin, over-sharpened, cgi, retouched, blurry, extra fingers, watermark, text",
+      "clip": [
+        "433:38",
+        0
+      ],
+      "vae": [
+        "433:39",
+        0
+      ],
+      "image1": [
+        "433:117",
+        0
+      ]
+    },
+    "class_type": "TextEncodeQwenImageEditPlus"
+  },
+  "433:148": {
+    "inputs": {
+      "conditioning": [
+        "433:111",
+        0
+      ],
+      "reference_latents_method": "index_timestep_zero"
+    },
+    "class_type": "FluxKontextMultiReferenceLatentMethod"
+  },
+  "433:147": {
+    "inputs": {
+      "conditioning": [
+        "433:110",
+        0
+      ],
+      "reference_latents_method": "index_timestep_zero"
+    },
+    "class_type": "FluxKontextMultiReferenceLatentMethod"
+  },
+  "433:66": {
+    "inputs": {
+      "shift": 3.1,
+      "sampling": "flow",
+      "model": [
+        "433:37",
+        0
+      ]
+    },
+    "class_type": "ModelSamplingAuraFlow"
+  },
+  "433:75": {
+    "inputs": {
+      "strength": 1,
+      "pre_cfg": false,
+      "model": [
+        "433:66",
+        0
+      ]
+    },
+    "class_type": "CFGNorm"
+  },
+  "433:89": {
+    "inputs": {
+      "lora_name": "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
+      "strength_model": 1,
+      "model": [
+        "433:75",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly"
+  },
+  "433:440": {
+    "inputs": {
+      "switch": [
+        "433:443",
+        0
+      ],
+      "on_false": [
+        "433:75",
+        0
+      ],
+      "on_true": [
+        "433:89",
+        0
+      ]
+    },
+    "class_type": "ComfySwitchNode"
+  },
+  "433:441": {
+    "inputs": {
+      "switch": [
+        "433:443",
+        0
+      ],
+      "on_false": [
+        "433:438",
+        0
+      ],
+      "on_true": [
+        "433:436",
+        0
+      ]
+    },
+    "class_type": "ComfySwitchNode"
+  },
+  "433:442": {
+    "inputs": {
+      "switch": [
+        "433:443",
+        0
+      ],
+      "on_false": [
+        "433:439",
+        0
+      ],
+      "on_true": [
+        "433:437",
+        0
+      ]
+    },
+    "class_type": "ComfySwitchNode"
+  },
+  "433:436": {
+    "inputs": {
+      "value": 4
+    },
+    "class_type": "PrimitiveInt"
+  },
+  "433:437": {
+    "inputs": {
+      "value": 1
+    },
+    "class_type": "PrimitiveFloat"
+  },
+  "433:438": {
+    "inputs": {
+      "value": 40
+    },
+    "class_type": "PrimitiveInt"
+  },
+  "433:439": {
+    "inputs": {
+      "value": 3
+    },
+    "class_type": "PrimitiveFloat"
+  },
+  "433:443": {
+    "inputs": {
+      "value": false
+    },
+    "class_type": "PrimitiveBoolean"
+  },
+  "433:88": {
+    "inputs": {
+      "pixels": [
+        "433:117",
+        0
+      ],
+      "vae": [
+        "433:39",
+        0
+      ]
+    },
+    "class_type": "VAEEncode"
+  },
+  "433:3": {
+    "inputs": {
+      "seed": 1,
+      "steps": [
+        "433:441",
+        0
+      ],
+      "cfg": [
+        "433:442",
+        0
+      ],
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "433:440",
+        0
+      ],
+      "positive": [
+        "433:148",
+        0
+      ],
+      "negative": [
+        "433:147",
+        0
+      ],
+      "latent_image": [
+        "433:88",
+        0
+      ]
+    },
+    "class_type": "KSampler"
+  },
+  "433:8": {
+    "inputs": {
+      "samples": [
+        "433:3",
+        0
+      ],
+      "vae": [
+        "433:39",
+        0
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "sv:57": {
+    "class_type": "ResizeImageMaskNode",
+    "inputs": {
+      "input": [
+        "433:8",
+        0
+      ],
+      "resize_type": "scale by multiplier",
+      "scale_method": "lanczos",
+      "resize_type.multiplier": 2.0
+    }
+  },
+  "sv:58": {
+    "class_type": "SeedVR2Preprocess",
+    "inputs": {
+      "resized_images": [
+        "sv:57",
+        0
+      ]
+    }
+  },
+  "sv:51": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "seedvr2_ema_vae_fp16.safetensors"
+    }
+  },
+  "sv:52": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "seedvr2_7b_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "sv:48": {
+    "class_type": "VAEEncodeTiled",
+    "inputs": {
+      "pixels": [
+        "sv:58",
+        0
+      ],
+      "vae": [
+        "sv:51",
+        0
+      ],
+      "tile_size": 512,
+      "overlap": 128,
+      "temporal_size": 4096,
+      "temporal_overlap": 8
+    }
+  },
+  "sv:61": {
+    "class_type": "SeedVR2Conditioning",
+    "inputs": {
+      "model": [
+        "sv:52",
+        0
+      ],
+      "vae_conditioning": [
+        "sv:48",
+        0
+      ]
+    }
+  },
+  "sv:54": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 1,
+      "steps": 1,
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "sv:52",
+        0
+      ],
+      "positive": [
+        "sv:61",
+        0
+      ],
+      "negative": [
+        "sv:61",
+        1
+      ],
+      "latent_image": [
+        "sv:48",
+        0
+      ]
+    }
+  },
+  "sv:55": {
+    "class_type": "VAEDecodeTiled",
+    "inputs": {
+      "samples": [
+        "sv:54",
+        0
+      ],
+      "vae": [
+        "sv:51",
+        0
+      ],
+      "tile_size": 512,
+      "overlap": 128,
+      "temporal_size": 4096,
+      "temporal_overlap": 8
+    }
+  },
+  "sv:59": {
+    "class_type": "SeedVR2PostProcessing",
+    "inputs": {
+      "images": [
+        "sv:55",
+        0
+      ],
+      "original_resized_images": [
+        "sv:57",
+        0
+      ],
+      "color_correction_method": "lab"
+    }
+  }
+}
