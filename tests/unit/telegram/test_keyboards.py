@@ -74,11 +74,14 @@ def test_config_variant_keyboard():
     assert rows[1][0].text == "✅ Alta calidad"
 
 
-def test_config_comfyui_keyboard_lists_only_flow():
+def test_config_comfyui_keyboard_lists_seeds_and_flows():
     cfg = ComfyUIConfig(model="grok_style")
     data = flat_callback_data(kb.config_comfyui_keyboard(cfg))
     # Flujos del menú (hasta dirty_edit) + navegación; sin legacy ni flujos ocultos.
     assert data == [
+        "cfg:comfyui:seed:random",
+        "cfg:comfyui:seed:batch",
+        "cfg:comfyui:seed:fixed",
         "cfg:comfyui:flow:grok_style",
         "cfg:comfyui:flow:agil_solo",
         "cfg:comfyui:flow:agil_nsfw",
@@ -109,7 +112,8 @@ def test_config_comfyui_has_no_legacy_model_lora_refine_rows():
     cfg = ComfyUIConfig(model="grok_style")
     rows = kb.config_comfyui_keyboard(cfg).inline_keyboard
     labels = [b.text for row in rows for b in row]
-    assert labels[0] == "✅ Grok Style"
+    assert labels[0] == "✅ Semilla aleatoria por imagen"
+    assert labels[3] == "✅ Grok Style"
     for row in rows:
         for b in row:
             if b.callback_data is None:

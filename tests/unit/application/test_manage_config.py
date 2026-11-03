@@ -231,6 +231,54 @@ def test_saved_records_are_distinct_copies():
     assert sessions.saved[0][1] is not sessions.saved[1][1]
 
 
+# --- ComfyUI seed policy ------------------------------------------------------
+
+def test_set_comfyui_seed_modes_keep_last_fixed_seed(sessions):
+    sessions.save_config(
+        USER_ID, _cfg(comfyui=ComfyUIConfig(seed_mode="fixed", seed=999))
+    )
+    uc = _uc(sessions)
+
+    res = uc.set_comfyui_seed(USER_ID, "batch")
+    assert res.ok is True and res.changed is True
+    cc = sessions.get_config(USER_ID).comfyui
+    assert (cc.seed_mode, cc.seed) == ("batch", 999)
+
+    res = uc.set_comfyui_seed(USER_ID, "random")
+    assert res.ok is True and res.changed is True
+    cc = sessions.get_config(USER_ID).comfyui
+    assert (cc.seed_mode, cc.seed) == ("random", 999)
+
+
+def test_set_comfyui_seed_noop_does_not_save(sessions):
+    sessions.save_config(
+        USER_ID, _cfg(comfyui=ComfyUIConfig(seed_mode="batch", seed=999))
+    )
+    uc = _uc(sessions)
+
+    res = uc.set_comfyui_seed(USER_ID, "batch")
+
+    assert res.ok is True and res.changed is False
+    assert len(sessions.saved) == 1  # solo el baseline
+
+
+def test_set_comfyui_seed_rejects_invalid_mode_and_seed(sessions):
+    sessions.save_config(USER_ID, _cfg())
+    uc = _uc(sessions)
+
+    for mode, seed in (
+        ("bogus", None),
+        ("fixed", -1),
+        ("fixed", 1 << 63),
+        ("fixed", True),
+        ("fixed", "1"),
+    ):
+        res = uc.set_comfyui_seed(USER_ID, mode, seed)
+        assert res.ok is False and res.changed is False
+
+    assert len(sessions.saved) == 1  # ningún save inválido
+
+
 def test_set_nano_banana_provider_and_variant(sessions):
     sessions.save_config(USER_ID, _cfg())
     uc = _uc(sessions)

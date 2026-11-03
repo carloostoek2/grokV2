@@ -188,3 +188,19 @@ nodos inyectaban (caso `donut_face`: `vae`, `bbox_detector`, `sam_model_opt`, `m
 | Catálogo v1 (recorte UI) | **Hecho (2026-09-05)** — ComfyUI se maneja por flujos; la UI solo ofrece los flujos registrados (**Grok Style**, **Donut Face**, **Ágil solo**, **Ágil NSFW**). |
 | Smoke Telegram | Recorrido manual en vivo de los flujos ComfyUI imagen (sin refine) — flujos validados por API directa (Grok Style, Donut Face, Ágil solo y Ágil NSFW generaron imagen real). |
 | Hosted API nodes | El box expone también nodos de API alojada (Krea2ImageNode, QwenImage…); fuera de alcance si se decide difusión local. |
+
+## Política de semillas (2026-11-03)
+
+ComfyUIConfig persiste seed_mode (random/fixed/batch) y seed. La petición de imagen
+resuelve el número antes de los reintentos; el lote batch transforma una copia de
+su configuración en fixed, sin modificar la preferencia persistida. El provider usa
+la semilla efectiva para todos los seed_nodes del workflow que exponen un input
+literal `seed` y la devuelve en GenerationResult.meta solo si parcheó al menos un
+nodo. Las peticiones sin seed (incluido video) eligen una semilla en el provider. El
+selector se refiere a generaciones de imagen; la extensión de configuración de
+semillas a video no está incluida y el copy de `/config` y `/semilla` lo acota a
+imágenes.
+
+La interfaz ofrece `/semilla` y botones en `/config`. El rango soportado es
+0..2^63-1. No requiere cambiar Colab. El análisis del editor dinámico basado en
+object_info y el grafo API está en `KSAMPLER_DINAMICO.md`.

@@ -169,6 +169,20 @@ def comfy_chain_destination(
 DEFAULT_COMFYUI_LORA = "none"
 DEFAULT_COMFYUI_REFINE = "1"  # "1" = final refine ON (JSON parity: str "0"/"1")
 
+# --- ComfyUI seed policy ---------------------------------------------------
+# One seed per image ("random"), one seed shared by a batch ("batch"), or a
+# user-pinned value ("fixed"). The range is the 64-bit signed max ComfyUI
+# accepts; keep every validator copy (domain/application/provider/telegram) on
+# these constants so the accepted and persisted ranges cannot drift apart.
+COMFYUI_SEED_LIMIT = 1 << 63  # exclusive: 0 .. 2^63-1
+VALID_COMFYUI_SEED_MODES = ("random", "batch", "fixed")
+
+
+def is_valid_comfyui_seed(value: object) -> bool:
+    """True for a plain int in ``[0, COMFYUI_SEED_LIMIT)`` (``bool`` rejected)."""
+    return type(value) is int and 0 <= value < COMFYUI_SEED_LIMIT
+
+
 IDLE_STATE = "IDLE"
 AWAITING_SOURCE = "AWAITING_SOURCE"
 
@@ -306,6 +320,8 @@ class ComfyUIConfig:
     model: str = DEFAULT_COMFYUI_MODEL
     lora: str = DEFAULT_COMFYUI_LORA
     refine: str = DEFAULT_COMFYUI_REFINE  # "0"/"1" as str (JSON parity)
+    seed_mode: str = VALID_COMFYUI_SEED_MODES[0]
+    seed: int = 0
 
     @classmethod
     def from_record(cls, rec: Mapping) -> "ComfyUIConfig":
@@ -325,10 +341,16 @@ class ComfyUIConfig:
         if refine not in ("0", "1"):
             refine = DEFAULT_COMFYUI_REFINE
 
-        return cls(model=model, lora=lora, refine=refine)
+        seed_mode = rec.get("seed_mode", VALID_COMFYUI_SEED_MODES[0])
+        if seed_mode not in VALID_COMFYUI_SEED_MODES:
+            seed_mode = VALID_COMFYUI_SEED_MODES[0]
+        seed = rec.get("seed", 0)
+        if not is_valid_comfyui_seed(seed):
+            seed = 0
+        return cls(model=model, lora=lora, refine=refine, seed_mode=seed_mode, seed=seed)
 
     def to_record(self) -> dict:
-        return {"model": self.model, "lora": self.lora, "refine": self.refine}
+        return {"model": self.model, "lora": self.lora, "refine": self.refine, "seed_mode": self.seed_mode, "seed": self.seed}
 
     @property
     def refine_enabled(self) -> bool:
@@ -424,6 +446,8 @@ class UserConfig:
             "video_resolution": self.video.resolution,
             "video_model": self.video.model,
             "video_mode": self.video.mode,
+            "comfyui_seed_mode": self.comfyui.seed_mode,
+            "comfyui_seed": self.comfyui.seed,
             "comfyui_model": self.comfyui.model,
             "comfyui_lora": self.comfyui.lora,
             "comfyui_refine": self.comfyui.refine,

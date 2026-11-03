@@ -557,3 +557,48 @@ async def test_qwen_aio_rewrites_prompt(sessions, variables_repo, fast_sleep):
     assert "{pose}" not in prompt  # NO es el template crudo del draw
     request, _ = prov.calls[0]
     assert request.prompt == prompt
+
+async def test_comfy_batch_seed_is_shared_and_config_is_snapshotted(sessions, variables_repo):
+    sessions.save_config(USER_ID, UserConfig(model="comfyui", comfyui=ComfyUIConfig(seed_mode="batch")))
+    prov = FakeComfyuiProvider(outcomes=[make_result(provider="comfyui") for _ in range(6)])
+    uc, _ = _uc(sessions, make_registry(comfyui=prov), variables_repo)
+    async for ev in uc.run(user_id=USER_ID, count=3, strategy=RandomComboStrategy(variables_repo)):
+        if isinstance(ev, ItemResult):
+            sessions.save_config(USER_ID, UserConfig(model="comfyui", comfyui=ComfyUIConfig(seed_mode="fixed", seed=99)))
+    seeds = [req.params["seed"] for req, _ in prov.calls]
+    assert len(seeds) == 3 and len(set(seeds)) == 1
+    sessions.save_config(USER_ID, UserConfig(model="comfyui", comfyui=ComfyUIConfig(seed_mode="batch")))
+    await _collect(uc, user_id=USER_ID, count=3, strategy=FixedPromptStrategy("same"))
+    next_seeds = [req.params["seed"] for req, _ in prov.calls[3:]]
+    assert len(set(next_seeds)) == 1
+    assert next_seeds[0] != seeds[0]
+    assert sessions.get_config(USER_ID).comfyui.seed_mode == "batch"
+
+async def test_comfy_fixed_zero_survives_batch(sessions, variables_repo):
+    sessions.save_config(USER_ID, UserConfig(model="comfyui", comfyui=ComfyUIConfig(seed_mode="fixed", seed=0)))
+    prov = FakeComfyuiProvider(outcomes=[make_result(provider="comfyui") for _ in range(2)])
+    uc, _ = _uc(sessions, make_registry(comfyui=prov), variables_repo)
+    await _collect(uc, user_id=USER_ID, count=2, strategy=FixedPromptStrategy("same"))
+    assert [req.params["seed"] for req, _ in prov.calls] == [0, 0]
+
+async def test_batch_seed_survives_provider_retry(sessions, variables_repo, fast_sleep):
+    sessions.save_config(USER_ID, UserConfig(model="comfyui", comfyui=ComfyUIConfig(seed_mode="batch")))
+    prov = FakeComfyuiProvider(outcomes=[ProviderRateLimitError("rate", user_message="Reintentar"), make_result(provider="comfyui"), make_result(provider="comfyui")])
+    uc, _ = _uc(sessions, make_registry(comfyui=prov), variables_repo)
+    await _collect(uc, user_id=USER_ID, count=2, strategy=RandomComboStrategy(variables_repo))
+    assert len(prov.calls) == 3
+    assert len({req.params["seed"] for req, _ in prov.calls}) == 1
+
+
+async def test_batch_seed_survives_shuffle_retry(sessions, variables_repo, fast_sleep):
+    sessions.save_config(USER_ID, UserConfig(model="comfyui", comfyui=ComfyUIConfig(seed_mode="batch")))
+    err = ProviderRateLimitError("rate", user_message="Reintentar")
+    prov = FakeComfyuiProvider(outcomes=[err] * 6 + [make_result(provider="comfyui")])
+    uc, _ = _uc(sessions, make_registry(comfyui=prov), variables_repo)
+
+    await _collect(
+        uc, user_id=USER_ID, count=1, strategy=RandomComboStrategy(variables_repo)
+    )
+
+    assert len(prov.calls) == 7  # primera corrida agotada + shuffle
+    assert len({req.params["seed"] for req, _ in prov.calls}) == 1

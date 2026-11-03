@@ -9,6 +9,7 @@ NUNCA se reintentan. Emite eventos tipados que item 5 traduce.
 from __future__ import annotations
 
 import asyncio
+import random
 import time
 from collections.abc import AsyncIterator
 
@@ -16,7 +17,11 @@ from grokbot.application._retry import GENERATE_MAX_RETRIES, _retry_backoff
 from grokbot.application.events import ItemFailed, ItemResult, RetryScheduled
 from grokbot.application.integrate_refs import REQUIRES_XAI_MSG
 from grokbot.domain.generation import GenerationRequest, ImageSource, KieTaskRef, MediaType
-from grokbot.domain.user_config import UserConfig, is_comfy_video_model
+from grokbot.domain.user_config import (
+    COMFYUI_SEED_LIMIT,
+    UserConfig,
+    is_comfy_video_model,
+)
 from grokbot.providers.base import ProviderError, ProviderInputError
 from grokbot.providers.registry import ProviderRegistry, ProviderResolution
 from grokbot.repositories.base import SessionRepository
@@ -26,15 +31,23 @@ _COMFY_VIDEO_NOT_IMAGE_MSG = "El modelo ComfyUI configurado genera video, no im�
 _UNSUPPORTED_IMAGE_MSG = "El modelo configurado no puede generar esta imagen."
 _GENERIC_ERROR_MSG = "Error en la generación. Intenta de nuevo más tarde."
 
-# --- Helpers puros -----------------------------------------------------------
+# --- Helpers -----------------------------------------------------------------
 
 def _comfy_params(cfg: UserConfig, prompts: list[str] | None) -> dict:
-    """Parámetros ComfyUI: el id de flujo (``cfg.comfyui.model``).
+    """Parámetros ComfyUI: el id de flujo y la semilla efectiva del request.
 
-    El modelo/LoRA del flujo los define su workflow; lora/refine quedaron
-    dormidos. ``prompts`` multipose ya no aplica (sin flujo qwen).
+    La semilla se resuelve UNA vez aquí, antes del bucle de reintentos: ``fixed``
+    usa la guardada y el resto sortea una por imagen (el modo ``batch`` llega ya
+    convertido a ``fixed`` por ``RunVariableBatchUseCase``). El modelo/LoRA del
+    flujo los define su workflow; lora/refine quedaron dormidos. ``prompts``
+    multipose ya no aplica (sin flujo qwen).
     """
     params = {"model": cfg.comfyui.model}
+    params["seed"] = (
+        cfg.comfyui.seed
+        if cfg.comfyui.seed_mode == "fixed"
+        else random.randrange(COMFYUI_SEED_LIMIT)
+    )
     if prompts:
         params["prompts"] = list(prompts)
     return params

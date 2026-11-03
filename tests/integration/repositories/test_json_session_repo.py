@@ -117,7 +117,7 @@ def test_legacy_video_hourly_timestamps_purged_on_first_load(tmp_path):
     # Los timestamps no tocan la config: el record queda limpio y estable.
     repo = JsonSessionRepository(path)
     repo.save_config(UID, config)
-    assert json.loads(path.read_text(encoding="utf-8"))[str(UID)] == canonical_record()
+    assert json.loads(path.read_text(encoding="utf-8"))[str(UID)] == {**canonical_record(), "comfyui_seed_mode": "random", "comfyui_seed": 0}
 
 
 def test_legacy_grok_provider_migrates_and_is_dropped_on_save(tmp_path):
@@ -185,7 +185,7 @@ def test_round_trip_parity(tmp_path):
     repo = JsonSessionRepository(path)
     config = repo.get_config(UID)
     repo.save_config(UID, config)
-    assert json.loads(path.read_text(encoding="utf-8"))[str(UID)] == canonical_record()
+    assert json.loads(path.read_text(encoding="utf-8"))[str(UID)] == {**canonical_record(), "comfyui_seed_mode": "random", "comfyui_seed": 0}
 
 
 def test_write_json_atomic_ensure_ascii_default_true(tmp_path):
@@ -199,3 +199,15 @@ def test_write_json_atomic_ensure_ascii_default_true(tmp_path):
     text = path.read_text(encoding="utf-8")
     assert "caf\\u00e9" in text  # ensure_ascii default True (D9)
     assert json.loads(text)[str(UID)]["_extra_note"] == "café"
+
+@pytest.mark.parametrize("mode", ["random", "fixed", "batch"])
+def test_seed_preferences_survive_restart_and_are_user_scoped(tmp_path, mode):
+    from grokbot.application.manage_config import UpdateUserConfigUseCase
+    path = tmp_path / "sessions.json"
+    repo = JsonSessionRepository(path)
+    uc = UpdateUserConfigUseCase(sessions=repo)
+    assert uc.set_comfyui_seed(UID, mode, 123456).ok
+    restarted = JsonSessionRepository(path)
+    cc = restarted.get_config(UID).comfyui
+    assert (cc.seed_mode, cc.seed) == (mode, 123456)
+    assert restarted.get_config(UID2).comfyui.seed == 0

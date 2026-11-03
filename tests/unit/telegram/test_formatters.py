@@ -65,6 +65,18 @@ def test_format_model_caption_plain_model():
     assert "1m 30s" in out
 
 
+def test_format_model_caption_comfyui_with_seed():
+    model = {"comfyui_model": "grok_style", "seed": 4242}
+    out = f.format_model_caption(model, 10, prompt="perro")
+    assert "<b>Semilla:</b> 4242" in out
+    assert "<b>Prompt:</b> perro" in out
+
+
+def test_format_model_caption_ignores_non_int_seed():
+    out = f.format_model_caption({"comfyui_model": "grok_style", "seed": True}, 10)
+    assert "Semilla" not in out
+
+
 def test_format_result_caption_variant():
     out = f.format_result_caption("Imagen generada", 12, variant="1/4")
     assert out == "<b>Imagen generada (1/4):</b> 12s"
