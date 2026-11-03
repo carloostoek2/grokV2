@@ -116,22 +116,32 @@ def format_model_caption(
 
     ComfyUI muestra el **flujo** (``comfyui_model`` = id de flujo → nombre de
     ``domain.COMFYUI_FLOW_LABELS``); sin fila de LoRA (el LoRA vive en el
-    workflow, no es configurable).
+    workflow, no es configurable). Cuando el resultado trae la semilla efectiva
+    (``model["seed"]``, inyectada por el sender para ComfyUI) se añade su fila
+    antes de truncar el prompt.
     """
     cm = model.get("comfyui_model")
     if cm:
         mlabel = COMFYUI_FLOW_LABELS.get(cm, cm) or "?"
-        body = (
-            f"<b>Modelo:</b> {escape(mlabel)}\n"
-            f"<b>Tiempo:</b> {format_elapsed(elapsed_sec)}"
-        )
     else:
         mlabel = model.get("name", "?")
-        body = (
-            f"<b>Modelo:</b> {escape(mlabel)}\n"
-            f"<b>Tiempo:</b> {format_elapsed(elapsed_sec)}"
-        )
+    body = (
+        f"<b>Modelo:</b> {escape(mlabel)}\n"
+        f"<b>Tiempo:</b> {format_elapsed(elapsed_sec)}"
+    )
+    seed = model.get("seed")
+    if type(seed) is int:
+        body += f"\n<b>Semilla:</b> {seed}"
     return append_prompt_to_caption(body, prompt)
+
+
+def comfyui_seed_label(mode: str, seed: int) -> str:
+    """Etiqueta corta de la política de semilla (compartida por panel y teclado)."""
+    if mode == "fixed":
+        return f"fija: {seed}"
+    return {"random": "aleatoria por imagen", "batch": "aleatoria por lote"}.get(
+        mode, mode
+    )
 
 
 def format_result_caption(

@@ -859,3 +859,74 @@ async def test_caption_shows_real_elapsed_when_present(gateway, downloader, refs
 
     photos = gateway.calls_by_method("send_photo")
     assert photos[0]["caption"] == "<b>Imagen:</b> 45s"
+
+
+# --- ComfyUI: la semilla efectiva se muestra en el caption -------------------
+
+def _comfy_item(*, file_path, seed: int) -> ItemResult:
+    request = GenerationRequest(
+        provider="comfyui",
+        model_id="grok_style",
+        media_type=MediaType.IMAGE,
+        prompt="un gato",
+        params={"model": "grok_style", "seed": seed},
+    )
+    return ItemResult(
+        result=make_result(
+            provider="comfyui",
+            media_type=MediaType.IMAGE,
+            file_path=str(file_path),
+            meta={"file_paths": [str(file_path)], "seed": seed},
+        ),
+        prompt="un gato",
+        request=request,
+    )
+
+
+@pytest.mark.asyncio
+async def test_comfyui_caption_shows_effective_seed(tmp_path, gateway, downloader, refs_repo):
+    img = tmp_path / "out.png"
+    img.write_bytes(b"png-bytes")
+    ui = ChatUI(gateway, CHAT_ID)
+    sender = _make_sender(gateway, downloader, refs_repo)
+
+    await sender.send_image(ui, _comfy_item(file_path=img, seed=4242), "Prompt")
+
+    caption = gateway.calls_by_method("send_photo")[0]["caption"]
+    assert "<b>Modelo:</b> Grok Style" in caption
+    assert "<b>Semilla:</b> 4242" in caption
+
+
+@pytest.mark.asyncio
+async def test_comfyui_album_caption_shows_effective_seed(
+    tmp_path, gateway, downloader, refs_repo
+):
+    p1 = tmp_path / "a.png"
+    p2 = tmp_path / "b.png"
+    p1.write_bytes(b"a")
+    p2.write_bytes(b"b")
+    ui = ChatUI(gateway, CHAT_ID)
+    sender = _make_sender(gateway, downloader, refs_repo)
+    request = GenerationRequest(
+        provider="comfyui",
+        model_id="grok_style",
+        media_type=MediaType.IMAGE,
+        prompt="un gato",
+        params={"model": "grok_style", "seed": 7},
+    )
+    item = ItemResult(
+        result=make_result(
+            provider="comfyui",
+            media_type=MediaType.IMAGE,
+            file_path=str(p1),
+            meta={"file_paths": [str(p1), str(p2)], "seed": 7},
+        ),
+        prompt="un gato",
+        request=request,
+    )
+
+    await sender.send_image(ui, item, "Prompt")
+
+    media = gateway.calls_by_method("send_media_group")[0]["media"]
+    assert "<b>Semilla:</b> 7" in media[0].caption
+    assert media[1].caption is None

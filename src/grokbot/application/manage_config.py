@@ -20,11 +20,13 @@ from grokbot.domain.catalog import (
 )
 from grokbot.domain.user_config import (
     VALID_COMFYUI_MODELS,
+    VALID_COMFYUI_SEED_MODES,
     VALID_VIDEO_ASPECT_RATIOS,
     VALID_VIDEO_DURATIONS,
     VALID_VIDEO_MODELS,
     VALID_VIDEO_MODES,
     VALID_VIDEO_RESOLUTIONS,
+    is_valid_comfyui_seed,
     kie_aspect_ratio_fallback,
 )
 from grokbot.repositories.base import SessionRepository
@@ -148,15 +150,16 @@ class UpdateUserConfigUseCase:
 
     def set_comfyui_seed(self, user_id: int, mode: str, seed: int | None = None) -> ConfigResult:
         """Persist the seed policy atomically, keeping the last fixed seed."""
-        valid = mode in ("random", "fixed", "batch")
-        if seed is not None:
-            valid = valid and type(seed) is int and 0 <= seed < (1 << 63)
-        if not valid:
+        if mode not in VALID_COMFYUI_SEED_MODES:
+            return ConfigResult(ok=False, changed=False, field="comfyui.seed", value=mode)
+        if seed is not None and not is_valid_comfyui_seed(seed):
             return ConfigResult(ok=False, changed=False, field="comfyui.seed", value=mode)
         cfg = self._sessions.get_config(user_id)
         cc = replace(cfg.comfyui, seed_mode=mode, seed=cfg.comfyui.seed if seed is None else seed)
+        if cc == cfg.comfyui:
+            return ConfigResult(ok=True, changed=False, field="comfyui.seed", value=mode)
         self._sessions.save_config(user_id, replace(cfg, comfyui=cc))
-        return ConfigResult(ok=True, changed=cc != cfg.comfyui, field="comfyui.seed", value=mode)
+        return ConfigResult(ok=True, changed=True, field="comfyui.seed", value=mode)
 
     # -- comfyui ------------------------------------------------------------
 

@@ -494,8 +494,10 @@ conservan aleatoria por imagen. Para activar consistencia de lote usar `/semilla
 En modo lote, `/variables` y `/var` eligen una semilla al comenzar y la comparten
 entre imágenes, etapas y reintentos. Cambiar la configuración durante un lote
 ComfyUI afecta al siguiente lote. Fuera de un lote, este modo elige una semilla por
-imagen. La semilla efectiva se muestra en los resultados ComfyUI locales y queda
-en sus metadatos. La configuración persiste; la semilla elegida por lote no reemplaza
-la última semilla fija guardada. Los demás parámetros del sampler siguen en el flujo.
+imagen. La semilla efectiva se muestra en el caption del resultado ComfyUI local
+(fila `Semilla`) y queda en sus metadatos. El alcance es generación de imágenes: los
+flujos ComfyUI de video siguen sorteando su semilla en el provider. La configuración
+persiste; la semilla elegida por lote no reemplaza la última semilla fija guardada.
+Los demás parámetros del sampler siguen en el flujo.
 
 Propuesta de edición automática por flujo: `comfyui/KSAMPLER_DINAMICO.md`.

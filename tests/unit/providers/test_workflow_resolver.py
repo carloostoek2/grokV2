@@ -10,12 +10,31 @@ import pytest
 from grokbot.domain.generation import MediaType
 from grokbot.providers.comfyui.workflows import resolver as resolver_mod
 from grokbot.providers.comfyui.workflows.resolver import (
+    Flow,
     configure_workflow_source,
     flows,
     get_flow,
+    patchable_seed_nodes,
     render,
     reset_workflow_source,
 )
+
+
+def test_patchable_seed_nodes_skips_missing_nodes_and_unsupported_inputs():
+    flow = Flow(
+        id="custom",
+        name="Custom",
+        file="custom.json",
+        graph={
+            "1": {"class_type": "KSampler", "inputs": {"seed": 0}},
+            "2": {"class_type": "KSamplerAdvanced", "inputs": {"noise_seed": 0}},
+            "3": {"class_type": "KSampler", "inputs": {"seed": ["1", 0]}},
+        },
+        media_type=MediaType.IMAGE,
+        seed_nodes=("1", "2", "3", "9"),
+    )
+
+    assert patchable_seed_nodes(flow) == ("1",)
 
 
 def test_get_flow_grok_style_returns_flow():

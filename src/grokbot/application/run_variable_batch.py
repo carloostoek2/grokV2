@@ -29,7 +29,11 @@ from grokbot.application.generate_image import GenerateImageUseCase
 from grokbot.application.job_manager import JobManager
 from grokbot.domain.families import Family, allowed_values
 from grokbot.domain.job import Job
-from grokbot.domain.user_config import UserConfig, is_comfy_video_model
+from grokbot.domain.user_config import (
+    COMFYUI_SEED_LIMIT,
+    UserConfig,
+    is_comfy_video_model,
+)
 from grokbot.domain.variables import (
     MAX_COMBO_ATTEMPTS,
     MULTIPOSE_BATCH_SIZE,
@@ -245,7 +249,16 @@ class RunVariableBatchUseCase:
     ) -> AsyncIterator[BatchStarted | ItemStarted | RetryScheduled | ItemResult | ItemFailed | BatchCancelled | BatchSummary | EmptyList | BatchRejected]:
         cfg = self._sessions.get_config(user_id)
         if cfg.model == "comfyui" and cfg.comfyui.seed_mode == "batch":
-            cfg = replace(cfg, comfyui=replace(cfg.comfyui, seed_mode="fixed", seed=random.randrange(1 << 63)))
+            # Snapshot inmutable: la preferencia persistida no se toca; la
+            # semilla sorteada se comparte entre imágenes y reintentos del lote.
+            cfg = replace(
+                cfg,
+                comfyui=replace(
+                    cfg.comfyui,
+                    seed_mode="fixed",
+                    seed=random.randrange(COMFYUI_SEED_LIMIT),
+                ),
+            )
 
         # 1. Rechazo temprano de modelos que no generan imágenes.
         reject = _batch_model_reject(cfg, self._registry)

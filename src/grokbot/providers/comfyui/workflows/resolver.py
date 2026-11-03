@@ -75,7 +75,9 @@ class Flow:
     positive_input: str = "text"
     # Nodo cuyo input ``text`` guarda el negativo (default de plantilla).
     negative_node: str | None = None
-    # Nodos con input "seed" (int) a randomizar por request.
+    # Nodos cuyo input "seed" recibe la semilla efectiva del request (fija,
+    # por imagen o por lote). ``patchable_seed_nodes`` filtra los que de verdad
+    # exponen ese input.
     seed_nodes: tuple[str, ...] = ()
     # Nodos cuya media final (images/videos) se descarga vía ``/view``.
     save_nodes: tuple[str, ...] = ()
@@ -340,12 +342,28 @@ def get_flow(flow_id: str) -> Flow | None:
     return _get_embed_flow(flow_id)
 
 
+def patchable_seed_nodes(flow: Flow) -> tuple[str, ...]:
+    """``seed_nodes`` que existen en el grafo y exponen un input literal ``seed``.
+
+    Un id ausente o un nodo con otro nombre de input (p. ej. ``noise_seed`` de
+    ``KSamplerAdvanced``) se ignora aquí; el provider usa esta lista para no
+    anunciar en ``meta["seed"]`` una semilla que nunca se escribió.
+    """
+    return tuple(
+        node_id
+        for node_id in flow.seed_nodes
+        if isinstance(flow.graph.get(node_id), dict)
+        and type(flow.graph[node_id].get("inputs", {}).get("seed")) is int
+    )
+
+
 def render(flow: Flow, prompt: str, seed_factory) -> dict:
     """Copia el grafo y parchea prompt + seeds para un request (sin ``_meta``).
 
     El prompt se escribe en ``flow.positive_node`` / ``flow.positive_input``
     (default ``"text"`` para CLIPTextEncode; p. ej. ``"prompt"`` en un
-    Wildcard Processor).
+    Wildcard Processor). Solo se parchean los nodos de
+    ``patchable_seed_nodes(flow)``.
     """
     graph = copy.deepcopy(flow.graph)
     pos = graph.get(flow.positive_node)
@@ -355,8 +373,6 @@ def render(flow: Flow, prompt: str, seed_factory) -> dict:
             f"/{flow.positive_input}"
         )
     pos["inputs"][flow.positive_input] = prompt
-    for node_id in flow.seed_nodes:
-        node = graph.get(node_id)
-        if node is not None and "seed" in node.get("inputs", {}):
-            node["inputs"]["seed"] = seed_factory()
+    for node_id in patchable_seed_nodes(flow):
+        graph[node_id]["inputs"]["seed"] = seed_factory()
     return graph

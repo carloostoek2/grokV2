@@ -331,3 +331,71 @@ async def test_seed_command_persists_and_rejects_invalid_input():
     for value in ("-1", "9223372036854775808", "abc", "1 extra", "²"):
         await dp.feed_update(_BOT, message_update(text_message("/semilla " + value)))
         assert deps.sessions.get_config(_UID) == before
+
+
+async def test_seed_command_status_noop_and_image_scope_copy():
+    dp, deps = make_dispatcher(make_deps())
+    await dp.feed_update(_BOT, message_update(text_message("/semilla")))
+    texts = [c["text"] for c in deps.gateway.calls_by_method("send_message")]
+    assert texts[-1].startswith("Semilla ComfyUI (imágenes): aleatoria por imagen.")
+
+    await dp.feed_update(_BOT, message_update(text_message("/semilla 999")))
+    assert deps.sessions.get_config(_UID).comfyui.seed == 999
+    texts = [c["text"] for c in deps.gateway.calls_by_method("send_message")]
+    assert "Semilla ComfyUI guardada" in texts[-1]
+    assert "próximas imágenes y lotes" in texts[-1]
+
+    await dp.feed_update(_BOT, message_update(text_message("/semilla 999")))
+    texts = [c["text"] for c in deps.gateway.calls_by_method("send_message")]
+    assert texts[-1] == "Ya está activa esa semilla."
+
+
+async def test_comfyui_seed_buttons_persist_and_mark_active():
+    dp, deps = await _open_config()
+    mid = _panel_id(deps)
+    await dp.feed_update(
+        _BOT, callback_update(callback_query("cfg:model:comfyui", message_id=mid))
+    )
+    assert (
+        "<b>Semilla (imágenes):</b> aleatoria por imagen"
+        in _last_edit_text(deps)["text"]
+    )
+
+    await dp.feed_update(
+        _BOT, callback_update(_bot_panel_callback("cfg:comfyui:seed:batch", mid))
+    )
+    assert deps.sessions.get_config(_UID).comfyui.seed_mode == "batch"
+    edit = _last_edit_text(deps)
+    assert edit["text"].startswith("Configuración actualizada ✅")
+    assert "<b>Semilla (imágenes):</b> aleatoria por lote" in edit["text"]
+    labels = [b.text for row in edit["reply_markup"].inline_keyboard for b in row]
+    assert "✅ Semilla aleatoria por lote" in labels
+    assert (
+        _last_answer(deps)["text"]
+        == "Semilla guardada para las próximas imágenes y lotes."
+    )
+
+    # Segundo tap del mismo modo: no-op visible, sin "Configuración actualizada".
+    await dp.feed_update(
+        _BOT, callback_update(_bot_panel_callback("cfg:comfyui:seed:batch", mid))
+    )
+    assert _last_answer(deps)["text"] == "Ya está activa esa semilla."
+    assert _last_edit_text(deps)["text"].startswith(
+        "Configuración de ComfyUI (GPU propia):"
+    )
+
+
+async def test_comfyui_seed_button_rejects_unknown_mode():
+    dp, deps = await _open_config()
+    mid = _panel_id(deps)
+    await dp.feed_update(
+        _BOT, callback_update(callback_query("cfg:model:comfyui", message_id=mid))
+    )
+    before = deps.sessions.get_config(_UID)
+    await dp.feed_update(
+        _BOT, callback_update(_bot_panel_callback("cfg:comfyui:seed:bogus", mid))
+    )
+    ans = _last_answer(deps)
+    assert ans["text"] == "Opción inválida."
+    assert ans["show_alert"] is True
+    assert deps.sessions.get_config(_UID) == before

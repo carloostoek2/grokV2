@@ -359,8 +359,14 @@ class ResultSender:
         meta = item.result.meta or {}
         elapsed = meta.get("elapsed_sec")
 
-        if type(meta.get("seed")) is int:
-            prefix = f"{prefix} • Semilla: {meta['seed']}"
+        # La semilla efectiva va en el caption del MODELO (ComfyUI siempre trae
+        # caption_model); añadirla al prefix lo perdería en format_model_caption.
+        seed = meta.get("seed")
+        if type(seed) is int:
+            if caption_model is not None:
+                caption_model = {**caption_model, "seed": seed}
+            else:
+                prefix = f"{prefix} • Semilla: {seed}"
 
         if len(paths) == 1:
             data = self._read_local(paths[0])

@@ -193,11 +193,13 @@ nodos inyectaban (caso `donut_face`: `vae`, `bbox_detector`, `sam_model_opt`, `m
 
 ComfyUIConfig persiste seed_mode (random/fixed/batch) y seed. La petición de imagen
 resuelve el número antes de los reintentos; el lote batch transforma una copia de
-su configuración en fixed, sin modificar la preferencia persistida. El provider
-usa la semilla efectiva para todos los seed_nodes del workflow y la devuelve en
-GenerationResult.meta. Las peticiones sin seed (incluido video) eligen una semilla
-en el provider. El selector se refiere a generaciones de imagen; la extensión de
-configuración de semillas a video no está incluida.
+su configuración en fixed, sin modificar la preferencia persistida. El provider usa
+la semilla efectiva para todos los seed_nodes del workflow que exponen un input
+literal `seed` y la devuelve en GenerationResult.meta solo si parcheó al menos un
+nodo. Las peticiones sin seed (incluido video) eligen una semilla en el provider. El
+selector se refiere a generaciones de imagen; la extensión de configuración de
+semillas a video no está incluida y el copy de `/config` y `/semilla` lo acota a
+imágenes.
 
 La interfaz ofrece `/semilla` y botones en `/config`. El rango soportado es
 0..2^63-1. No requiere cambiar Colab. El análisis del editor dinámico basado en
