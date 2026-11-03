@@ -588,3 +588,17 @@ async def test_batch_seed_survives_provider_retry(sessions, variables_repo, fast
     await _collect(uc, user_id=USER_ID, count=2, strategy=RandomComboStrategy(variables_repo))
     assert len(prov.calls) == 3
     assert len({req.params["seed"] for req, _ in prov.calls}) == 1
+
+
+async def test_batch_seed_survives_shuffle_retry(sessions, variables_repo, fast_sleep):
+    sessions.save_config(USER_ID, UserConfig(model="comfyui", comfyui=ComfyUIConfig(seed_mode="batch")))
+    err = ProviderRateLimitError("rate", user_message="Reintentar")
+    prov = FakeComfyuiProvider(outcomes=[err] * 6 + [make_result(provider="comfyui")])
+    uc, _ = _uc(sessions, make_registry(comfyui=prov), variables_repo)
+
+    await _collect(
+        uc, user_id=USER_ID, count=1, strategy=RandomComboStrategy(variables_repo)
+    )
+
+    assert len(prov.calls) == 7  # primera corrida agotada + shuffle
+    assert len({req.params["seed"] for req, _ in prov.calls}) == 1

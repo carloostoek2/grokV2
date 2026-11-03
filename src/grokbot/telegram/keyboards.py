@@ -25,6 +25,7 @@ from grokbot.domain.user_config import (
     PIPE_EDIT,
     PIPE_RETAKE,
     VALID_COMFYUI_MODELS,
+    VALID_COMFYUI_SEED_MODES,
     comfy_chain_stages,
     VALID_VIDEO_ASPECT_RATIOS,
     VALID_VIDEO_DURATIONS,
@@ -38,6 +39,7 @@ from grokbot.domain.user_config import (
 from grokbot.telegram.formatters import (
     VIDEO_MODEL_LABELS,
     VIDEO_MODE_LABELS,
+    comfyui_seed_label,
     prov_label,
 )
 
@@ -244,10 +246,16 @@ def config_comfyui_keyboard(cfg: ComfyUIConfig) -> InlineKeyboardMarkup:
     modelo/LoRA/refine (dormidos tras el slice HTTP/WS). Flujos en
     ``COMFYUI_MENU_HIDDEN_FLOWS`` no se muestran, pero siguen siendo ids válidos.
     """
-    rows = [[InlineKeyboardButton(
-        text=("✅ " if cfg.seed_mode == mode else "") + label,
-        callback_data=f"cfg:comfyui:seed:{mode}",
-    )] for mode, label in (("random", "Semilla aleatoria por imagen"), ("batch", "Semilla aleatoria por lote"), ("fixed", f"Semilla fija: {cfg.seed}"))]
+    rows = [
+        [
+            InlineKeyboardButton(
+                text=("✅ " if cfg.seed_mode == mode else "")
+                + f"Semilla {comfyui_seed_label(mode, cfg.seed)}",
+                callback_data=f"cfg:comfyui:seed:{mode}",
+            )
+        ]
+        for mode in VALID_COMFYUI_SEED_MODES
+    ]
     for flow_id, flow_name in COMFYUI_FLOW_LABELS.items():
         if flow_id in COMFYUI_MENU_HIDDEN_FLOWS:
             continue

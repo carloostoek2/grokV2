@@ -224,7 +224,7 @@ async def test_supports_routing(tmp_path):
     )
 
 @pytest.mark.parametrize("seed", [0, 123456, (1 << 63) - 1])
-async def test_fixed_seed_reaches_both_stages_and_result(tmp_path, seed):
+async def test_fixed_seed_reaches_all_seed_nodes_and_result(tmp_path, seed):
     calls = []
     prov = ComfyUIProvider("box", transport=FakeTransport(), workflow_source="embed",
         client_factory=lambda url: calls.append(FakeClient(url)) or calls[-1], tmpdir=tmp_path)
@@ -232,3 +232,38 @@ async def test_fixed_seed_reaches_both_stages_and_result(tmp_path, seed):
     assert calls[0].graph["1"]["inputs"]["seed"] == seed
     assert calls[0].graph["17"]["inputs"]["seed"] == seed
     assert result.meta["seed"] == seed
+
+
+@pytest.mark.parametrize("seed", ["7", True, -1, 1 << 63])
+async def test_invalid_seed_is_rejected_before_touching_transport(tmp_path, seed):
+    transport = FakeTransport()
+    calls = []
+    prov = ComfyUIProvider(
+        "box", transport=transport, workflow_source="embed",
+        client_factory=lambda url: calls.append(FakeClient(url)) or calls[-1],
+        tmpdir=tmp_path,
+    )
+
+    with pytest.raises(ProviderInputError):
+        await prov.generate(_req(params={"model": "grok_style", "seed": seed}))
+
+    assert calls == []
+    assert transport.ensure_calls == 0
+
+
+async def test_fallback_seed_is_drawn_once_and_shared_by_all_seed_nodes(tmp_path):
+    values = iter([111, 222])
+    calls = []
+    prov = ComfyUIProvider(
+        "box", transport=FakeTransport(), workflow_source="embed",
+        client_factory=lambda url: calls.append(FakeClient(url)) or calls[-1],
+        tmpdir=tmp_path, seed_factory=lambda: next(values),
+    )
+
+    result = await prov.generate(_req(params={"model": "grok_style"}))
+
+    # Un solo sorteo: si render volviera a pedir una semilla por nodo, el
+    # segundo nodo recibiría 222 y el meta no coincidiría con el grafo.
+    assert calls[0].graph["1"]["inputs"]["seed"] == 111
+    assert calls[0].graph["17"]["inputs"]["seed"] == 111
+    assert result.meta["seed"] == 111

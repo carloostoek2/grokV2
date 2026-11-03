@@ -27,7 +27,11 @@ from typing import Callable
 logger = logging.getLogger(__name__)
 
 from grokbot.domain.generation import GenerationRequest, GenerationResult, MediaType
-from grokbot.domain.user_config import DEFAULT_COMFYUI_MODEL
+from grokbot.domain.user_config import (
+    COMFYUI_SEED_LIMIT,
+    DEFAULT_COMFYUI_MODEL,
+    is_valid_comfyui_seed,
+)
 from grokbot.providers.base import (
     ProviderInputError,
     ProviderNotConfiguredError,
@@ -39,6 +43,7 @@ from grokbot.providers.comfyui.workflows.resolver import (
     Flow,
     configure_workflow_source,
     get_flow,
+    patchable_seed_nodes,
     render,
 )
 
@@ -112,7 +117,7 @@ class ComfyUIProvider:
         )
         self._client_factory = client_factory or (lambda url: ComfyApiClient(url))
         self._tmpdir = Path(tmpdir) if tmpdir is not None else _DEFAULT_TMPDIR
-        self._seed = seed_factory or (lambda: random.randrange(1 << 63))
+        self._seed = seed_factory or (lambda: random.randrange(COMFYUI_SEED_LIMIT))
 
     # -- state ------------------------------------------------------------
     @property
@@ -191,18 +196,23 @@ class ComfyUIProvider:
         request: GenerationRequest,
         flow: Flow,
         locals_: list[str],
+        *,
+        seed: int | None = None,
     ) -> GenerationResult:
         if not locals_:
             raise ProviderUnavailableError(_NO_DOWNLOAD_MSG, user_message=_NO_DOWNLOAD_MSG)
+        meta = {
+            "file_paths": locals_,
+            "download_allowlist": None,
+        }
+        if seed is not None:
+            meta["seed"] = seed
         return GenerationResult(
             provider="comfyui",
             model_id=request.model_id,
             media_type=flow.media_type,
             file_path=locals_[0],
-            meta={
-                "file_paths": locals_,
-                "download_allowlist": None,
-            },
+            meta=meta,
         )
 
     # -- generate ---------------------------------------------------------
@@ -236,8 +246,21 @@ class ComfyUIProvider:
         seed = request.params.get("seed")
         if seed is None:
             seed = self._seed()
-        if type(seed) is not int or not 0 <= seed < (1 << 63):
-            raise ProviderInputError("Semilla inválida.", user_message="La semilla debe ser un entero entre 0 y 9223372036854775807.")
+        if not is_valid_comfyui_seed(seed):
+            raise ProviderInputError(
+                "Semilla inválida.",
+                user_message=(
+                    "La semilla debe ser un entero entre 0 y "
+                    f"{COMFYUI_SEED_LIMIT - 1}."
+                ),
+            )
+        seed_nodes = patchable_seed_nodes(flow)
+        if flow.seed_nodes and not seed_nodes:
+            logger.warning(
+                "ComfyUI flow %s declares seed_nodes %s but none has a literal 'seed' input",
+                flow.id,
+                flow.seed_nodes,
+            )
         graph = render(flow, request.prompt, lambda: seed)
         run_timeout = flow.timeout or (
             _COMFY_VIDEO_TIMEOUT if flow.media_type is MediaType.VIDEO else _COMFY_IMAGE_TIMEOUT
@@ -259,9 +282,9 @@ class ComfyUIProvider:
             close = getattr(client, "aclose", None)
             if close is not None:
                 await close()
-        result = self._build_result(request, flow, locals_)
-        result.meta["seed"] = seed
-        return result
+        return self._build_result(
+            request, flow, locals_, seed=seed if seed_nodes else None
+        )
 
 
     async def _inject_source_image(

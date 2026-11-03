@@ -30,6 +30,7 @@ from grokbot.domain.catalog import (
 )
 from grokbot.domain.user_config import (
     COMFYUI_FLOW_LABELS,
+    COMFYUI_SEED_LIMIT,
     VALID_VIDEO_ASPECT_RATIOS,
     VALID_VIDEO_DURATIONS,
     VALID_VIDEO_MODELS,
@@ -43,6 +44,7 @@ from grokbot.telegram.deps import BotDeps
 from grokbot.telegram.formatters import (
     VIDEO_MODEL_LABELS,
     VIDEO_MODE_LABELS,
+    comfyui_seed_label,
     prov_label,
 )
 from grokbot.telegram.fsm_states import ConfigStates
@@ -150,8 +152,15 @@ def _video_screen_text(cfg, *, updated: bool = False, aspect_reset_msg: str | No
     return text
 
 
+_SEED_MAX = COMFYUI_SEED_LIMIT - 1
+_SEED_USAGE = (
+    "Usa /semilla aleatoria, /semilla lote o un entero entre "
+    f"0 y {_SEED_MAX}."
+)
+
+
 def _seed_label(cc) -> str:
-    return {"random": "aleatoria por imagen", "batch": "aleatoria por lote", "fixed": f"fija: {cc.seed}"}[cc.seed_mode]
+    return comfyui_seed_label(cc.seed_mode, cc.seed)
 
 
 async def cmd_seed(message: types.Message, state: FSMContext, deps: BotDeps) -> None:
@@ -161,17 +170,34 @@ async def cmd_seed(message: types.Message, state: FSMContext, deps: BotDeps) -> 
     uid = message.from_user.id
     ui = ChatUI.for_message(deps.gateway, message)
     if len(parts) == 1:
-        await ui.send_text(f"Semilla ComfyUI: {_seed_label(deps.sessions.get_config(uid).comfyui)}.\nUsa /semilla aleatoria, /semilla lote o /semilla 123456.")
+        await ui.send_text(
+            f"Semilla ComfyUI (imágenes): "
+            f"{_seed_label(deps.sessions.get_config(uid).comfyui)}.\n"
+            "Usa /semilla aleatoria, /semilla lote o /semilla 123456."
+        )
         return
     value = parts[1].lower()
     mode = {"aleatoria": "random", "lote": "batch"}.get(value)
     seed = None
-    if mode is None and value.isascii() and value.isdecimal() and len(value) <= 19:
+    if (
+        mode is None
+        and value.isascii()
+        and value.isdecimal()
+        and len(value) <= len(str(_SEED_MAX))
+    ):
         mode, seed = "fixed", int(value)
-    if len(parts) != 2 or mode is None or not deps.update_config.set_comfyui_seed(uid, mode, seed).ok:
-        await ui.send_text("Usa /semilla aleatoria, /semilla lote o un entero entre 0 y 9223372036854775807.")
+    result = deps.update_config.set_comfyui_seed(uid, mode, seed) if len(parts) == 2 and mode else None
+    if result is None or not result.ok:
+        await ui.send_text(_SEED_USAGE)
         return
-    await ui.send_text(f"Semilla ComfyUI guardada: {_seed_label(deps.sessions.get_config(uid).comfyui)}. Se aplicará a las próximas generaciones y lotes.")
+    if not result.changed:
+        await ui.send_text("Ya está activa esa semilla.")
+        return
+    await ui.send_text(
+        f"Semilla ComfyUI guardada: "
+        f"{_seed_label(deps.sessions.get_config(uid).comfyui)}. "
+        "Se aplicará a las próximas imágenes y lotes."
+    )
 
 
 def _comfyui_screen_text(cfg, *, updated: bool = False) -> str:
@@ -181,7 +207,7 @@ def _comfyui_screen_text(cfg, *, updated: bool = False) -> str:
     return (
         f"{header}"
         f"<b>Flujo:</b> {flow_name}\n"
-        f"<b>Semilla:</b> {_seed_label(cc)}\n"
+        f"<b>Semilla (imágenes):</b> {_seed_label(cc)}\n"
         "Para fijar un número: /semilla 123456\n\n"
         "Elige el flujo: cada uno trae su modelo y LoRA configurados en la GPU."
     )
@@ -676,8 +702,16 @@ async def handle_cfg_comfyui(callback: types.CallbackQuery, state: FSMContext, d
         if not result.ok:
             await answer_callback(deps.gateway, callback, "Opción inválida.", show_alert=True)
             return
-        await _show_configure_screen(callback.message, state, deps, "comfyui", uid=callback.from_user.id, updated=True)
-        await answer_callback(deps.gateway, callback, "Semilla guardada para las próximas generaciones y lotes.")
+        await _show_configure_screen(
+            callback.message, state, deps, "comfyui",
+            uid=callback.from_user.id, updated=result.changed,
+        )
+        answer = (
+            "Semilla guardada para las próximas imágenes y lotes."
+            if result.changed
+            else "Ya está activa esa semilla."
+        )
+        await answer_callback(deps.gateway, callback, answer)
         return
     if len(parts) != 4 or parts[2] != "flow":
         await answer_callback(deps.gateway, callback, "Opción inválida.", show_alert=True)
