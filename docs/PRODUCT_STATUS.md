@@ -482,3 +482,20 @@ debe correr sin las credenciales de (a).
   `.planning/quick/20260903-grokv2-rearch/CLOSURE.md` (resultado + learnings),
   `.grok/agent-memory/review/grokv2-rearch-poolclose.md` (review completo),
   `.grok/agent-memory/residuals/grokv2-rearch.md` (registry final, sí trackeado).
+
+## Semillas ComfyUI (2026-11-03)
+
+`/config` muestra la política de semilla y permite elegir aleatoria por imagen,
+aleatoria por lote o fija con el último número guardado. `/semilla` consulta el
+estado; `/semilla aleatoria`, `/semilla lote` y `/semilla 123456` guardan la
+preferencia por usuario. Se acepta 0 hasta 9223372036854775807. Sesiones anteriores
+conservan aleatoria por imagen. Para activar consistencia de lote usar `/semilla lote`.
+
+En modo lote, `/variables` y `/var` eligen una semilla al comenzar y la comparten
+entre imágenes, etapas y reintentos. Cambiar la configuración durante un lote
+ComfyUI afecta al siguiente lote. Fuera de un lote, este modo elige una semilla por
+imagen. La semilla efectiva se muestra en los resultados ComfyUI locales y queda
+en sus metadatos. La configuración persiste; la semilla elegida por lote no reemplaza
+la última semilla fija guardada. Los demás parámetros del sampler siguen en el flujo.
+
+Propuesta de edición automática por flujo: `comfyui/KSAMPLER_DINAMICO.md`.

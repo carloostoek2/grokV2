@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+import random
 from collections.abc import AsyncIterator
 
 from grokbot.application._retry import GENERATE_MAX_RETRIES, _retry_backoff
@@ -35,6 +36,7 @@ def _comfy_params(cfg: UserConfig, prompts: list[str] | None) -> dict:
     dormidos. ``prompts`` multipose ya no aplica (sin flujo qwen).
     """
     params = {"model": cfg.comfyui.model}
+    params["seed"] = cfg.comfyui.seed if cfg.comfyui.seed_mode == "fixed" else random.randrange(1 << 63)
     if prompts:
         params["prompts"] = list(prompts)
     return params

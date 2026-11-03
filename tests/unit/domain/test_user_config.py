@@ -149,6 +149,8 @@ def test_round_trip_canonical_record():
     expected = dict(rec)
     expected["nano_banana_provider"] = "kie"
     expected["nano_banana_variant"] = "banana2"
+    expected["comfyui_seed_mode"] = "random"
+    expected["comfyui_seed"] = 0
     assert out == expected
 
 
@@ -191,7 +193,7 @@ def test_video_config_and_comfyui_config_standalone():
     assert vc.to_record() == {"duration": 15, "aspect_ratio": "3:2", "resolution": "480p",
                               "model": "grok-imagine-video-1.5", "mode": "fun"}
     cc = ComfyUIConfig.from_record({"model": "grok_style", "lora": "none", "refine": "1"})
-    assert cc.to_record() == {"model": "grok_style", "lora": "none", "refine": "1"}
+    assert cc.to_record() == {"model": "grok_style", "lora": "none", "refine": "1", "seed_mode": "random", "seed": 0}
     assert cc.refine_enabled is True
 
 
@@ -260,3 +262,12 @@ def test_comfy_chain_stages():
     assert comfy_chain_stages(
         "not_a_flow", supports_source=False, requires_source=False
     ) == ()
+
+
+def test_comfy_seed_roundtrip_and_legacy():
+    from dataclasses import replace
+    cfg = replace(UserConfig.defaults(), comfyui=ComfyUIConfig(seed_mode="fixed", seed=0))
+    assert UserConfig.from_record(cfg.to_record()) == cfg
+    assert ComfyUIConfig.from_record({}).seed_mode == "random"
+    for value in (-1, 1 << 63, True, "123"):
+        assert ComfyUIConfig.from_record({"seed": value}).seed == 0

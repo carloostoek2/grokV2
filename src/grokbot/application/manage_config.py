@@ -146,6 +146,18 @@ class UpdateUserConfigUseCase:
             aspect_reset_to=aspect,
         )
 
+    def set_comfyui_seed(self, user_id: int, mode: str, seed: int | None = None) -> ConfigResult:
+        """Persist the seed policy atomically, keeping the last fixed seed."""
+        valid = mode in ("random", "fixed", "batch")
+        if seed is not None:
+            valid = valid and type(seed) is int and 0 <= seed < (1 << 63)
+        if not valid:
+            return ConfigResult(ok=False, changed=False, field="comfyui.seed", value=mode)
+        cfg = self._sessions.get_config(user_id)
+        cc = replace(cfg.comfyui, seed_mode=mode, seed=cfg.comfyui.seed if seed is None else seed)
+        self._sessions.save_config(user_id, replace(cfg, comfyui=cc))
+        return ConfigResult(ok=True, changed=cc != cfg.comfyui, field="comfyui.seed", value=mode)
+
     # -- comfyui ------------------------------------------------------------
 
     def set_comfyui(self, user_id: int, **field) -> ConfigResult:

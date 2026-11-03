@@ -244,7 +244,10 @@ def config_comfyui_keyboard(cfg: ComfyUIConfig) -> InlineKeyboardMarkup:
     modelo/LoRA/refine (dormidos tras el slice HTTP/WS). Flujos en
     ``COMFYUI_MENU_HIDDEN_FLOWS`` no se muestran, pero siguen siendo ids válidos.
     """
-    rows = []
+    rows = [[InlineKeyboardButton(
+        text=("✅ " if cfg.seed_mode == mode else "") + label,
+        callback_data=f"cfg:comfyui:seed:{mode}",
+    )] for mode, label in (("random", "Semilla aleatoria por imagen"), ("batch", "Semilla aleatoria por lote"), ("fixed", f"Semilla fija: {cfg.seed}"))]
     for flow_id, flow_name in COMFYUI_FLOW_LABELS.items():
         if flow_id in COMFYUI_MENU_HIDDEN_FLOWS:
             continue

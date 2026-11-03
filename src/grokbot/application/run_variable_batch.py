@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import random
 from collections.abc import AsyncIterator
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Protocol
 
 from grokbot.application.events import (
@@ -244,6 +244,8 @@ class RunVariableBatchUseCase:
         family: Family | None = None,
     ) -> AsyncIterator[BatchStarted | ItemStarted | RetryScheduled | ItemResult | ItemFailed | BatchCancelled | BatchSummary | EmptyList | BatchRejected]:
         cfg = self._sessions.get_config(user_id)
+        if cfg.model == "comfyui" and cfg.comfyui.seed_mode == "batch":
+            cfg = replace(cfg, comfyui=replace(cfg.comfyui, seed_mode="fixed", seed=random.randrange(1 << 63)))
 
         # 1. Rechazo temprano de modelos que no generan imágenes.
         reject = _batch_model_reject(cfg, self._registry)
@@ -314,6 +316,7 @@ class RunVariableBatchUseCase:
                     source_image=source_image,
                     source_file_id=source_file_id,
                     allow_shuffle=(strategy.style == "variables"),
+                    cfg_override=cfg if use_comfyui else None,
                 ):
                     # Terminal del item en vuelo. Paridad grok 2387-2399 / 2736-2741:
                     # si el usuario canceló mientras este item generaba (o durante el
@@ -348,6 +351,7 @@ class RunVariableBatchUseCase:
         source_image: bytes | None,
         source_file_id: str | None,
         allow_shuffle: bool,
+        cfg_override: UserConfig | None = None,
     ) -> AsyncIterator[RetryScheduled | ItemResult | ItemFailed]:
         """Corre el inner GenerateImageUseCase, relaya su progreso y decide el shuffle-retry.
 
@@ -366,6 +370,7 @@ class RunVariableBatchUseCase:
             source_file_id=source_file_id,
             index=i,
             total=count,
+            cfg_override=cfg_override,
         ):
             if isinstance(ev, ItemResult):
                 yield ev
@@ -386,6 +391,7 @@ class RunVariableBatchUseCase:
                     source_file_id=source_file_id,
                     index=i,
                     total=count,
+                    cfg_override=cfg_override,
                 ):
                     yield ev2
                 return

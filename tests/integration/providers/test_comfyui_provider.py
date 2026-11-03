@@ -222,3 +222,13 @@ async def test_supports_routing(tmp_path):
     assert not prov.supports(
         GenerationRequest(provider="xai", model_id="x", media_type=MediaType.IMAGE, prompt="x")
     )
+
+@pytest.mark.parametrize("seed", [0, 123456, (1 << 63) - 1])
+async def test_fixed_seed_reaches_both_stages_and_result(tmp_path, seed):
+    calls = []
+    prov = ComfyUIProvider("box", transport=FakeTransport(), workflow_source="embed",
+        client_factory=lambda url: calls.append(FakeClient(url)) or calls[-1], tmpdir=tmp_path)
+    result = await prov.generate(_req(params={"model": "grok_style", "seed": seed}))
+    assert calls[0].graph["1"]["inputs"]["seed"] == seed
+    assert calls[0].graph["17"]["inputs"]["seed"] == seed
+    assert result.meta["seed"] == seed

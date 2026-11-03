@@ -150,13 +150,39 @@ def _video_screen_text(cfg, *, updated: bool = False, aspect_reset_msg: str | No
     return text
 
 
+def _seed_label(cc) -> str:
+    return {"random": "aleatoria por imagen", "batch": "aleatoria por lote", "fixed": f"fija: {cc.seed}"}[cc.seed_mode]
+
+
+async def cmd_seed(message: types.Message, state: FSMContext, deps: BotDeps) -> None:
+    if await _reject_non_private_message(message, deps):
+        return
+    parts = (message.text or "").split()
+    uid = message.from_user.id
+    ui = ChatUI.for_message(deps.gateway, message)
+    if len(parts) == 1:
+        await ui.send_text(f"Semilla ComfyUI: {_seed_label(deps.sessions.get_config(uid).comfyui)}.\nUsa /semilla aleatoria, /semilla lote o /semilla 123456.")
+        return
+    value = parts[1].lower()
+    mode = {"aleatoria": "random", "lote": "batch"}.get(value)
+    seed = None
+    if mode is None and value.isascii() and value.isdecimal() and len(value) <= 19:
+        mode, seed = "fixed", int(value)
+    if len(parts) != 2 or mode is None or not deps.update_config.set_comfyui_seed(uid, mode, seed).ok:
+        await ui.send_text("Usa /semilla aleatoria, /semilla lote o un entero entre 0 y 9223372036854775807.")
+        return
+    await ui.send_text(f"Semilla ComfyUI guardada: {_seed_label(deps.sessions.get_config(uid).comfyui)}. Se aplicará a las próximas generaciones y lotes.")
+
+
 def _comfyui_screen_text(cfg, *, updated: bool = False) -> str:
     cc = cfg.comfyui
     header = "Configuración actualizada ✅\n" if updated else "Configuración de ComfyUI (GPU propia):\n"
     flow_name = COMFYUI_FLOW_LABELS.get(cc.model, cc.model)
     return (
         f"{header}"
-        f"<b>Flujo:</b> {flow_name}\n\n"
+        f"<b>Flujo:</b> {flow_name}\n"
+        f"<b>Semilla:</b> {_seed_label(cc)}\n"
+        "Para fijar un número: /semilla 123456\n\n"
         "Elige el flujo: cada uno trae su modelo y LoRA configurados en la GPU."
     )
 
@@ -645,6 +671,14 @@ async def handle_cfg_comfyui(callback: types.CallbackQuery, state: FSMContext, d
     ):
         return
     parts = callback.data.split(":")
+    if len(parts) == 4 and parts[2] == "seed":
+        result = deps.update_config.set_comfyui_seed(callback.from_user.id, parts[3])
+        if not result.ok:
+            await answer_callback(deps.gateway, callback, "Opción inválida.", show_alert=True)
+            return
+        await _show_configure_screen(callback.message, state, deps, "comfyui", uid=callback.from_user.id, updated=True)
+        await answer_callback(deps.gateway, callback, "Semilla guardada para las próximas generaciones y lotes.")
+        return
     if len(parts) != 4 or parts[2] != "flow":
         await answer_callback(deps.gateway, callback, "Opción inválida.", show_alert=True)
         return
@@ -714,6 +748,7 @@ async def handle_cfg_close(callback: types.CallbackQuery, state: FSMContext, dep
 # Registro
 # --------------------------------------------------------------------------- #
 def register_config(dp: Dispatcher, deps: BotDeps) -> None:
+    dp.message.register(partial(cmd_seed, deps=deps), Command("semilla"))
     dp.message.register(partial(cmd_config, deps=deps), Command("config", "model"))
     dp.message.register(partial(cmd_imaginess, deps=deps), Command("imagine", "imaginess"))
     dp.message.register(partial(cmd_nano, deps=deps), Command("nano", "nanobanana"))

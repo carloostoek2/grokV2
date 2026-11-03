@@ -233,7 +233,12 @@ class ComfyUIProvider:
                 user_message=_SOURCE_REQUIRED_MSG,
             )
 
-        graph = render(flow, request.prompt, self._seed)
+        seed = request.params.get("seed")
+        if seed is None:
+            seed = self._seed()
+        if type(seed) is not int or not 0 <= seed < (1 << 63):
+            raise ProviderInputError("Semilla inválida.", user_message="La semilla debe ser un entero entre 0 y 9223372036854775807.")
+        graph = render(flow, request.prompt, lambda: seed)
         run_timeout = flow.timeout or (
             _COMFY_VIDEO_TIMEOUT if flow.media_type is MediaType.VIDEO else _COMFY_IMAGE_TIMEOUT
         )
@@ -254,7 +259,9 @@ class ComfyUIProvider:
             close = getattr(client, "aclose", None)
             if close is not None:
                 await close()
-        return self._build_result(request, flow, locals_)
+        result = self._build_result(request, flow, locals_)
+        result.meta["seed"] = seed
+        return result
 
 
     async def _inject_source_image(

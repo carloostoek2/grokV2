@@ -306,6 +306,8 @@ class ComfyUIConfig:
     model: str = DEFAULT_COMFYUI_MODEL
     lora: str = DEFAULT_COMFYUI_LORA
     refine: str = DEFAULT_COMFYUI_REFINE  # "0"/"1" as str (JSON parity)
+    seed_mode: str = "random"
+    seed: int = 0
 
     @classmethod
     def from_record(cls, rec: Mapping) -> "ComfyUIConfig":
@@ -325,10 +327,16 @@ class ComfyUIConfig:
         if refine not in ("0", "1"):
             refine = DEFAULT_COMFYUI_REFINE
 
-        return cls(model=model, lora=lora, refine=refine)
+        seed_mode = rec.get("seed_mode", "random")
+        if seed_mode not in ("random", "fixed", "batch"):
+            seed_mode = "random"
+        seed = rec.get("seed", 0)
+        if type(seed) is not int or not 0 <= seed < (1 << 63):
+            seed = 0
+        return cls(model=model, lora=lora, refine=refine, seed_mode=seed_mode, seed=seed)
 
     def to_record(self) -> dict:
-        return {"model": self.model, "lora": self.lora, "refine": self.refine}
+        return {"model": self.model, "lora": self.lora, "refine": self.refine, "seed_mode": self.seed_mode, "seed": self.seed}
 
     @property
     def refine_enabled(self) -> bool:
@@ -424,6 +432,8 @@ class UserConfig:
             "video_resolution": self.video.resolution,
             "video_model": self.video.model,
             "video_mode": self.video.mode,
+            "comfyui_seed_mode": self.comfyui.seed_mode,
+            "comfyui_seed": self.comfyui.seed,
             "comfyui_model": self.comfyui.model,
             "comfyui_lora": self.comfyui.lora,
             "comfyui_refine": self.comfyui.refine,

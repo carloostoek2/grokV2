@@ -359,6 +359,9 @@ class ResultSender:
         meta = item.result.meta or {}
         elapsed = meta.get("elapsed_sec")
 
+        if type(meta.get("seed")) is int:
+            prefix = f"{prefix} • Semilla: {meta['seed']}"
+
         if len(paths) == 1:
             data = self._read_local(paths[0])
             if data is None:

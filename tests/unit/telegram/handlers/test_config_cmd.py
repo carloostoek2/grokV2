@@ -320,3 +320,14 @@ async def test_close_clears_panel():
     edit = _last_edit_text(deps)
     assert edit["text"] == "Configuración cerrada."
     assert edit["reply_markup"] is None
+
+async def test_seed_command_persists_and_rejects_invalid_input():
+    dp, deps = make_dispatcher(make_deps())
+    for command, mode, seed in (("/semilla 0", "fixed", 0), ("/semilla lote", "batch", 0), ("/semilla aleatoria", "random", 0), ("/semilla 9223372036854775807", "fixed", 9223372036854775807)):
+        await dp.feed_update(_BOT, message_update(text_message(command)))
+        cc = deps.sessions.get_config(_UID).comfyui
+        assert (cc.seed_mode, cc.seed) == (mode, seed)
+    before = deps.sessions.get_config(_UID)
+    for value in ("-1", "9223372036854775808", "abc", "1 extra", "²"):
+        await dp.feed_update(_BOT, message_update(text_message("/semilla " + value)))
+        assert deps.sessions.get_config(_UID) == before
