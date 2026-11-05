@@ -14,7 +14,8 @@ Rutea los updates aiogram de generación a los use cases con copy exacto de grok
 * foto sin caption → awaiting-ref guarda la referencia; faceswap delega en
   faceswap.handle_faceswap_photo; resto → hint de editar/video (grok 2895-2928).
 * álbum → awaiting-ref agenda integrate_ref.drain_integrate_ref_album (final-wins,
-  A1); faceswap agenda faceswap.drain_faceswap_album; grok/nano_banana → _drain_grok_album.
+  A1); faceswap agenda faceswap.drain_faceswap_album; grok/nano_banana y ComfyUI de
+  imagen → _drain_grok_album (edición secuencial por foto).
 * reply texto→foto → faceswap responde reply-not-used solo si el reply es foto;
   resto → edit sin job (KieTaskRef o download por gateway); video si
   grok_video (grok 2934-3061).
@@ -401,7 +402,12 @@ async def handle_photo_no_caption(message: types.Message, state: FSMContext, dep
 
 
 async def handle_album(message: types.Message, state: FSMContext, deps: BotDeps) -> None:
-    """Media group → colección efímera y edición/drain secuencial (grok/nano_banana/faceswap)."""
+    """Media group → colección efímera y edición/drain secuencial.
+
+    Edición por foto: grok/nano_banana y ComfyUI con flujo de imagen; faceswap e
+    integrate-ref tienen sus propios drains. Los modelos de video (grok_video y
+    flujos ComfyUI de video) y seedream siguen en silencio (parity grok).
+    """
     if await in_var_text_entry(state):
         return
     uid = message.from_user.id
@@ -419,9 +425,12 @@ async def handle_album(message: types.Message, state: FSMContext, deps: BotDeps)
         if deps.album.add(key, message):
             asyncio.create_task(faceswap_handlers.drain_faceswap_album(deps, key, message))
         return
-    # Album edit path: Grok Imagine + Nano Banana (same sequential UX).
-    # seedream/comfyui/grok_video remain silent (parity grok 3088-3089).
-    if cfg.model not in ("grok", "nano_banana"):
+    # Album edit path: Grok Imagine, Nano Banana y ComfyUI de imagen (misma UX
+    # secuencial: una edición por foto con el prompt único del álbum). seedream,
+    # grok_video y los flujos ComfyUI de video siguen en silencio (parity grok
+    # 3088-3089): un flujo de video no edita imágenes y abriría un job condenado.
+    # El flujo ComfyUI debe aceptar foto de entrada (error user-safe si no).
+    if cfg.model not in ("grok", "nano_banana", "comfyui") or is_video_cfg(cfg):
         return
     if deps.album.add(key, message):
         asyncio.create_task(_drain_grok_album(deps, key))
@@ -492,12 +501,13 @@ async def _process_album_edit(
     """Edición secuencial del álbum con UN job ``album_edit`` (parity 1815-1963).
 
     NO reutiliza ``present_single_image``: necesita continuar por foto editando un
-    UNICO status con cancel cooperativo y terminales byte-parity. Álbum solo llega
-    con ``cfg.model`` en ``("grok", "nano_banana")`` (sin refine). A2 (Item 2): la
-    rama no-integrate mantiene los labels SIN sufijo ``({backend})``. La rama
-    integrate (R4 Item 3) transcribe el copy de grok CON sufijo ``({backend})``
-    (A6: en la práctica ``backend == "xAI"`` por el prereq del use case; Nano
-    Banana no usa integrate).
+    UNICO status con cancel cooperativo y terminales byte-parity. Álbum llega con
+    ``cfg.model`` en ``("grok", "nano_banana", "comfyui")`` (sin refine); en
+    ComfyUI de imagen cada foto se envía al flujo configurado como foto de
+    entrada. A2 (Item 2): la rama no-integrate mantiene los labels SIN sufijo
+    ``({backend})``. La rama integrate (R4 Item 3) transcribe el copy de grok
+    CON sufijo ``({backend})`` (A6: en la práctica ``backend == "xAI"`` por el
+    prereq del use case; Nano Banana no usa integrate).
     """
     uid = anchor_message.from_user.id
     ui = _chat_ui(deps, anchor_message)

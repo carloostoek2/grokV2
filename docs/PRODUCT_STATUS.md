@@ -84,7 +84,8 @@ marca **[R4]** son exactamente los que en la wave rearch degradaban **D8** (resp
 - **Long-prompt collection** — caption > 1020 no edita directo: guarda el file_id y pide el
   prompt por texto (foto con/sin caption, grok_video incluido) **[R4 · Item 1]**.
 - **Álbumes entrantes / media groups** — colección (`AlbumStore`) + edición secuencial
-  "Editando i/N" (máx. 10, cancel, long-prompt multi-file) **[R4 · Item 1]**.
+  "Editando i/N" (máx. 10, cancel, long-prompt multi-file; Grok, Nano Banana y ComfyUI)
+  **[R4 · Item 1]**.
 - **`/estado`** — tarjeta de configuración byte-parity con grok `cmd_estado` (sin lista de
   jobs activos por decisión del owner) **[R4 · Item 1]**.
 - **Face Swap completo** — modo `faceswap` con `/cambiar_source` (foto/álbum, confirm
@@ -135,6 +136,22 @@ respeta completo (`N ≥ 1`, sin máximo). Se retiró la constante
 límites del engine no cambia (`MAX_COMBO_ATTEMPTS = 30` para evitar combos
 repetidos y `MULTIPOSE_BATCH_SIZE = 5`), y `JobManager` sigue sin tope de
 concurrencia (R9). El usuario puede cancelar el lote con el botón de siempre.
+
+### Álbum de fotos con ComfyUI (2026-11-05)
+
+Enviar un álbum (media group) de fotos con el prompt como caption ya funciona
+también con `cfg.model == "comfyui"`: el drain secuencial recorre las fotos en
+orden y, para cada una, corre la edición con **el mismo prompt** y esa foto como
+fuente (`source_image`), enviando el resultado antes de pasar a la siguiente.
+El flujo ComfyUI configurado debe aceptar foto de entrada (`supports_source`);
+con un flujo T2I la generación falla con el mensaje user-safe del provider y el
+álbum se detiene en esa foto. Antes, `handle_album` descartaba el media group en
+silencio para todo modelo fuera de Grok/Nano Banana, así que ComfyUI no
+respondía. Siguen en silencio para álbumes `seedream`, `grok_video` y los flujos
+ComfyUI de video (`wan_i2v`, `minimax_h3_i2v`): un flujo de video no edita
+imágenes y abriría un job condenado (parity grok). Tests:
+`tests/unit/telegram/handlers/test_generation.py`
+(`test_album_comfyui_edits_sequentially`, `test_album_comfyui_video_flow_silent`).
 
 ### Integración ComfyUI por API HTTP/WS — slice 2026-09-05 (`aa65651`→`e5ead0e`)
 

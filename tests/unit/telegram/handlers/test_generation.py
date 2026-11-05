@@ -420,6 +420,7 @@ async def test_photo_no_caption_while_awaiting_reminds():
 # --------------------------------------------------------------------------- #
 _ALBUM_LABEL = "Grok Imagine (Kie.ai • Alta calidad)"
 _NANO_ALBUM_LABEL = "Nano Banana (Kie.ai • Nano Banana 2)"
+_COMFY_ALBUM_LABEL = "Ágil Edit"  # COMFYUI_FLOW_LABELS["agil_edit_qwen"]
 
 
 async def _feed_album(deps, n: int, *, group: str = "album-1", caption_on: int | None = 1,
@@ -488,6 +489,48 @@ async def test_album_nano_banana_edits_sequentially():
     assert deps.job_manager.active_jobs(_UID) == ()
 
 
+async def test_album_comfyui_edits_sequentially():
+    """Álbum con ComfyUI edita cada foto en secuencia con el MISMO prompt."""
+    registry = make_registry()
+    comfy = registry.provider("comfyui")
+    deps = make_deps(registry=registry)
+    deps.update_config.set_model(_UID, "comfyui")
+    deps.update_config.set_comfyui(_UID, model="agil_edit_qwen")
+    deps.album.delay = 0.05
+    deps = await _feed_album(
+        deps, 3, group="album-comfy", file_prefix="FAKE:alb_comfy"
+    )
+    await _wait_until(lambda: any(
+        c["text"] == "Completadas 3/3 imágenes."
+        for c in deps.gateway.calls_by_method("edit_message_text")
+    ))
+    sends = deps.gateway.calls_by_method("send_message")
+    status = sends[0]
+    assert status["text"] == f"Editando 0/3 imágenes con {_COMFY_ALBUM_LABEL}..."
+    data = flat_callback_data(status["reply_markup"])
+    assert data and data[0].startswith("cancel_job:"), "status de álbum lleva cancel_job:<id>"
+    edits = [c["text"] for c in deps.gateway.calls_by_method("edit_message_text")]
+    for i in (1, 2, 3):
+        assert f"Editando {i}/3 imágenes con {_COMFY_ALBUM_LABEL}..." in edits
+    assert edits[-1] == "Completadas 3/3 imágenes."
+    photos = deps.gateway.calls_by_method("send_photo")
+    assert len(photos) == 3
+    assert all(p["reply_to_message_id"] == 101 for p in photos)
+    # Una generación por foto, cada una con los bytes de SU foto y el mismo prompt.
+    downloads = deps.gateway.calls_by_method("get_file_bytes")
+    assert [c["file_id"] for c in downloads] == [
+        "FAKE:alb_comfy1", "FAKE:alb_comfy2", "FAKE:alb_comfy3",
+    ]
+    assert len(comfy.calls) == 3
+    assert all(source is not None for _request, source in comfy.calls)
+    assert [request.prompt for request, _source in comfy.calls] == ["un cambio"] * 3
+    assert all(
+        request.params.get("model") == "agil_edit_qwen"
+        for request, _source in comfy.calls
+    )
+    assert deps.job_manager.active_jobs(_UID) == ()
+
+
 async def test_album_no_caption_shows_hint():
     deps = make_deps()
     deps.album.delay = 0.05
@@ -519,14 +562,28 @@ async def test_album_too_many_photos_errors():
 
 
 async def test_album_non_grok_model_silent():
-    """seedream/comfyui/grok_video siguen en silencio; nano_banana ya no está excluido."""
+    """seedream/grok_video siguen en silencio; comfyui y nano_banana ya no."""
+
     deps = make_deps()
     deps.update_config.set_model(_UID, "seedream")
     deps.album.delay = 0.05
     deps = await _feed_album(deps, 3, caption_on=1)
-    # Sin tarea de drain (handle_album no agenda nada fuera de grok/nano_banana): asserts directos.
+    # Sin tarea de drain (handle_album no agenda nada para seedream): asserts directos.
     assert deps.gateway.calls_by_method("send_message") == []
     assert deps.gateway.calls_by_method("send_photo") == []
+
+
+async def test_album_comfyui_video_flow_silent():
+    """Un flujo ComfyUI de video no entra al drain de edición de imágenes."""
+    deps = make_deps()
+    deps.update_config.set_model(_UID, "comfyui")
+    deps.update_config.set_comfyui(_UID, model="wan_i2v")
+    deps.album.delay = 0.05
+    deps = await _feed_album(deps, 2, caption_on=1, group="album-comfy-video")
+    # Sin job/status: el handler sale antes de agendar el drain.
+    assert deps.gateway.calls_by_method("send_message") == []
+    assert deps.gateway.calls_by_method("send_photo") == []
+    assert deps.job_manager.active_jobs(_UID) == ()
 
 
 async def test_album_faceswap_schedules_drain_and_confirm():
