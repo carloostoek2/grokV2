@@ -95,7 +95,7 @@ def test_parse_variables_request():
     assert parse_variables_request("/variables 4") == (4, None)
     assert parse_variables_request("/variables 4 mirror") == (4, "mirror")
     assert parse_variables_request("/variables mirror") == (1, "mirror")
-    assert parse_variables_request("/variables 99 mirror") == (10, "mirror")
+    assert parse_variables_request("/variables 99 mirror") == (99, "mirror")
     assert parse_variables_request("/variables 0") is None
     assert parse_variables_request("/variables a b") is None
 

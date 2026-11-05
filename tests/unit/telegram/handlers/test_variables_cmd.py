@@ -19,7 +19,6 @@ from conftest import (
     message_update,
     text_message,
 )
-from grokbot.domain.variables import VARIABLES_MAX
 from grokbot.telegram.handlers._common import (
     SOURCE_MEDIA_UNAVAILABLE_MSG,
     parse_var_count_and_text,
@@ -52,13 +51,15 @@ def _use_seedream(deps) -> None:
 def test_parse_variables_count():
     assert parse_variables_count("/variables") == 1
     assert parse_variables_count("/variables 5") == 5
-    assert parse_variables_count("/variables 99") == VARIABLES_MAX
+    assert parse_variables_count("/variables 99") == 99
     assert parse_variables_count("/variables abc") is None
 
 
 def test_parse_var_count_and_text():
     assert parse_var_count_and_text("/var de pie") == (1, "de pie")
     assert parse_var_count_and_text("/var 3 de pie") == (3, "de pie")
+    assert parse_var_count_and_text("/var 12 de pie") == (12, "de pie")
+    assert parse_var_count_and_text("/var 0 de pie") == (1, "0 de pie")
     assert parse_var_count_and_text("/var") == (1, None)
     assert parse_var_prompt("/var una foto cualquiera") == "una foto cualquiera"
 

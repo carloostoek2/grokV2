@@ -48,7 +48,6 @@ from grokbot.domain.user_config import (
 from grokbot.domain.variables import (
     MAX_COMBO_ATTEMPTS,
     MULTIPOSE_BATCH_SIZE,
-    VARIABLES_MAX,
     PromptTemplate,
     build_shuffled_prompt,
     combo_key,
@@ -89,7 +88,6 @@ __all__ = [
     "KIE_15_VIDEO_ASPECT_RATIOS",
     "kie_video_aspect_ratios",
     "kie_aspect_ratio_fallback",
-    "VARIABLES_MAX",
     "MAX_COMBO_ATTEMPTS",
     "MULTIPOSE_BATCH_SIZE",
     "PromptTemplate",

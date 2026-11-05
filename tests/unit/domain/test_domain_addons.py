@@ -23,7 +23,6 @@ from grokbot.domain.user_config import (
 from grokbot.domain.variables import (
     MAX_COMBO_ATTEMPTS,
     MULTIPOSE_BATCH_SIZE,
-    VARIABLES_MAX,
     PromptTemplate,
     build_shuffled_prompt,
     combo_key,
@@ -125,7 +124,6 @@ def test_kie_aspect_ratio_fallback_valid_aspect_returns_none():
 # --- D11: batch constants + derangement ------------------------------------
 
 def test_batch_constants():
-    assert VARIABLES_MAX == 10
     assert MAX_COMBO_ATTEMPTS == 30
     assert MULTIPOSE_BATCH_SIZE == 5
 

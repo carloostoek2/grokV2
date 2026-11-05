@@ -126,6 +126,16 @@ por la calle). Modelo (`domain/families.py`):
 - Switch visual por campo (aleatorio/fijo/anulado): **pendiente** para una iteración
   posterior; hoy se consigue quitando/poniendo placeholders en la plantilla.
 
+### Lote de variables sin tope (2026-11-05)
+
+`/variables N` y `/var N texto` ya **no recortan N a 10**: el número pedido se
+respeta completo (`N ≥ 1`, sin máximo). Se retiró la constante
+`domain.variables.VARIABLES_MAX` y el clamp de
+`telegram/handlers/_common.py`; el copy de ayuda muestra `N ≥ 1`. El resto de
+límites del engine no cambia (`MAX_COMBO_ATTEMPTS = 30` para evitar combos
+repetidos y `MULTIPOSE_BATCH_SIZE = 5`), y `JobManager` sigue sin tope de
+concurrencia (R9). El usuario puede cancelar el lote con el botón de siempre.
+
 ### Integración ComfyUI por API HTTP/WS — slice 2026-09-05 (`aa65651`→`e5ead0e`)
 
 El provider ComfyUI dejó de ejecutar scripts en la GPU (`gen_comfy.py` vía SSH/scp) y

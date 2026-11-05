@@ -25,7 +25,7 @@ from aiogram import Dispatcher, types
 from aiogram.filters import Command
 
 from grokbot.domain.families import Family
-from grokbot.domain.variables import VARIABLES_MAX, PromptTemplate
+from grokbot.domain.variables import PromptTemplate
 from grokbot.telegram.chat_ui import ChatUI
 from grokbot.telegram.deps import BotDeps
 from grokbot.telegram.formatters import model_display, validate_prompt
@@ -45,7 +45,7 @@ from grokbot.telegram.stream_presenter import present_batch
 _VARIABLES_USAGE = (
     "Para usar <b>/variables</b>:\n"
     "• Envía una foto con el caption <b>/variables N</b>, o responde a una foto, "
-    "para generar N ediciones (N = 1-" + str(VARIABLES_MAX) + ") combinando "
+    "para generar N ediciones (N ≥ 1) combinando "
     "aleatoriamente poses, ángulos y acciones.\n"
     "• Envía <b>/variables N</b> como mensaje de texto para generar N imágenes "
     "directamente desde la combinación de listas.\n"
@@ -61,8 +61,8 @@ _VARIABLES_USAGE = (
 def _var_usage() -> str:
     return (
         "Para usar <b>/var</b>:\n"
-        "• Envía <b>/var texto</b> (o <b>/var N texto</b>, N = 1-"
-        f"{VARIABLES_MAX}) como mensaje para generar una imagen (o N) con ese "
+        "• Envía <b>/var texto</b> (o <b>/var N texto</b>) como mensaje para "
+        "generar una imagen (o N) con ese "
         "texto como prompt.\n"
         "• Envía una foto con el caption <b>/var texto</b>, o responde a una foto "
         "con <b>/var texto</b>, para editarla con ese texto.\n\n"
@@ -242,7 +242,7 @@ async def cmd_variables_photo(message: types.Message, deps: BotDeps) -> None:
         ui = ChatUI.for_message(deps.gateway, message)
         await ui.send_text(
             f"Uso: envía la foto con el caption <b>/variables N [familia]</b> "
-            f"(N = 1-{VARIABLES_MAX}).\n\n"
+            f"(N ≥ 1).\n\n"
             "Gestiona las listas con <b>/listas</b>."
         )
         return
@@ -270,7 +270,7 @@ async def cmd_variables_reply(message: types.Message, deps: BotDeps) -> None:
         ui = ChatUI.for_message(deps.gateway, message)
         await ui.send_text(
             f"Uso: responde a una foto con <b>/variables N [familia]</b> "
-            f"(N = 1-{VARIABLES_MAX}).\n\n"
+            f"(N ≥ 1).\n\n"
             "Gestiona las listas con <b>/listas</b>."
         )
         return

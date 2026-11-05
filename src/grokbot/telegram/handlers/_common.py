@@ -113,7 +113,7 @@ def is_variables_command(text: str | None) -> bool:
 
 
 def parse_variables_count(text: str | None) -> int | None:
-    """Parse '/variables N' → N clamp [1, VARIABLES_MAX]; bare → 1; inválido → None.
+    """Parse '/variables N' → N ≥ 1 (no upper bound); bare → 1; inválido → None.
 
     Kept for callers/tests that only care about the count: a family token makes
     this return None, while :func:`parse_variables_request` exposes both.
@@ -143,9 +143,6 @@ def parse_variables_request(text: str | None) -> tuple[int, str | None] | None:
         count = int(m.group(1))
         if count < 1:
             return None
-        from grokbot.domain.variables import VARIABLES_MAX
-
-        count = min(count, VARIABLES_MAX)
     family = m.group(2).strip() if m.group(2) else None
     return count, family
 
@@ -173,12 +170,11 @@ def parse_var_count_and_text(text: str | None) -> tuple[int, str | None]:
     prompt = parse_var_prompt(text)
     if prompt is None:
         return 1, None
-    from grokbot.domain.variables import VARIABLES_MAX
 
     parts = prompt.split(maxsplit=1)
     if len(parts) == 2 and parts[0].isdigit():
         n = int(parts[0])
-        if 1 <= n <= VARIABLES_MAX:
+        if n >= 1:
             return n, parts[1].strip()
     return 1, prompt
 
