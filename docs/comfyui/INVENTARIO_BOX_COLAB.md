@@ -4,6 +4,11 @@
 > sesión de **Google Colab** con **A100-SXM4-80GB**. Este documento es la foto del runtime
 > actual. La receta histórica del box Vast sigue en
 > [INVENTARIO_BOX_VAST.md](./INVENTARIO_BOX_VAST.md) y **no** describe el entorno actual.
+>
+> **Nota 2026-11-07:** es una foto histórica. Los templates del repo ya no usan bf16
+> (todo el set Krea comparte `krea2_turbo_fp8_scaled` + `qwen3vl_4b_fp8_scaled`) y los
+> flujos Dirty\* están retirados. Ver `PRODUCT_STATUS.md` §2 y
+> [AUDITORIA_FLUJOS_5000ADA.md](./AUDITORIA_FLUJOS_5000ADA.md).
 
 ## 1. Conexión del bot (contrato)
 

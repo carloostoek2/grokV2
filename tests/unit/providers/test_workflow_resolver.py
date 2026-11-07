@@ -81,10 +81,6 @@ def test_flows_returns_registered_flows():
         "agil_edit_nsfw",
         "grok_edit",
         "grok_edit_hq",
-        "dirty_realism",
-        "dirty_realism_hq",
-        "dirty_edit",
-        "dirty_edit_hq",
         "wan_i2v",
         "qwen21_t2i",
         "flux1_dev_t2i",
@@ -92,7 +88,6 @@ def test_flows_returns_registered_flows():
         "instantid_sdxl",
         "ohwx_krea2",
         "ohwx_edit",
-        "ohwx_dirty_edit",
     }
 
 
@@ -532,51 +527,6 @@ def test_render_grok_edit_patches_instruction():
     assert "_meta" not in graph
 
 
-def test_get_flow_dirty_realism_uses_checkpoint_as_the_look():
-    """Dirty Realism: el look lo aporta el checkpoint, sin LoRA de estilo horneada."""
-    flow = get_flow("dirty_realism")
-    assert flow is not None
-    assert flow.name == "Dirty Realism"
-    assert flow.media_type is MediaType.IMAGE
-    assert flow.supports_source is False
-    assert flow.requires_source is False
-
-    g = flow.graph
-    assert g["1"]["class_type"] == "UNETLoader"
-    assert g["1"]["inputs"]["unet_name"] == "krea2SATDirtyRealism_uncut_fp8.safetensors"
-    assert g["2"]["inputs"]["type"] == "krea2"
-    assert g["7"]["inputs"]["steps"] == 8
-    assert g["7"]["inputs"]["cfg"] == 1.0
-    # Sin LoRA de estilo: apilar una competiria con el finetune.
-    assert not any(
-        isinstance(n, dict) and n.get("class_type") == "LoraLoaderModelOnly"
-        for n in g.values()
-    )
-
-
-def test_get_flow_dirty_edit_edits_on_the_dirty_checkpoint():
-    """Dirty Realism Edit: mismo grafo krea2edit, base Dirty y solo LoRA de identidad."""
-    flow = get_flow("dirty_edit")
-    assert flow is not None
-    assert flow.name == "Dirty Realism Edit"
-    assert flow.supports_source is True
-    assert flow.requires_source is True
-    assert flow.source_node == "1"
-    assert flow.positive_node == "8"
-    assert flow.positive_input == "prompt"
-
-    g = flow.graph
-    assert g["2"]["inputs"]["unet_name"] == "krea2SATDirtyRealism_uncut_fp8.safetensors"
-    assert g["7"]["class_type"] == "Krea2EditModelPatch"
-    assert g["5"]["inputs"]["lora_name"] == "krea2/krea2_identity_edit_v1_2.safetensors"
-    # grokstyle NO va: competiria con el look del checkpoint.
-    assert not any(
-        isinstance(n, dict)
-        and (n.get("inputs") or {}).get("lora_name") == "grokstyle_krea2_v2.safetensors"
-        for n in g.values()
-    )
-
-
 def test_get_flow_ohwx_edit_swaps_identity_lora_keeps_style():
     """Ohwx Edit: clon de grok_edit con identidad ohwx y grokstyle intacto."""
     flow = get_flow("ohwx_edit")
@@ -603,37 +553,6 @@ def test_get_flow_ohwx_edit_swaps_identity_lora_keeps_style():
     assert g["7"]["inputs"]["model"] == ["6", 0]
     assert g["13"]["inputs"]["steps"] == 10
     assert g["13"]["inputs"]["cfg"] == 1.0
-
-
-def test_get_flow_ohwx_dirty_edit_is_identity_only_on_dirty():
-    """Ohwx Dirty Edit: clon de dirty_edit; único LoRA ohwx_krea2, sin grokstyle."""
-    flow = get_flow("ohwx_dirty_edit")
-    assert flow is not None
-    assert flow.name == "Ohwx Dirty Edit"
-    assert flow.supports_source is True
-    assert flow.requires_source is True
-    assert flow.source_node == "1"
-    assert flow.source_input == "image"
-    assert flow.positive_node == "8"
-    assert flow.positive_input == "prompt"
-
-    g = flow.graph
-    assert g["2"]["inputs"]["unet_name"] == "krea2SATDirtyRealism_uncut_fp8.safetensors"
-    assert g["5"]["class_type"] == "LoraLoaderModelOnly"
-    assert g["5"]["inputs"]["lora_name"] == "ohwx_krea2.safetensors"
-    assert g["5"]["inputs"]["strength_model"] == 1.0
-    assert g["7"]["inputs"]["model"] == ["5", 0]
-    assert not any(
-        isinstance(n, dict)
-        and (n.get("inputs") or {}).get("lora_name") == "grokstyle_krea2_v2.safetensors"
-        for n in g.values()
-    )
-    loras = [
-        (n.get("inputs") or {}).get("lora_name")
-        for n in g.values()
-        if isinstance(n, dict) and n.get("class_type") == "LoraLoaderModelOnly"
-    ]
-    assert loras == ["ohwx_krea2.safetensors"]
 
 
 def test_get_flow_wan_i2v_supports_source_video():

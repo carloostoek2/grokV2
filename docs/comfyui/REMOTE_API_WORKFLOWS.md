@@ -15,10 +15,15 @@ JSON files **on the Vast box** and fetches them at runtime.
 ```
 /workspace/ComfyUI/user/default/api_workflows/
   agil_edit_nsfw.json   agil_edit_qwen.json   agil_moody.json
-  agil_nsfw.json        agil_solo.json        dirty_edit.json
-  dirty_realism.json    donut_face.json       grok_edit.json
-  grok_style.json       qwen21_t2i.json       wan_i2v.json
+  agil_nsfw.json        agil_solo.json        donut_face.json
+  grok_edit.json        grok_style.json       qwen21_t2i.json
+  wan_i2v.json
 ```
+
+> **Dirty\* retirados (2026-11-07):** `dirty_edit.json` y `dirty_realism.json`
+> ya no se despliegan; sus templates viven en
+> `workflows/templates/_disabled/` en el repo. Reactivar exige devolverlos al
+> box y registrar de nuevo el id en `COMFYUI_FLOWS`.
 
 > Para el runtime actual (Colab), el listado de pesos/flujos vive en
 > [INVENTARIO_BOX_COLAB.md](./INVENTARIO_BOX_COLAB.md). La foto histórica del box Vast, con

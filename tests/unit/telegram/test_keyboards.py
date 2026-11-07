@@ -77,7 +77,7 @@ def test_config_variant_keyboard():
 def test_config_comfyui_keyboard_lists_seeds_and_flows():
     cfg = ComfyUIConfig(model="grok_style")
     data = flat_callback_data(kb.config_comfyui_keyboard(cfg))
-    # Flujos del menú (hasta dirty_edit) + navegación; sin legacy ni flujos ocultos.
+    # Flujos del menú + navegación; sin legacy, sin flujos ocultos y sin Dirty*.
     assert data == [
         "cfg:comfyui:seed:random",
         "cfg:comfyui:seed:batch",
@@ -89,14 +89,10 @@ def test_config_comfyui_keyboard_lists_seeds_and_flows():
         "cfg:comfyui:flow:agil_edit_qwen",
         "cfg:comfyui:flow:agil_edit_nsfw",
         "cfg:comfyui:flow:grok_edit",
-        "cfg:comfyui:flow:dirty_realism",
-        "cfg:comfyui:flow:dirty_edit",
         "cfg:comfyui:flow:grok_style_hq",
         "cfg:comfyui:flow:agil_solo_hq",
         "cfg:comfyui:flow:agil_nsfw_hq",
         "cfg:comfyui:flow:agil_moody_hq",
-        "cfg:comfyui:flow:dirty_realism_hq",
-        "cfg:comfyui:flow:dirty_edit_hq",
         "cfg:comfyui:flow:grok_edit_hq",
         "cfg:comfyui:flow:agil_edit_hq",
         "cfg:back:model",
@@ -224,9 +220,9 @@ def test_comfy_result_keyboard_is_stage_gated():
     assert ohwx == ["regen", "pipe:edit", "pipe:detail", "pipe:retake"]
     ohwx_edit = flat_callback_data(kb.comfy_result_keyboard("ohwx_edit"))
     assert ohwx_edit == ["regen", "pipe:detail"]
+    # Dirty* retirados: el id ya no es válido y solo deja Regenerar.
     ohwx_dirty = flat_callback_data(kb.comfy_result_keyboard("ohwx_dirty_edit"))
-    assert ohwx_dirty == ["regen", "pipe:detail"]
-    assert "pipe:edit" not in ohwx_dirty
+    assert ohwx_dirty == ["regen"]
     assert "pipe:retake" not in ohwx_edit
     # Unknown / non-catalog ids stay regen-only (Grok results never use this builder).
     assert flat_callback_data(kb.comfy_result_keyboard("krea2")) == ["regen"]

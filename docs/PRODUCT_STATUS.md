@@ -250,8 +250,9 @@ local-forward** (`transport.py` → `client.py` → plantillas API-format en
   deja `model=comfyui` con el flujo destino, recuerda en memoria `last_comfy_path` y espera
   el siguiente texto.
   - **Editar**: solo si el flujo tiene hermano de edición (`grok_style` → `grok_edit`,
-    `dirty_realism` → `dirty_edit`, `qwen21_t2i` / `agil_solo` / `agil_moody` →
-    `agil_edit_qwen`, `agil_nsfw` → `agil_edit_nsfw`). Flux no tiene, así que no lo muestra.
+    `qwen21_t2i` / `agil_solo` / `agil_moody` → `agil_edit_qwen`, `agil_nsfw` →
+    `agil_edit_nsfw`). Flux no tiene, así que no lo muestra. Los Dirty*, retirados el
+    2026-11-07, ya no aparecen.
   - **Detalle cara**: manda la imagen a `face_detail_impact`; no aparece en video ni sobre
     un resultado de ese mismo flujo.
   - **Otra toma**: solo en txt2img; repite el flujo sin foto de entrada.
@@ -319,11 +320,23 @@ local-forward** (`transport.py` → `client.py` → plantillas API-format en
   pesos faltantes. Siguen sin pesos (ocultos/legacy): `face_detail_impact`, `instantid_sdxl`,
   `flux1_dev_t2i`, `qwen21_t2i` y los `ohwx_*` — «Detalle cara» del bot depende de
   `face_detail_impact` y **fallaría** en esta VM hasta instalar `sd_xl_base_1.0`.
+- **Set Krea unificado en fp8 + retiro temporal de Dirty* (2026-11-07)**: todos los flujos
+  que corren Krea2 Turbo comparten **los mismos archivos** `krea2_turbo_fp8_scaled.safetensors`
+  + `qwen3vl_4b_fp8_scaled.safetensors` + `qwen_image_vae.safetensors`, incluidos los `*_hq` y
+  `grok_edit`. Así cambiar de flujo no obliga a ComfyUI a cargar otra copia del mismo peso.
+  `agil_moody` / `agil_moody_hq` conservan su UNET Moody propio y comparten el TE Krea.
+  `donut_face`, `agil_edit_qwen` y `agil_edit_hq` mantienen su familia (Krea con extras y
+  Qwen-Image-Edit fp8mixed). Los flujos **Dirty\*** (`dirty_realism`, `dirty_edit`,
+  `dirty_realism_hq`, `dirty_edit_hq`) y `ohwx_dirty_edit` quedan **retirados temporalmente**:
+  ids fuera de `COMFYUI_FLOWS`, templates en `workflows/templates/_disabled/` y checkpoint
+  Dirty fuera de `descargar_local.py`. Una config guardada con un id retirado cae al flujo
+  default (`grok_style`). Reactivar = devolver las entradas a la tupla y mover los JSON de
+  vuelta a `templates/`.
 - **MiniMax H3 (`minimax_h3_i2v`, 2026-10-04, commit directo `f6bbae3`)**: se registra en
   `COMFYUI_FLOWS` como flujo de video (también en `COMFY_VIDEO_MODELS`). Desde `737944c`
   está en `COMFYUI_MENU_HIDDEN_FLOWS`, así que no aparece en el teclado de `/config`.
-- **Alcance actual**: **27 flujos registrados** en `COMFYUI_FLOWS` y **17 visibles** en el
-  `/config` (9 base + 8 `*_hq`); el resto son legacy/ocultos
+- **Alcance actual**: **22 flujos registrados** en `COMFYUI_FLOWS` y **13 visibles** en el
+  `/config` (7 base + 6 `*_hq`); el resto son legacy/ocultos
   (`COMFYUI_MENU_HIDDEN_FLOWS`). Salud real de cada flujo y pesos instalados:
   `docs/comfyui/INVENTARIO_BOX_COLAB.md`; el inventario Vast queda como histórico.
 

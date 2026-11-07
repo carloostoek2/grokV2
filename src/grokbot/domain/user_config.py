@@ -54,14 +54,14 @@ COMFYUI_FLOWS = (
     ("agil_edit_qwen", "Ágil Edit"),
     ("agil_edit_nsfw", "Ágil Edit NSFW"),
     ("grok_edit", "Grok Style Edit"),
-    ("dirty_realism", "Dirty Realism"),
-    ("dirty_edit", "Dirty Realism Edit"),
+    # Dirty* (dirty_realism/dirty_edit y sus variantes HQ) retirados
+    # temporalmente el 2026-11-07: sus templates viven en
+    # ``workflows/templates/_disabled/``. Reactivar = devolver las entradas a
+    # esta tupla y mover los JSON de vuelta a ``templates/``.
     ("grok_style_hq", "Grok Style (HQ A100)"),
     ("agil_solo_hq", "Ágil Solo (HQ A100)"),
     ("agil_nsfw_hq", "Ágil NSFW (HQ A100)"),
     ("agil_moody_hq", "Ágil Moody (HQ A100)"),
-    ("dirty_realism_hq", "Dirty Realism (HQ A100)"),
-    ("dirty_edit_hq", "Dirty Edit (HQ A100)"),
     ("grok_edit_hq", "Grok Edit (HQ A100)"),
     ("agil_edit_hq", "Ágil Edit (HQ A100)"),
     ("wan_i2v", "Wan I2V"),
@@ -72,14 +72,13 @@ COMFYUI_FLOWS = (
     ("instantid_sdxl", "InstantID SDXL"),
     ("ohwx_krea2", "Ohwx"),
     ("ohwx_edit", "Ohwx Edit"),
-    ("ohwx_dirty_edit", "Ohwx Dirty Edit"),
 )
 DEFAULT_COMFYUI_MODEL = COMFYUI_FLOWS[0][0]
 VALID_COMFYUI_MODELS = tuple(_id for _id, _label in COMFYUI_FLOWS)
 COMFYUI_FLOW_LABELS = dict(COMFYUI_FLOWS)
 # Still valid saved configs (see VALID_COMFYUI_MODELS). Hidden from the
-# Telegram config keyboard by explicit list; the HQ block after dirty_edit stays
-# visible because it is the active menu.
+# Telegram config keyboard by explicit list; the HQ block stays visible because
+# it is the active menu.
 COMFYUI_MENU_HIDDEN_FLOWS = frozenset({
     "donut_face",
     "wan_i2v",
@@ -90,7 +89,6 @@ COMFYUI_MENU_HIDDEN_FLOWS = frozenset({
     "instantid_sdxl",
     "ohwx_krea2",
     "ohwx_edit",
-    "ohwx_dirty_edit",
 })
 
 # Result-chain stages (Telegram buttons under a ComfyUI image). The callback
@@ -103,9 +101,7 @@ FACE_DETAIL_FLOW_ID = "face_detail_impact"
 # T2I id → edit sibling. No entry means the Editar button stays hidden.
 COMFYUI_EDIT_SIBLINGS = {
     "grok_style": "grok_edit",
-    "dirty_realism": "dirty_edit",
     "grok_style_hq": "grok_edit_hq",
-    "dirty_realism_hq": "dirty_edit_hq",
     "agil_solo_hq": "agil_edit_hq",
     "agil_moody_hq": "agil_edit_hq",
     "agil_nsfw_hq": "agil_edit_nsfw",

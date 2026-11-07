@@ -215,7 +215,6 @@ def test_new_comfy_flows_are_accepted():
         "instantid_sdxl",
         "ohwx_krea2",
         "ohwx_edit",
-        "ohwx_dirty_edit",
     ):
         uc = UserConfig.from_record({"comfyui_model": flow_id})
         assert uc.comfyui.model == flow_id
@@ -230,14 +229,21 @@ def test_comfy_chain_stages():
         ("detail", "face_detail_impact"),
         ("retake", "grok_style"),
     )
-    assert comfy_chain_destination(
-        "dirty_realism", "edit", supports_source=False, requires_source=False
-    ) == "dirty_edit"
+    # Dirty* retirados: no son ids válidos ni generan cadena.
+    from grokbot.domain.user_config import VALID_COMFYUI_MODELS
+
+    assert not any(
+        flow_id.startswith("dirty_") or flow_id == "ohwx_dirty_edit"
+        for flow_id in VALID_COMFYUI_MODELS
+    )
+    assert comfy_chain_stages(
+        "dirty_realism", supports_source=False, requires_source=False
+    ) == ()
     flux = [stage for stage, _dest in comfy_chain_stages(
         "flux1_dev_t2i", supports_source=False, requires_source=False
     )]
     assert flux == ["detail", "retake"]
-    # T2I Ohwx encadena solo a ohwx_edit (no a ohwx_dirty_edit).
+    # T2I Ohwx encadena solo a ohwx_edit (ohwx_dirty_edit fue retirado).
     ohwx = comfy_chain_stages("ohwx_krea2", supports_source=False, requires_source=False)
     assert ohwx == (
         ("edit", "ohwx_edit"),

@@ -33,7 +33,7 @@
   },
   "3": {
     "inputs": {
-      "clip_name": "qwen3vl_4b_bf16.safetensors",
+      "clip_name": "qwen3vl_4b_fp8_scaled.safetensors",
       "type": "krea2",
       "device": "default"
     },

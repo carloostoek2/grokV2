@@ -16,6 +16,14 @@
 > `/workspace/ComfyUI`, pesos fp8). Se conservan como receta histórica; donde digan
 > Vast/18188, leer Colab/8188. El diseño del slice (transporte, cliente, render,
 > descarga) sigue vigente.
+>
+> **Update 2026-11-07 — set Krea en fp8 y Dirty\* retirados:** todos los flujos Krea
+> comparten `krea2_turbo_fp8_scaled` + `qwen3vl_4b_fp8_scaled` + `qwen_image_vae`
+> (incluidos los `*_hq` y `grok_edit`) para no cargar dos copias del mismo peso al
+> cambiar de flujo. `agil_moody` / `agil_moody_hq` conservan su UNET Moody y comparten
+> el TE. Los flujos Dirty\* y `ohwx_dirty_edit` se retiran temporalmente: ids fuera de
+> `COMFYUI_FLOWS` y templates en `workflows/templates/_disabled/`. Detalle de producto:
+> `docs/PRODUCT_STATUS.md` §2.
 
 # ComfyUI en grokV2 — integración por API HTTP/WS (avance y estado)
 
