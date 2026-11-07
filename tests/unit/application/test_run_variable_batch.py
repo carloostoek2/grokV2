@@ -105,6 +105,53 @@ async def test_random_success_event_order_and_unique_combos(sessions, variables_
     assert jm.active_count(USER_ID) == 0
 
 
+# --- random: la plantilla configurada es siempre la fuente del prompt ---------
+
+async def test_random_unknown_placeholder_keeps_template_literal(sessions, fast_sleep):
+    """Un placeholder sin lista no descarta el texto de la plantilla."""
+    variables = FakeVariablesRepo(
+        lists={"poses": ["de pie"], "angles": ["frontal"]},
+        template="RETRATO editorial, {pose}, {outfit}, luz suave",
+    )
+    prov = FakeImageProvider(name="kie")
+    reg = make_registry(kie=prov)
+    uc, _ = _uc(sessions, reg, variables)
+
+    events = await _collect(uc, user_id=USER_ID, count=1, strategy=RandomComboStrategy(variables))
+
+    assert any(isinstance(ev, ItemResult) for ev in events)
+    assert prov.calls[-1][0].prompt == "RETRATO editorial, de pie, luz suave"
+
+
+async def test_random_template_without_placeholders_is_the_fixed_prompt(sessions, fast_sleep):
+    """Sin placeholders la plantilla es el prompt fijo (no se combinan listas)."""
+    variables = FakeVariablesRepo(
+        lists={"poses": ["de pie", "sentada"]},
+        template="retrato hiperrealista, luz suave",
+    )
+    prov = FakeImageProvider(name="kie")
+    reg = make_registry(kie=prov)
+    uc, _ = _uc(sessions, reg, variables)
+
+    events = await _collect(uc, user_id=USER_ID, count=2, strategy=RandomComboStrategy(variables))
+
+    assert [ev for ev in events if isinstance(ev, EmptyList)] == []
+    assert [c[0].prompt for c in prov.calls] == ["retrato hiperrealista, luz suave"] * 2
+
+
+async def test_random_fixed_template_does_not_need_lists(sessions, fast_sleep):
+    """Una plantilla sin placeholders no depende de que existan listas."""
+    variables = FakeVariablesRepo(lists={}, template="retrato fijo")
+    prov = FakeImageProvider(name="kie")
+    reg = make_registry(kie=prov)
+    uc, _ = _uc(sessions, reg, variables)
+
+    events = await _collect(uc, user_id=USER_ID, count=1, strategy=RandomComboStrategy(variables))
+
+    assert [ev for ev in events if isinstance(ev, EmptyList)] == []
+    assert prov.calls[-1][0].prompt == "retrato fijo"
+
+
 # --- random: skip-on-fail (un ítem falla y el siguiente corre) ----------------
 
 async def test_random_partial_skip_on_fail(sessions, variables_repo, fast_sleep):

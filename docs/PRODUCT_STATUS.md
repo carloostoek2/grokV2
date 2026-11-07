@@ -137,6 +137,27 @@ límites del engine no cambia (`MAX_COMBO_ATTEMPTS = 30` para evitar combos
 repetidos y `MULTIPOSE_BATCH_SIZE = 5`), y `JobManager` sigue sin tope de
 concurrencia (R9). El usuario puede cancelar el lote con el botón de siempre.
 
+### La plantilla de variables siempre se respeta (2026-11-05)
+
+Antes, la plantilla configurada en `/listas` (o importada con un paquete JSON)
+podía ignorarse en silencio y el prompt salía combinando las listas como el
+formato de siempre. Ahora la plantilla es siempre la fuente del prompt:
+
+- `PromptTemplate.render` **nunca** descarta el texto configurado: un
+  placeholder sin lista resuelta (p. ej. `{outfit}` sin lista `outfits`) se
+  renderiza vacío y solo se limpian las comas sobrantes. El resto de la
+  plantilla se respeta tal cual. Solo un `str.format` (`{pose.foo}`) mantiene el
+  fallback histórico a join, porque no se puede sustituir con seguridad.
+- Una plantilla **sin placeholders** es un prompt fijo: `/variables N` la usa
+  tal cual (ya no dibuja una opción de cada lista) y el pre-check de listas
+  vacías no aplica. `/var texto` la usa como base y añade el texto después
+  (`plantilla, texto`).
+- Sin cambios cuando la plantilla es el formato normal con placeholders: mismos
+  prompts, mismos combos y misma blacklist. Docs: sección de variables de este
+  archivo; tests en `tests/unit/domain/test_variables.py`,
+  `tests/unit/application/test_run_variable_batch.py` y
+  `tests/unit/telegram/handlers/test_variables_cmd.py`.
+
 ### Álbum de fotos con ComfyUI (2026-11-05)
 
 Enviar un álbum (media group) de fotos con el prompt como caption ya funciona

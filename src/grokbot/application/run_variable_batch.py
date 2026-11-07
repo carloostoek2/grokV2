@@ -95,6 +95,20 @@ class RandomComboStrategy:
         self._family = family
 
     def draw(self, *, exclude: set[tuple[str, ...]]) -> DrawnCombo | None:
+        template = self._variables.get_template()
+        pt = PromptTemplate(template)
+        has_format_expr = pt.has_format_expr()
+        placeholders = [] if has_format_expr else pt.fields()
+
+        # Plantilla sin placeholders: es un prompt fijo. No se dibuja de las
+        # listas (antes se combinaba una opción de cada lista y se descartaba
+        # el texto configurado — el usuario veía el prompt "de siempre").
+        if not placeholders and not has_format_expr:
+            prompt = template.strip()
+            if not prompt:
+                return None
+            return DrawnCombo(prompt=prompt, values={}, key=(), label=prompt)
+
         lists = self._variables.get_lists()
         usable = {
             name: values
@@ -103,30 +117,32 @@ class RandomComboStrategy:
         }
         if not usable:
             return None
-        template = self._variables.get_template()
-        pt = PromptTemplate(template)
-        placeholders = [] if pt.has_format_expr() else pt.fields()
         blacklist = self._variables.get_blacklist()
         exclude = exclude or set()
 
-        if placeholders:
+        if has_format_expr:
+            order = list(usable)
+
+            def _draw() -> dict[str, str]:
+                return {name: self._rng.choice(usable[name]) for name in order}
+
+        else:
             field_map: dict[str, str] = {}
             for placeholder in placeholders:
                 resolved = list_for_placeholder(placeholder, usable)
                 if resolved is not None:
                     field_map[placeholder] = resolved
             if not field_map:
-                return None
+                # La plantilla solo referencia placeholders sin lista: se usa
+                # su texto literal (con los huecos vacíos), nunca un join.
+                prompt = pt.render({})
+                if not prompt:
+                    return None
+                return DrawnCombo(prompt=prompt, values={}, key=(), label=prompt)
             order = list(field_map)
 
             def _draw() -> dict[str, str]:
                 return {p: self._rng.choice(usable[field_map[p]]) for p in order}
-
-        else:
-            order = list(usable)
-
-            def _draw() -> dict[str, str]:
-                return {name: self._rng.choice(usable[name]) for name in order}
 
         for _ in range(MAX_COMBO_ATTEMPTS):
             values = _draw()
@@ -136,7 +152,7 @@ class RandomComboStrategy:
         else:
             values = _draw()
 
-        prompt = pt.render(values) if placeholders else ", ".join(values.values())
+        prompt = pt.render(values) if not has_format_expr else ", ".join(values.values())
         return DrawnCombo(
             prompt=prompt,
             values=values,
@@ -181,11 +197,14 @@ def _first_unusable_field(
 ) -> str | None:
     """First referenced field with no allowed value under ``family``.
 
-    Only template-referenced fields are checked (a template without placeholders
-    falls back to every list). Unreferenced empty lists no longer abort a batch:
-    they do not participate in the prompt.
+    Only template-referenced fields are checked. A template without placeholders
+    is a fixed prompt and references no list at all, so it never aborts.
+    Unreferenced empty lists no longer abort a batch: they do not participate in
+    the prompt.
     """
     pt = PromptTemplate(template)
+    if not pt.has_format_expr() and not pt.fields():
+        return None
     placeholders = [] if pt.has_format_expr() else pt.fields()
     if not placeholders:
         return next(

@@ -54,9 +54,13 @@ def test_render_json_template_with_literal_braces():
     assert data["camera"]["angle"] == "frontal"
 
 
-def test_render_fallback_unknown_placeholder():
-    prompt = PromptTemplate("{unknown} {pose}").render({"pose": "a", "angle": "b", "action": "c"})
-    assert prompt == "a, b, c"
+def test_render_unknown_placeholder_keeps_literal_template():
+    """Un placeholder sin lista se vacía; el texto de la plantilla NUNCA se pierde."""
+    prompt = PromptTemplate("RETRATO editorial, {pose}, {outfit}, luz suave").render(
+        {"pose": "de pie"}
+    )
+    assert prompt == "RETRATO editorial, de pie, luz suave"
+    assert PromptTemplate("{unknown} {pose}").render({"pose": "a"}) == "a"
 
 
 def test_render_fallback_format_expr():
@@ -68,8 +72,15 @@ def test_render_inline_clean_gaps_and_join():
     assert tpl.render_inline(["de pie"]) == "de pie"
     assert tpl.render_inline(["de pie", "frontal", "extra"]) == "de pie, frontal, extra"
     assert tpl.render_inline(["de pie", "", "extra"]) == "de pie, extra"
-    # Template with no placeholders joins the clean fields.
-    assert PromptTemplate("foto fija").render_inline(["de pie", "frontal"]) == "de pie, frontal"
+
+
+def test_render_inline_without_placeholders_keeps_template():
+    """Plantilla sin placeholders: el texto escrito va DESPUÉS de la plantilla."""
+    assert (
+        PromptTemplate("foto fija, hiperrealista").render_inline(["de pie", "frontal"])
+        == "foto fija, hiperrealista, de pie, frontal"
+    )
+    assert PromptTemplate("foto fija").render_inline([]) == "foto fija"
 
 
 def test_render_positional():

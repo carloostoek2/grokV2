@@ -1,9 +1,11 @@
 """Prompt-template value objects and pure helpers for the /variables batch engine.
 
 Rendering is done with regex substitution (never ``str.format``), so templates
-that embed literal JSON braces render intact. When the template references an
-unknown placeholder or a format expression, rendering falls back to a plain
-join of the supplied values.
+that embed literal JSON braces render intact. The configured template is always
+authoritative: a placeholder without a value renders empty (cleaning its
+separator artifacts) and never causes the literal template text to be dropped.
+Only a ``str.format`` expression (which cannot be substituted safely) falls back
+to a plain join of the supplied values.
 """
 
 from __future__ import annotations
@@ -97,14 +99,18 @@ class PromptTemplate:
     def render(self, values: Mapping[str, str]) -> str:
         """Fill the template with ``{field}`` values.
 
-        Falls back to a join when the template has no value for a placeholder or
-        contains a str.format expression. Literal JSON braces render intact.
+        The template text is ALWAYS preserved: a placeholder without a value is
+        rendered empty (and its separator artifacts cleaned), never dropped in
+        favor of a bare join. Only a str.format expression (which cannot be
+        substituted safely) falls back to joining the supplied values. Literal
+        JSON braces render intact.
         """
         if self.has_format_expr():
             return ", ".join(values.values())
         placeholders = self.fields()
         if any(field not in values for field in placeholders):
-            return ", ".join(values.values())
+            rendered = _PLACEHOLDER_RE.sub(lambda m: values.get(m.group(1), ""), self.template)
+            return clean_gaps(rendered)
         return _PLACEHOLDER_RE.sub(lambda m: values[m.group(1)], self.template)
 
     def render_inline(self, fields: list[str]) -> str:
@@ -112,12 +118,18 @@ class PromptTemplate:
 
         The first field fills the FIRST placeholder; fields beyond the placeholder
         count are ignored; leftover empty-placeholder separator artifacts are
-        cleaned via :func:`clean_gaps`. Templates without placeholders join fields.
+        cleaned via :func:`clean_gaps`. A template WITHOUT placeholders is a base
+        prompt: the typed fields are appended after it (never discarded).
         """
         clean = [f.strip() for f in fields if isinstance(f, str) and f.strip()]
         names = self.fields()
-        if not names or self.has_format_expr():
+        if self.has_format_expr():
             return ", ".join(clean)
+        if not names:
+            base = self.template.strip()
+            if not clean:
+                return base
+            return clean_gaps(", ".join([base, *clean]))
         values = {name: "" for name in names}
         for i, name in enumerate(names):
             if i < len(clean):

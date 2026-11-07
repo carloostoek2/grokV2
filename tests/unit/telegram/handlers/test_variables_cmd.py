@@ -12,10 +12,12 @@ from aiogram import Bot
 from conftest import (
     CHAT_ID,
     USER_ID,
+    FakeImageProvider,
     FakeVariablesRepo,
     make_deps,
     make_dispatcher,
     make_photo_message,
+    make_registry,
     message_update,
     text_message,
 )
@@ -144,6 +146,22 @@ async def test_var_fixed_prompt_text():
     assert photos
     # la foto del /var responde al mensaje del comando (message_id=1).
     assert photos[-1]["reply_to_message_id"] == 1
+
+
+async def test_var_uses_template_without_placeholders():
+    """`/var` inyecta el texto DESPUÉS de una plantilla sin placeholders."""
+    prov = FakeImageProvider(name="replicate")
+    registry = make_registry(replicate=prov)
+    deps = make_deps(
+        registry=registry,
+        variables=FakeVariablesRepo(
+            lists={"poses": ["de pie"]},
+            template="retrato hiperrealista",
+        ),
+    )
+    _use_seedream(deps)
+    deps = await _msg(deps, text_message("/var de pie, frontal"))
+    assert prov.calls[-1][0].prompt == "retrato hiperrealista, de pie, frontal"
 
 
 async def test_var_short_prompt_validation():
