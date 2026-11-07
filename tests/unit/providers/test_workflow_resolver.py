@@ -96,6 +96,55 @@ def test_flows_returns_registered_flows():
     }
 
 
+def test_krea2_model_files_are_shared_fp8_across_flows():
+    """Todo flujo Krea comparte el mismo UNET/TE/VAE fp8.
+
+    El objetivo es que cambiar de flujo no obligue a ComfyUI a recargar otra
+    copia del mismo modelo: un solo ``krea2_turbo_fp8_scaled`` y un solo
+    ``qwen3vl_4b_fp8_scaled``. Un flujo que se salga del set lo detecta este
+    test antes de duplicar pesos en el box.
+    """
+    turbo_flows = set()
+    for flow in flows():
+        unets = {
+            node["inputs"]["unet_name"]
+            for node in flow.graph.values()
+            if isinstance(node, dict)
+            and node.get("class_type") == "UNETLoader"
+            and "krea2_turbo" in node["inputs"].get("unet_name", "")
+        }
+        if not unets:
+            continue
+        assert unets == {"krea2_turbo_fp8_scaled.safetensors"}, flow.id
+        turbo_flows.add(flow.id)
+
+    assert turbo_flows == {
+        "grok_style",
+        "grok_style_hq",
+        "agil_solo",
+        "agil_solo_hq",
+        "agil_nsfw",
+        "agil_nsfw_hq",
+        "grok_edit",
+        "grok_edit_hq",
+        "ohwx_krea2",
+        "ohwx_edit",
+        "donut_face",
+    }
+
+    encoders = {
+        flow.id: node["inputs"]["clip_name"]
+        for flow in flows()
+        for node in flow.graph.values()
+        if isinstance(node, dict)
+        and node.get("class_type") == "CLIPLoader"
+        and "qwen3vl_4b" in node["inputs"].get("clip_name", "")
+    }
+    # Los flujos Moody usan su propio UNET pero comparten el mismo TE Krea.
+    for flujo in turbo_flows | {"agil_moody", "agil_moody_hq"}:
+        assert encoders[flujo] == "qwen3vl_4b_fp8_scaled.safetensors", flujo
+
+
 def test_get_flow_donut_face():
     flow = get_flow("donut_face")
     assert flow is not None

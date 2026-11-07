@@ -31,14 +31,14 @@
   },
   "2": {
     "inputs": {
-      "unet_name": "krea2_turbo_bf16.safetensors",
+      "unet_name": "krea2_turbo_fp8_scaled.safetensors",
       "weight_dtype": "default"
     },
     "class_type": "UNETLoader"
   },
   "3": {
     "inputs": {
-      "clip_name": "qwen3vl_4b_bf16.safetensors",
+      "clip_name": "qwen3vl_4b_fp8_scaled.safetensors",
       "type": "krea2",
       "device": "default"
     },
@@ -222,7 +222,7 @@
       "19"
     ],
     "supports_source": false,
-    "source": "Krea2 Turbo bf16 + grokstyle LoRA. Candid tuning 2026-10-25: LoRA 0.5/0.5, euler/simple, 10 steps @ 2:3 1.2 MP; refine 6 steps denoise 0.25 at 1.25x (~1.9 MP sampling, inside Turbo's 2 MP range), final 1.1x pixel upscale. Both KSamplers share SeedNode 200 so the two-pass result is reproducible. A/B 2026-10-25 chose B (0.25) over 0.18 for a slightly softer skin; 0.18 remains the texture reference."
+    "source": "Krea2 Turbo fp8_scaled + grokstyle LoRA. Candid tuning 2026-10-25: LoRA 0.5/0.5, euler/simple, 10 steps @ 2:3 1.2 MP; refine 6 steps denoise 0.25 at 1.25x (~1.9 MP sampling, inside Turbo's 2 MP range), final 1.1x pixel upscale. Both KSamplers share SeedNode 200 so the two-pass result is reproducible. A/B 2026-10-25 chose B (0.25) over 0.18 for a slightly softer skin; 0.18 remains the texture reference."
   },
   "200": {
     "inputs": {

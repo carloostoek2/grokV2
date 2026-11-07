@@ -12,18 +12,18 @@
       "10"
     ],
     "supports_source": false,
-    "source": "Krea2 Turbo bf16, no LoRA. Candid tuning 2026-10-25: 8 steps (Turbo official), euler/simple, 1024x1792 (1.83 MP). The prompt must carry the phone-camera look; at CFG 1 the negative prompt is inert."
+    "source": "Krea2 Turbo fp8_scaled, no LoRA. Candid tuning 2026-10-25: 8 steps (Turbo official), euler/simple, 1024x1792 (1.83 MP). The prompt must carry the phone-camera look; at CFG 1 the negative prompt is inert."
   },
   "1": {
     "inputs": {
-      "unet_name": "krea2_turbo_bf16.safetensors",
+      "unet_name": "krea2_turbo_fp8_scaled.safetensors",
       "weight_dtype": "default"
     },
     "class_type": "UNETLoader"
   },
   "2": {
     "inputs": {
-      "clip_name": "qwen3vl_4b_bf16.safetensors",
+      "clip_name": "qwen3vl_4b_fp8_scaled.safetensors",
       "type": "krea2",
       "device": "default"
     },
