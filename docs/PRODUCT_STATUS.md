@@ -317,9 +317,10 @@ local-forward** (`transport.py` → `client.py` → plantillas API-format en
   `krea2_turbo_bf16` y `qwen3vl_4b_bf16`, así que **los 7 flujos `*_hq` fallaban** con
   `value_not_in_list`. Se descargaron de `Comfy-Org/Krea-2` (26,3 GB + 8,9 GB) y la
   comprobación cruzada de plantillas contra `GET /models/*` vuelve a dar 0 flujos de menú con
-  pesos faltantes. Siguen sin pesos (ocultos/legacy): `face_detail_impact`, `instantid_sdxl`,
-  `flux1_dev_t2i`, `qwen21_t2i` y los `ohwx_*` — «Detalle cara» del bot depende de
-  `face_detail_impact` y **fallaría** en esta VM hasta instalar `sd_xl_base_1.0`.
+  pesos faltantes. Quedan como legacy/ocultos `instantid_sdxl`, `flux1_dev_t2i`,
+  `qwen21_t2i` y los `ohwx_*` (fuera de los perfiles activos). `face_detail_impact`
+  («Detalle cara») queda **retirado** (2026-11-09): arquitectura SDXL/Impact antigua, sin
+  pesos en ningún perfil y sin botón en el resultado.
 - **Set Krea unificado en fp8 + retiro temporal de Dirty* (2026-11-07)**: todos los flujos
   que corren Krea2 Turbo comparten **los mismos archivos** `krea2_turbo_fp8_scaled.safetensors`
   + `qwen3vl_4b_fp8_scaled.safetensors` + `qwen_image_vae.safetensors`, incluidos los `*_hq` y
@@ -332,12 +333,29 @@ local-forward** (`transport.py` → `client.py` → plantillas API-format en
   Dirty fuera de `descargar_local.py`. Una config guardada con un id retirado cae al flujo
   default (`grok_style`). Reactivar = devolver las entradas a la tupla y mover los JSON de
   vuelta a `templates/`.
+- **Preparación del box Vast RTX 5000 Ada (2026-11-08)**: instancia de 32 GB VRAM, 125 GB
+  de RAM y 212 GB de disco; el set Krea canónico es **fp8** (`krea2_turbo_fp8_scaled` +
+  `qwen3vl_4b_fp8_scaled`), que sí entra residente (17,1 GB). Los pesos de `agil_moody_hq`
+  (`Moody-Krea-Mix-v7_00002__clean_fp8` + `Krea2-realism-V2`) forman parte del perfil `l4`;
+  los de `face_detail_impact` ya no se descargan porque la función se retiró el 2026-11-09.
+  Los templates del repo se mantienen en fp8; el bf16 de la A100 vive ahora en el perfil
+  `a100` (ver el punto siguiente).
+- **Perfiles de pesos por GPU (2026-11-09)**: el cuaderno y el bot dejan de usar una lista
+  fija. `workflows/profiles/{a100,l4,t4}.json` declara flujos, pesos, sustituciones,
+  symlinks y parches; `profiles.apply_profile()` adapta la plantilla base (bf16 en `a100`,
+  Qwen Edit GGUF en `l4`, Krea GGUF Q4 en `t4`) y cambia `UNETLoader` → `UnetLoaderGGUF`
+  cuando el archivo acaba en `.gguf`. El cuaderno detecta la GPU con `torch`; el bot con
+  `/system_stats` (`COMFYUI_PERFIL=auto`), filtra el menú y cae al `default_flow` si el
+  flujo guardado no existe en esa tarjeta. `t4` solo ofrece `grok_style`, `agil_solo`,
+  `agil_nsfw` y `grok_edit` (medido: 179 s por edición en caliente). Detalle en
+  `docs/comfyui/PERFILES_GPU.md`.
 - **MiniMax H3 (`minimax_h3_i2v`, 2026-10-04, commit directo `f6bbae3`)**: se registra en
   `COMFYUI_FLOWS` como flujo de video (también en `COMFY_VIDEO_MODELS`). Desde `737944c`
   está en `COMFYUI_MENU_HIDDEN_FLOWS`, así que no aparece en el teclado de `/config`.
-- **Alcance actual**: **22 flujos registrados** en `COMFYUI_FLOWS` y **13 visibles** en el
-  `/config` (7 base + 6 `*_hq`); el resto son legacy/ocultos
-  (`COMFYUI_MENU_HIDDEN_FLOWS`). Salud real de cada flujo y pesos instalados:
+- **Alcance actual**: **22 flujos registrados** en `COMFYUI_FLOWS`; el menú depende del
+  perfil de GPU: **13 visibles en `a100`** (7 base + 6 `*_hq`), **12 en `l4`** y **4 en
+  `t4`**; el resto son legacy/ocultos (`COMFYUI_MENU_HIDDEN_FLOWS`). Salud real de cada
+  flujo y pesos instalados:
   `docs/comfyui/INVENTARIO_BOX_COLAB.md`; el inventario Vast queda como histórico.
 
 ### Flujos degradados D8 — ninguno (wave-2/R4 resuelta 2026-09-05)

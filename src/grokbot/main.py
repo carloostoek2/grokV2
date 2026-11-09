@@ -96,6 +96,7 @@ def _build_providers(
             workflow_source=settings.comfyui_workflow_source,
             workflows_dir=settings.comfyui_workflows_dir,
             workflow_cache_ttl=settings.comfyui_workflow_cache_ttl,
+            weight_profile=settings.comfyui_perfil,
         ),
     )
 
@@ -181,6 +182,7 @@ def build_deps(
         source_faces=source_faces,
         swap_face=swap_face,
         integrate_refs=integrate_refs,
+        comfyui=comfyui,
         allowed_telegram_ids=settings.allowed_telegram_ids,
         variables_admin_ids=settings.variables_admin_ids,
     )

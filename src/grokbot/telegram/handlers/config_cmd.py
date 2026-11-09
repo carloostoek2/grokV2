@@ -201,11 +201,16 @@ async def cmd_seed(message: types.Message, state: FSMContext, deps: BotDeps) -> 
 
 
 def _comfyui_screen_text(cfg, *, updated: bool = False) -> str:
+    from grokbot.providers.comfyui.workflows.resolver import active_profile
+
     cc = cfg.comfyui
     header = "Configuración actualizada ✅\n" if updated else "Configuración de ComfyUI (GPU propia):\n"
     flow_name = COMFYUI_FLOW_LABELS.get(cc.model, cc.model)
+    perfil = active_profile()
+    linea_perfil = f"<b>Tarjeta:</b> {perfil.label}\n" if perfil is not None else ""
     return (
         f"{header}"
+        f"{linea_perfil}"
         f"<b>Flujo:</b> {flow_name}\n"
         f"<b>Semilla (imágenes):</b> {_seed_label(cc)}\n"
         "Para fijar un número: /semilla 123456\n\n"
@@ -347,6 +352,12 @@ async def _show_configure_screen(
         )
         return
     if model_key == "comfyui":
+        # Refrescar la GPU antes de pintar el menú: el perfil decide qué flujos
+        # existen en esta tarjeta. Best-effort: si el box no responde, se
+        # conserva el último perfil conocido.
+        provider = getattr(deps, "comfyui", None)
+        if provider is not None:
+            await provider.refresh_profile(force=True)
         await ui.edit_text(
             target.message_id,
             _comfyui_screen_text(cfg, updated=updated),

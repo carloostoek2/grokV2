@@ -66,12 +66,16 @@ vae/qwen_image_vae.safetensors
 - Test que fija el contrato:
   `tests/unit/providers/test_workflow_resolver.py::test_krea2_model_files_are_shared_fp8_across_flows`.
 
-## 3. Assets que faltan en `descargar_local.py`
+## 3. Assets que faltaban en `descargar_local.py` (añadidos 2026-11-08)
+
+> **Actualización 2026-11-09:** `descargar_local.py` ya no mantiene listas propias; lee
+> `workflows/profiles/{a100,l4,t4}.json`. `agil_moody_hq` queda en el perfil `l4` y
+> `face_detail_impact` se retiró (arquitectura antigua): sus pesos ya no se descargan.
 
 | flujo | falta | impacto |
 |---|---|---|
-| `agil_moody_hq` | `Moody-Krea-Mix-v7_00002__clean_fp8`, `Krea2-realism-V2` | flujo visible del menú fallaría |
-| `face_detail_impact` | `sd_xl_base_1.0`, `4x-UltraSharp`, `face_yolov8m`, `sam_vit_b` | botón «Detalle cara» falla |
+| `agil_moody_hq` | `Moody-Krea-Mix-v7_00002__clean_fp8`, `Krea2-realism-V2` | incluido en el perfil `l4` |
+| `face_detail_impact` | `sd_xl_base_1.0`, `4x-UltraSharp`, `face_yolov8m`, `sam_vit_b` | **retirado**; no aplica |
 | `ohwx_krea2` / `ohwx_edit` | `ohwx_krea2` (LoRA) | flujos ocultos, no bloquean |
 | `donut_face` | `4x_NickelbackFS`, `sam_vit_b`, `face_yolov8m`, `realism_engine_krea2_v1`, `Krea2_NSFW_Aesthetics_V1` | flujo oculto |
 | `flux1_dev_t2i`, `qwen21_t2i`, `wan_i2v`, `instantid_sdxl` | pesos propios | legacy/ocultos |

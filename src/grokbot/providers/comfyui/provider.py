@@ -39,16 +39,22 @@ from grokbot.providers.base import (
 )
 from grokbot.providers.comfyui.client import ComfyApiClient
 from grokbot.providers.comfyui.transport import SshLocalForward, TunnelConfig
+from grokbot.providers.comfyui.workflows.profiles import profile_for_device
 from grokbot.providers.comfyui.workflows.resolver import (
     Flow,
+    active_profile,
     configure_workflow_source,
     get_flow,
     patchable_seed_nodes,
     render,
+    set_active_profile,
 )
 
 _COMFY_IMAGE_TIMEOUT = 600
 _COMFY_VIDEO_TIMEOUT = 1500
+# Cada cuánto se vuelve a preguntar la GPU al box (el perfil puede cambiar si
+# el usuario recrea la sesión con otra tarjeta).
+_PROFILE_REFRESH_SEC = 300.0
 
 _COMFY_NOT_CONFIGURED_MSG = (
     "ComfyUI no está disponible en este momento. Contacta al administrador del bot."
@@ -94,6 +100,7 @@ class ComfyUIProvider:
         workflow_source: str = "remote",
         workflows_dir: str = "/workspace/ComfyUI/user/default/api_workflows",
         workflow_cache_ttl: float = 45.0,
+        weight_profile: str = "",
         transport: SshLocalForward | None = None,
         client_factory: Callable[[str], ComfyApiClient] | None = None,
         tmpdir: str | Path | None = None,
@@ -107,6 +114,10 @@ class ComfyUIProvider:
                 local_port=int(tunnel_local_port or 0),
             )
         )
+        # Perfil de pesos: "auto" se detecta de la GPU en el primer uso;
+        # un id concreto ("a100"|"l4"|"t4") lo fuerza; "" no gestiona perfil.
+        self._weight_profile = (weight_profile or "").strip().lower()
+        self._profile_checked_at = 0.0
         # Source-of-truth for API graphs: Vast api_workflows/ (SSH) with embed fallback.
         configure_workflow_source(
             source=workflow_source,
@@ -114,6 +125,7 @@ class ComfyUIProvider:
             ssh_port=int(port or 22),
             workflows_dir=workflows_dir,
             cache_ttl=workflow_cache_ttl,
+            profile=self._weight_profile or None,
         )
         self._client_factory = client_factory or (lambda url: ComfyApiClient(url))
         self._tmpdir = Path(tmpdir) if tmpdir is not None else _DEFAULT_TMPDIR
@@ -123,6 +135,61 @@ class ComfyUIProvider:
     @property
     def available(self) -> bool:
         return self._transport.is_configured
+
+    async def refresh_profile(self, *, force: bool = False) -> bool:
+        """Alinear el perfil de pesos con la GPU real del box.
+
+        Devuelve ``True`` solo si cambió el perfil activo (el caller debe
+        re-resolver el flujo). Solo actúa con ``weight_profile="auto"``. Se
+        throttlea a ``_PROFILE_REFRESH_SEC`` para no consultar
+        ``/system_stats`` en cada generación. Un fallo de red no rompe el
+        request: se conserva el perfil anterior y se registra el motivo.
+        """
+        if self._weight_profile != "auto" or not self._transport.is_configured:
+            return False
+        now = time.monotonic()
+        if not force and now - self._profile_checked_at < _PROFILE_REFRESH_SEC:
+            return False
+        # Nunca abrir un túnel desde la detección: si ComfyUI no está accesible
+        # ya, se conserva el perfil y se reintenta en la próxima generación
+        # (que sí hace ensure()). Evita reconexiones SSH innecesarias.
+        base_url = self._transport.base_url
+        if base_url is None:
+            logger.debug("Sin túnel ComfyUI activo; se omite la detección de GPU.")
+            return False
+        self._profile_checked_at = now
+        try:
+            client = self._client_factory(base_url)
+            try:
+                stats = await client.system_stats()
+            finally:
+                close = getattr(client, "aclose", None)
+                if close is not None:
+                    await close()
+        except Exception as exc:  # detección best-effort, nunca rompe generate
+            logger.warning(
+                "No se pudo detectar la GPU del box (%s); se conserva el perfil %s",
+                type(exc).__name__,
+                active_profile().id if active_profile() else "sin filtro",
+            )
+            return False
+        devices = stats.get("devices") or []
+        first = devices[0] if devices and isinstance(devices[0], dict) else {}
+        name = str(first.get("name") or "")
+        vram_gb = float(first.get("vram_total") or 0) / 1024**3
+        profile = profile_for_device(name, vram_gb)
+        actual = active_profile()
+        if actual is not None and actual.id == profile.id:
+            return False
+        set_active_profile(profile.id)
+        logger.info(
+            "ComfyUI GPU %s (%.1f GB) -> perfil de pesos %s (%s)",
+            name or "desconocida",
+            vram_gb,
+            profile.id,
+            profile.label,
+        )
+        return True
 
     def supports(self, request: GenerationRequest) -> bool:
         if request.provider != "comfyui":
@@ -144,7 +211,20 @@ class ComfyUIProvider:
         jamás se interpola a shell. Un id desconocido/malicioso se rechaza aquí,
         antes de tocar el transporte.
         """
-        flow = get_flow(str(request.params.get("model") or DEFAULT_COMFYUI_MODEL))
+        requested = str(request.params.get("model") or DEFAULT_COMFYUI_MODEL)
+        flow = get_flow(requested)
+        perfil = active_profile()
+        if flow is None and perfil is not None and requested != perfil.default_flow:
+            # Flujo guardado por el usuario que no existe en esta tarjeta
+            # (p. ej. un *_hq seleccionado en la A100 y ahora corre en T4).
+            flow = get_flow(perfil.default_flow)
+            if flow is not None:
+                logger.info(
+                    "Flujo %s no disponible en perfil %s; usando %s",
+                    requested,
+                    perfil.id,
+                    flow.id,
+                )
         if flow is None:
             raise ProviderInputError(
                 "Flujo de ComfyUI no disponible.",
@@ -157,6 +237,31 @@ class ComfyUIProvider:
             flow.file,
         )
         return flow
+
+    @staticmethod
+    def _validate_flow(
+        flow: Flow,
+        request: GenerationRequest,
+        source_image: bytes | None,
+    ) -> None:
+        """M2 + guards de foto: se validan antes de tocar el transporte."""
+        if request.media_type is MediaType.VIDEO and flow.media_type is not MediaType.VIDEO:
+            raise ProviderInputError(
+                "El modelo ComfyUI configurado no genera video.",
+                user_message="El modelo ComfyUI configurado no genera video.",
+            )
+        if source_image is not None and not flow.supports_source:
+            raise ProviderInputError(
+                "La plantilla no admite foto de entrada.",
+                user_message=_EDIT_UNAVAILABLE_MSG,
+            )
+        # Reverse guard: an edit flow without a photo would run with the baked
+        # placeholder and return a silently wrong result.
+        if source_image is None and flow.requires_source:
+            raise ProviderInputError(
+                "La plantilla exige foto de entrada.",
+                user_message=_SOURCE_REQUIRED_MSG,
+            )
 
     async def _download_outputs(
         self,
@@ -223,25 +328,11 @@ class ComfyUIProvider:
         source_image: bytes | None = None,
     ) -> GenerationResult:
         self._raise_if_not_configured()
+        # M1/M2: validar flujo, tipo de media, foto y semilla ANTES de tocar el
+        # transporte. La detección de GPU se hace después y, si cambia el
+        # perfil, se vuelve a resolver el flujo para usar sus pesos.
         flow = self._resolve_flow(request)  # M1: id validado antes de tocar transporte.
-        # M2: un request VIDEO contra un flujo de imagen es un seam del caller.
-        if request.media_type is MediaType.VIDEO and flow.media_type is not MediaType.VIDEO:
-            raise ProviderInputError(
-                "El modelo ComfyUI configurado no genera video.",
-                user_message="El modelo ComfyUI configurado no genera video.",
-            )
-        if source_image is not None and not flow.supports_source:
-            raise ProviderInputError(
-                "La plantilla no admite foto de entrada.",
-                user_message=_EDIT_UNAVAILABLE_MSG,
-            )
-        # Reverse guard: an edit flow without a photo would run with the baked
-        # placeholder and return a silently wrong result.
-        if source_image is None and flow.requires_source:
-            raise ProviderInputError(
-                "La plantilla exige foto de entrada.",
-                user_message=_SOURCE_REQUIRED_MSG,
-            )
+        self._validate_flow(flow, request, source_image)
 
         seed = request.params.get("seed")
         if seed is None:
@@ -254,6 +345,15 @@ class ComfyUIProvider:
                     f"{COMFYUI_SEED_LIMIT - 1}."
                 ),
             )
+        # Túnel + perfil: la detección solo consulta un túnel ya activo.
+        base_url = await self._transport.ensure()
+        if self._weight_profile == "auto" and await self.refresh_profile():
+            flow = self._resolve_flow(request)
+            # El fallback del perfil puede cambiar el tipo de flujo (p. ej. un
+            # Ágil Edit guardado en una T4 cae a Grok Style T2I): revalidar
+            # evita ignorar la foto o exigirla de más.
+            self._validate_flow(flow, request, source_image)
+
         seed_nodes = patchable_seed_nodes(flow)
         if flow.seed_nodes and len(seed_nodes) != len(flow.seed_nodes):
             logger.warning(
@@ -266,7 +366,6 @@ class ComfyUIProvider:
             _COMFY_VIDEO_TIMEOUT if flow.media_type is MediaType.VIDEO else _COMFY_IMAGE_TIMEOUT
         )
 
-        base_url = await self._transport.ensure()
         client = self._client_factory(base_url)
         try:
             if source_image is not None:

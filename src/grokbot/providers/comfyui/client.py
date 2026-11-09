@@ -119,6 +119,21 @@ class ComfyApiClient:
         except (aiohttp.ClientError, asyncio.TimeoutError):
             return False
 
+    async def system_stats(self) -> dict:
+        """``/system_stats`` (GPU name/VRAM) para elegir el perfil de pesos."""
+        try:
+            session = await self._acquire_session()
+            async with session.get(self._url("/system_stats")) as resp:
+                if resp.status != 200:
+                    self._raise_unavailable()
+                return await resp.json()
+        except aiohttp.ClientError as exc:
+            logger.warning("comfyui /system_stats unreachable: %s", type(exc).__name__)
+            self._raise_unavailable()
+        except asyncio.TimeoutError:
+            logger.warning("comfyui /system_stats timed out.")
+            self._raise_unavailable()
+
     async def object_info(self) -> dict:
         """Full node registry (schemas + model dropdowns) from ``/object_info``."""
         session = await self._acquire_session()

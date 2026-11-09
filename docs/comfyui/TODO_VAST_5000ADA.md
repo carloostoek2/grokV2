@@ -25,14 +25,29 @@
       `DESCARGAS_LOCALES.md` y auditoría estática en
       `AUDITORIA_FLUJOS_5000ADA.md`.
 
+## Instancia actual (2026-11-08)
+
+- **RTX 5000 Ada, 32 GB VRAM, 125 GB RAM, 212 GB disco.**
+- ComfyUI **0.44.2** (frontend 1.57.6) en `/workspace/ComfyUI` (puerto 18188) con
+  `/venv/main/bin/python3`, actualizado desde v0.27.0 el 2026-11-09. Manager 4.3
+  instalado por pip y arrancado con `--enable-manager`. Los nodos SeedVR2 pasan a
+  venir del core (`comfy_extras/nodes_seedvr.py`); el custom node
+  `seedvr2_videoupscaler` queda obsoleto (falla su import por `flash_attn`, sin
+  impacto porque sus nodos ya están en el core).
+- Set Krea **fp8** (`krea2_turbo_fp8_scaled` + `qwen3vl_4b_fp8_scaled`), ya presente
+  en el template del box. Los templates del repo quedan en fp8 (HEAD); el parche
+  bf16 de la A100 se guardó aparte en `comfy-colab/a100-bf16.patch`.
+- Descarga y log en el box: `/workspace/descargar_local.py`,
+  `/workspace/secrets.env` y `/workspace/descarga_modelos.log`.
+
 ## Pendiente (requiere el box)
 
-- [ ] Renta la instancia (32 GB VRAM, ≥64 GB RAM, ≥120 GB disco) y documenta la
-      ficha real en `INVENTARIO_BOX_VAST.md` o en un inventario nuevo.
-- [ ] Añade al descargador los assets que faltan para el menú:
-      `Moody-Krea-Mix-v7` + `Krea2-realism-V2` (`agil_moody_hq`) y los pesos de
-      `face_detail_impact` (botón «Detalle cara»).
-- [ ] Ejecuta `descargar_local.py --listar` y la descarga completa.
+- [x] Renta la instancia (32 GB VRAM, ≥64 GB RAM, ≥120 GB disco) y documenta la
+      ficha real (arriba).
+- [x] Añade al descargador los assets que faltan para el menú:
+      `Moody-Krea-Mix-v7` + `Krea2-realism-V2` (`agil_moody_hq`, perfil `l4`). Los
+      pesos de `face_detail_impact` no se añaden: la función se retiró el 2026-11-09.
+- [x] Ejecuta `descargar_local.py --listar` y la descarga completa.
 - [ ] Instala/verifica los custom nodes y sus commits.
 - [ ] Genera una imagen por flujo habilitado, en frío y en caliente; registra
       VRAM pico, offload y tiempo.

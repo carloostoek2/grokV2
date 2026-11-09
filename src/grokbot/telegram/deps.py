@@ -14,6 +14,7 @@ inyecta uno fresco por ``make_deps`` para aislar casos.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from grokbot.application.faceswap import SourceFacesUseCase, SwapFaceUseCase
 from grokbot.application.generate_image import GenerateImageUseCase
@@ -30,6 +31,9 @@ from grokbot.repositories.base import (
     VariablesRepository,
 )
 from grokbot.telegram.ports import MediaDownloader, TelegramGateway
+
+if TYPE_CHECKING:
+    from grokbot.providers.comfyui.provider import ComfyUIProvider
 
 
 class PendingPrompts:
@@ -287,6 +291,9 @@ class BotDeps:
     long_prompt: LongPromptStore = field(default_factory=LongPromptStore)
     album: AlbumStore = field(default_factory=AlbumStore)
     comfy_chain: ComfyChainMemory = field(default_factory=ComfyChainMemory)
+    # Provider ComfyUI (opcional): la pantalla de configuración lo usa para
+    # refrescar el perfil de pesos según la GPU real del box.
+    comfyui: "ComfyUIProvider | None" = None
     # Flag efímero awaiting-ref (A2): en memoria, NUNCA en cfg.state/sessions.json
     # (parity grok ``state["integrate_ref_awaiting"]``, se pierde al reiniciar).
     integrate_ref_pending: set[int] = field(default_factory=set)

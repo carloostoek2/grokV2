@@ -1,0 +1,126 @@
+{
+  "id": "a100",
+  "label": "A100 / H100 (bf16)",
+  "default_flow": "grok_style",
+  "flows": [
+    "grok_style",
+    "agil_solo",
+    "agil_nsfw",
+    "agil_moody",
+    "agil_edit_qwen",
+    "agil_edit_nsfw",
+    "grok_edit",
+    "grok_style_hq",
+    "agil_solo_hq",
+    "agil_nsfw_hq",
+    "agil_moody_hq",
+    "grok_edit_hq",
+    "agil_edit_hq"
+  ],
+  "substitutions": {
+    "krea2_turbo_fp8_scaled.safetensors": "krea2_turbo_bf16.safetensors",
+    "qwen3vl_4b_fp8_scaled.safetensors": "qwen3vl_4b_bf16.safetensors"
+  },
+  "weights": [
+    {
+      "path": "diffusion_models/krea2_turbo_bf16.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/diffusion_models/krea2_turbo_bf16.safetensors",
+      "auth": "none",
+      "min_size": 25000000000
+    },
+    {
+      "path": "text_encoders/qwen3vl_4b_bf16.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/text_encoders/qwen3vl_4b_bf16.safetensors",
+      "auth": "none",
+      "min_size": 8000000000
+    },
+    {
+      "path": "vae/qwen_image_vae.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/vae/qwen_image_vae.safetensors",
+      "auth": "none",
+      "min_size": 200000000
+    },
+    {
+      "path": "diffusion_models/Moody-Krea-Mix-v7_00002__clean_fp8.safetensors",
+      "url": "https://huggingface.co/catlover1937/moody-krea-mix/resolve/main/Moody-Krea-Mix-v7_00002__clean_fp8.safetensors",
+      "auth": "hf",
+      "min_size": 13000000000
+    },
+    {
+      "path": "diffusion_models/Moody-Krea-Mix-v4.1G_00001__clean_nvfp4.safetensors",
+      "url": "https://huggingface.co/catlover1937/moody-krea-mix/resolve/main/Moody-Krea-Mix-v4.1G_00001__clean_nvfp4.safetensors",
+      "auth": "none",
+      "min_size": 7000000000
+    },
+    {
+      "path": "loras/Krea2-realism-V2.safetensors",
+      "url": "https://huggingface.co/RudySen/Krea2-realism-V2/resolve/main/Krea2-realism-V2.safetensors",
+      "auth": "hf",
+      "min_size": 1400000000
+    },
+    {
+      "path": "diffusion_models/qwen_image_edit_2511_fp8mixed.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_fp8mixed.safetensors",
+      "auth": "none",
+      "min_size": 20000000000
+    },
+    {
+      "path": "text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors",
+      "auth": "none",
+      "min_size": 8000000000
+    },
+    {
+      "path": "loras/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
+      "url": "https://huggingface.co/lightx2v/Qwen-Image-Edit-2511-Lightning/resolve/main/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
+      "auth": "none",
+      "min_size": 700000000
+    },
+    {
+      "path": "diffusion_models/seedvr2_7b_int8_convrot.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/SeedVR2/resolve/main/diffusion_models/seedvr2_7b_int8_convrot.safetensors",
+      "auth": "none",
+      "min_size": 8000000000
+    },
+    {
+      "path": "vae/seedvr2_ema_vae_fp16.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/SeedVR2/resolve/main/vae/seedvr2_ema_vae_fp16.safetensors",
+      "auth": "none",
+      "min_size": 500000000
+    },
+    {
+      "path": "checkpoints/Qwen-Rapid-AIO-NSFW-v23.safetensors",
+      "url": "https://huggingface.co/Phr00t/Qwen-Image-Edit-Rapid-AIO/resolve/main/v23/Qwen-Rapid-AIO-NSFW-v23.safetensors",
+      "auth": "none",
+      "min_size": 25000000000
+    },
+    {
+      "path": "loras/krea2/krea2_identity_edit_v1_2.safetensors",
+      "url": "https://huggingface.co/conradlocke/krea2-identity-edit/resolve/main/krea2_identity_edit_v1_2.safetensors",
+      "auth": "hf",
+      "min_size": 1500000000
+    },
+    {
+      "path": "loras/grokstyle_krea2_v2.safetensors",
+      "url": "https://civitai.com/api/download/models/3278913",
+      "auth": "civitai",
+      "min_size": 200000000
+    },
+    {
+      "path": "loras/Krea2NSFWV4.safetensors",
+      "url": "https://huggingface.co/yufusoft/Krea2_NSFW_V4/resolve/main/KNP_000003000.safetensors",
+      "auth": "none",
+      "min_size": 400000000
+    }
+  ],
+  "symlinks": [
+    ["clip/qwen3vl_4b_bf16.safetensors", "../text_encoders/qwen3vl_4b_bf16.safetensors"],
+    ["clip/qwen_2.5_vl_7b_fp8_scaled.safetensors", "../text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors"],
+    ["unet/krea2_turbo_bf16.safetensors", "../diffusion_models/krea2_turbo_bf16.safetensors"],
+    ["unet/Moody-Krea-Mix-v7_00002__clean_fp8.safetensors", "../diffusion_models/Moody-Krea-Mix-v7_00002__clean_fp8.safetensors"],
+    ["unet/Moody-Krea-Mix-v4.1G_00001__clean_nvfp4.safetensors", "../diffusion_models/Moody-Krea-Mix-v4.1G_00001__clean_nvfp4.safetensors"],
+    ["unet/qwen_image_edit_2511_fp8mixed.safetensors", "../diffusion_models/qwen_image_edit_2511_fp8mixed.safetensors"],
+    ["unet/seedvr2_7b_int8_convrot.safetensors", "../diffusion_models/seedvr2_7b_int8_convrot.safetensors"],
+    ["vae/qwen-image/qwen_image_vae.safetensors", "../qwen_image_vae.safetensors"]
+  ]
+}

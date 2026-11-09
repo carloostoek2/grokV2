@@ -129,14 +129,18 @@ def comfy_result_keyboard(flow_id: str | None) -> InlineKeyboardMarkup:
             supports, requires, media = True, True, "image"
         else:
             supports, requires, media = flags
+        from grokbot.providers.comfyui.workflows.resolver import active_flow_ids
+
+        allowed = active_flow_ids()
         buttons = [
             InlineKeyboardButton(text=_PIPE_LABELS[stage], callback_data=f"pipe:{stage}")
-            for stage, _dest in comfy_chain_stages(
+            for stage, dest in comfy_chain_stages(
                 flow_id,
                 supports_source=supports,
                 requires_source=requires,
                 media_type=media,
             )
+            if allowed is None or dest in allowed
         ]
         if buttons:
             rows.append(buttons)
@@ -256,8 +260,13 @@ def config_comfyui_keyboard(cfg: ComfyUIConfig) -> InlineKeyboardMarkup:
         ]
         for mode in VALID_COMFYUI_SEED_MODES
     ]
+    from grokbot.providers.comfyui.workflows.resolver import active_flow_ids
+
+    allowed = active_flow_ids()
     for flow_id, flow_name in COMFYUI_FLOW_LABELS.items():
         if flow_id in COMFYUI_MENU_HIDDEN_FLOWS:
+            continue
+        if allowed is not None and flow_id not in allowed:
             continue
         mark = "✅ " if flow_id == cfg.model else "• "
         rows.append([

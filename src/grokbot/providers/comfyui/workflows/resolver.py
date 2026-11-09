@@ -49,6 +49,12 @@ from pathlib import Path
 from typing import Callable
 
 from grokbot.domain.generation import MediaType
+from grokbot.providers.comfyui.workflows.profiles import (
+    Profile,
+    apply_profile,
+    load_profiles,
+    template_index,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -112,8 +118,49 @@ class _RemoteConfig:
 # Module-level source config (set at boot via ``configure_workflow_source``).
 _source_mode: str = "embed"  # "remote" | "embed"
 _remote: _RemoteConfig | None = None
+# Perfil activo (None = sin filtro: todas las plantillas base, modo tests/legacy).
+_active_profile: Profile | None = None
 # flow_id -> (monotonic_deadline, Flow)
 _remote_cache: dict[str, tuple[float, Flow]] = {}
+
+
+def active_profile() -> Profile | None:
+    """Perfil de pesos activo, o ``None`` si no hay filtro."""
+    return _active_profile
+
+
+def active_flow_ids() -> frozenset[str] | None:
+    """Ids visibles con el perfil activo (``None`` = catálogo completo)."""
+    return frozenset(_active_profile.flows) if _active_profile is not None else None
+
+
+def set_active_profile(profile_id: str | None) -> None:
+    """Cambiar el perfil activo (``None`` o ``""`` = sin filtro).
+
+    Limpia las entradas en caché dependientes del perfil: los ``Flow``
+    cargados llevan los pesos horneados y no valen para otro perfil.
+    """
+    global _active_profile
+    if not profile_id:
+        _active_profile = None
+    else:
+        perfiles = load_profiles()
+        if profile_id not in perfiles:
+            logger.warning(
+                "Perfil ComfyUI desconocido %r; se ignora (sin filtro)", profile_id
+            )
+            _active_profile = None
+        else:
+            _active_profile = perfiles[profile_id]
+    _flows_cached.cache_clear()
+    _remote_cache.clear()
+    if _active_profile is not None:
+        logger.info(
+            "ComfyUI weight profile=%s label=%s flows=%d",
+            _active_profile.id,
+            _active_profile.label,
+            len(_active_profile.flows),
+        )
 
 
 def configure_workflow_source(
@@ -126,6 +173,7 @@ def configure_workflow_source(
     ssh_user: str = "root",
     ssh_bin: str = "ssh",
     fetch: Callable[[str], str | None] | None = None,
+    profile: str | None = None,
 ) -> None:
     """Configurar origen de workflows (remoto Vast vía SSH o embed).
 
@@ -133,6 +181,10 @@ def configure_workflow_source(
       - ``remote`` (default de producto): SSH-cat ``{workflows_dir}/{id}.json``
         en el box; fallback a ``templates/`` si falta o falla.
       - ``embed``: solo templates del repo (tests / offline).
+
+    ``profile``: id de perfil de pesos (``a100``, ``l4``, ``t4``). ``None``,
+    ``""`` o ``auto`` dejan el catálogo completo sin filtro hasta que
+    :func:`set_active_profile` reciba la GPU detectada.
 
     Sin ``host`` y ``source=remote`` se degrada a embed con warning.
     ``fetch`` permite mockear la lectura remota en tests unitarios.
@@ -142,6 +194,8 @@ def configure_workflow_source(
     if mode not in ("remote", "embed"):
         logger.warning("Unknown COMFYUI_WORKFLOW_SOURCE=%r; using remote", source)
         mode = "remote"
+    profile_id = (profile or "").strip().lower()
+    set_active_profile(None if profile_id in ("", "auto") else profile_id)
     _remote_cache.clear()
     if mode == "remote" and (host or fetch is not None):
         _source_mode = "remote"
@@ -208,32 +262,64 @@ def _flow_from_raw(raw: dict, file_name: str, *, origin: str) -> Flow:
 
 
 def _load_template(file_name: str) -> tuple[Flow, dict]:
-    """Cargar un template embebido: separa ``_meta`` (→ Flow) del grafo limpio."""
+    """Cargar un template embebido sin perfil (tests / modo legacy)."""
     raw = json.loads((TEMPLATES_DIR / file_name).read_text(encoding="utf-8"))
     flow = _flow_from_raw(raw, file_name, origin="embed")
     return flow, flow.graph
 
 
 @lru_cache(maxsize=None)
-def _flows_cached() -> tuple[Flow, ...]:
-    """Descubrir los flujos de ``templates/`` (un ``.json`` = un flujo)."""
+def _template_index_cached() -> dict[str, Path]:
+    """``flow_id`` → archivo base, descubierto por ``_meta.id``."""
+    return template_index(TEMPLATES_DIR)
+
+
+def _profile_by_id(profile_id: str | None) -> Profile | None:
+    if not profile_id:
+        return None
+    return load_profiles().get(profile_id)
+
+
+def _profile_template(path: Path, profile: Profile | None) -> Flow:
+    """Cargar una plantilla y, si hay perfil, adaptarla a sus pesos."""
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    if profile is not None:
+        raw = apply_profile(raw, profile)
+    return _flow_from_raw(raw, path.name, origin="embed")
+
+
+@lru_cache(maxsize=None)
+def _flows_cached(profile_id: str | None) -> tuple[Flow, ...]:
+    """Flujos efectivos del perfil (sin perfil: todas las plantillas base)."""
+    profile = _profile_by_id(profile_id)
+    index = _template_index_cached()
+    ids = profile.flows if profile is not None else tuple(index)
     flows_list: list[Flow] = []
-    for path in sorted(TEMPLATES_DIR.glob("*.json")):
-        flow, _graph = _load_template(path.name)
-        flows_list.append(flow)
+    for flow_id in ids:
+        path = index.get(flow_id)
+        if path is None:
+            logger.warning(
+                "Perfil %s: no existe plantilla para %s", profile_id, flow_id
+            )
+            continue
+        flows_list.append(_profile_template(path, profile))
     return tuple(flows_list)
 
 
 def flows() -> tuple[Flow, ...]:
-    """Todos los flujos embebidos (catálogo; orden estable por nombre de archivo)."""
-    return _flows_cached()
+    """Flujos disponibles con el perfil activo (orden del perfil)."""
+    activo = _active_profile.id if _active_profile is not None else None
+    return _flows_cached(activo)
 
 
 def _get_embed_flow(flow_id: str) -> Flow | None:
-    for flow in flows():
-        if flow.id == flow_id:
-            return flow
-    return None
+    profile = _active_profile
+    if profile is not None and not profile.allows(flow_id):
+        return None
+    path = _template_index_cached().get(flow_id)
+    if path is None:
+        return None
+    return _profile_template(path, profile)
 
 
 def _ssh_cat(flow_id: str) -> str | None:
@@ -305,6 +391,9 @@ def _get_remote_flow(flow_id: str) -> Flow | None:
         return None
     try:
         raw = json.loads(raw_text)
+        if _active_profile is not None:
+            # El perfil detectado manda sobre lo que haya desplegado el cuaderno.
+            raw = apply_profile(raw, _active_profile)
         flow = _flow_from_raw(raw, f"{flow_id}.json", origin="remote")
     except (json.JSONDecodeError, ValueError, TypeError, KeyError) as exc:
         logger.warning(
@@ -330,7 +419,16 @@ def _get_remote_flow(flow_id: str) -> Flow | None:
 
 
 def get_flow(flow_id: str) -> Flow | None:
-    """Resolver un flujo por id: remoto (si configurado) → fallback embed."""
+    """Resolver un flujo por id: remoto (si configurado) → fallback embed.
+
+    Con perfil activo, un flujo fuera de ``profile.flows`` devuelve ``None``:
+    el provider lo trata como no disponible (o cae a su flujo por defecto).
+    """
+    if _active_profile is not None and not _active_profile.allows(flow_id):
+        logger.info(
+            "Flujo %s no disponible en perfil %s", flow_id, _active_profile.id
+        )
+        return None
     if _source_mode == "remote" and _remote is not None:
         flow = _get_remote_flow(flow_id)
         if flow is not None:

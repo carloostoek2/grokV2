@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     comfyui_workflow_source: str = "remote"
     comfyui_workflows_dir: str = "/workspace/ComfyUI/user/default/api_workflows"
     comfyui_workflow_cache_ttl: float = 45.0
+    # Perfil de pesos: "auto" detecta la GPU por /system_stats; o forzar
+    # "a100" | "l4" | "t4" (útil en tests/offline).
+    comfyui_perfil: str = "auto"
 
     # Telegram user ID allowlists. blank/whitespace -> None (open bot); None too.
     allowed_telegram_ids: Annotated[set[int] | None, NoDecode] = None

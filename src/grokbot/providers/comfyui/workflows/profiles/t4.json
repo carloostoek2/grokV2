@@ -1,0 +1,65 @@
+{
+  "id": "t4",
+  "label": "T4 16 GB (GGUF Q4)",
+  "default_flow": "grok_style",
+  "flows": [
+    "grok_style",
+    "agil_solo",
+    "agil_nsfw",
+    "grok_edit"
+  ],
+  "substitutions": {
+    "krea2_turbo_fp8_scaled.safetensors": "Krea-2-Turbo-Q4_K_M.gguf"
+  },
+  "weights": [
+    {
+      "path": "diffusion_models/Krea-2-Turbo-Q4_K_M.gguf",
+      "url": "https://huggingface.co/vantagewithai/Krea-2-Turbo-GGUF/resolve/main/krea2_turbo-Q4_K_M.gguf",
+      "auth": "none",
+      "min_size": 6000000000
+    },
+    {
+      "path": "text_encoders/qwen3vl_4b_fp8_scaled.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/text_encoders/qwen3vl_4b_fp8_scaled.safetensors",
+      "auth": "none",
+      "min_size": 4000000000
+    },
+    {
+      "path": "vae/qwen_image_vae.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/vae/qwen_image_vae.safetensors",
+      "auth": "none",
+      "min_size": 200000000
+    },
+    {
+      "path": "loras/krea2/krea2_identity_edit_v1_2.safetensors",
+      "url": "https://huggingface.co/conradlocke/krea2-identity-edit/resolve/main/krea2_identity_edit_v1_2.safetensors",
+      "auth": "hf",
+      "min_size": 1500000000
+    },
+    {
+      "path": "loras/grokstyle_krea2_v2.safetensors",
+      "url": "https://civitai.com/api/download/models/3278913",
+      "auth": "civitai",
+      "min_size": 200000000
+    },
+    {
+      "path": "loras/Krea2NSFWV4.safetensors",
+      "url": "https://huggingface.co/yufusoft/Krea2_NSFW_V4/resolve/main/KNP_000003000.safetensors",
+      "auth": "none",
+      "min_size": 400000000
+    }
+  ],
+  "symlinks": [
+    ["clip/qwen3vl_4b_fp8_scaled.safetensors", "../text_encoders/qwen3vl_4b_fp8_scaled.safetensors"],
+    ["unet/Krea-2-Turbo-Q4_K_M.gguf", "../diffusion_models/Krea-2-Turbo-Q4_K_M.gguf"],
+    ["vae/qwen-image/qwen_image_vae.safetensors", "../qwen_image_vae.safetensors"]
+  ],
+  "node_patches": [
+    {
+      "node": "ComfyUI-GGUF",
+      "file": "loader.py",
+      "kind": "gguf_arch",
+      "arch": "krea2"
+    }
+  ]
+}
