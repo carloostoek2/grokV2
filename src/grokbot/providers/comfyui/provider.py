@@ -5,9 +5,10 @@ path). It reaches ComfyUI through an SSH local-forward tunnel
 (:mod:`transport`) and drives the native API with :class:`ComfyApiClient`
 (:mod:`client`): resolver un flujo por id (``workflows.resolver.get_flow`` —
 cada flujo es un workflow API-format con su modelo/LoRA horneados), parchear
-prompt/seeds, encolar, esperar el run y descargar los outputs a un ``tmpdir``
-local siguiendo la convención ``GenerationResult`` (``file_path`` +
-``meta["file_paths"]``).
+prompt/seeds, apilar los LoRAs **extra** del usuario sobre esa copia
+(``workflows.loras``, sin tocar los horneados), encolar, esperar el run y
+descargar los outputs a un ``tmpdir`` local siguiendo la convención
+``GenerationResult`` (``file_path`` + ``meta["file_paths"]``).
 
 Refine is NOT part of this provider: results never carry
 ``meta["comfyui_remotes"]``, so the legacy refine offer in the telegram layer
@@ -21,6 +22,7 @@ import os
 import random
 import time
 import uuid
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Callable
 
@@ -31,6 +33,7 @@ from grokbot.domain.user_config import (
     COMFYUI_SEED_LIMIT,
     DEFAULT_COMFYUI_MODEL,
     is_valid_comfyui_seed,
+    parse_lora_stack,
 )
 from grokbot.providers.base import (
     ProviderInputError,
@@ -39,6 +42,10 @@ from grokbot.providers.base import (
 )
 from grokbot.providers.comfyui.client import ComfyApiClient
 from grokbot.providers.comfyui.transport import SshLocalForward, TunnelConfig
+from grokbot.providers.comfyui.workflows.loras import (
+    LoraInjectionError,
+    apply_lora_stack,
+)
 from grokbot.providers.comfyui.workflows.profiles import profile_for_device
 from grokbot.providers.comfyui.workflows.resolver import (
     Flow,
@@ -55,6 +62,8 @@ _COMFY_VIDEO_TIMEOUT = 1500
 # Cada cuánto se vuelve a preguntar la GPU al box (el perfil puede cambiar si
 # el usuario recrea la sesión con otra tarjeta).
 _PROFILE_REFRESH_SEC = 300.0
+# Catálogo de LoRAs: cache corta para que navegar el menú no abra un túnel por tap.
+_LORA_CACHE_TTL = 60.0
 
 _COMFY_NOT_CONFIGURED_MSG = (
     "ComfyUI no está disponible en este momento. Contacta al administrador del bot."
@@ -74,6 +83,9 @@ _SOURCE_REQUIRED_MSG = (
     "el cambio que quieres."
 )
 _COMBO_UNAVAILABLE_MSG = "Configuración de ComfyUI aún no disponible."
+_LORA_INJECTION_MSG = (
+    "Este flujo no admite LoRAs adicionales. Intenta con otro flujo."
+)
 
 # Extensiones aceptadas al escribir el archivo local (outputs del box).
 _ALLOWED_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".mp4", ".webm", ".mov", ".gif")
@@ -130,6 +142,8 @@ class ComfyUIProvider:
         self._client_factory = client_factory or (lambda url: ComfyApiClient(url))
         self._tmpdir = Path(tmpdir) if tmpdir is not None else _DEFAULT_TMPDIR
         self._seed = seed_factory or (lambda: random.randrange(COMFYUI_SEED_LIMIT))
+        # (deadline monotonic, names) del catálogo de LoRAs del box.
+        self._loras_cache: tuple[float, tuple[str, ...]] | None = None
 
     # -- state ------------------------------------------------------------
     @property
@@ -196,6 +210,28 @@ class ComfyUIProvider:
             return False
         flow = get_flow(str(request.params.get("model") or DEFAULT_COMFYUI_MODEL))
         return flow is not None and flow.media_type is request.media_type
+
+    async def list_loras(self) -> tuple[str, ...]:
+        """LoRAs instalados en el box (``/models/loras``), ordenados.
+
+        Cache corta por instancia: el menú de Telegram puede pedirlo en cada
+        tap y no debe abrir un túnel ni un HTTP por cada uno. Un fallo de red
+        propaga el error tipado del cliente (el caller lo degrada a user-safe).
+        """
+        self._raise_if_not_configured()
+        now = time.monotonic()
+        if self._loras_cache is not None and now < self._loras_cache[0]:
+            return self._loras_cache[1]
+        base_url = await self._transport.ensure()
+        client = self._client_factory(base_url)
+        try:
+            names = await client.model_files("loras")
+        finally:
+            close = getattr(client, "aclose", None)
+            if close is not None:
+                await close()
+        self._loras_cache = (now + _LORA_CACHE_TTL, tuple(names))
+        return tuple(names)
 
     # -- internals --------------------------------------------------------
     def _raise_if_not_configured(self) -> None:
@@ -362,6 +398,33 @@ class ComfyUIProvider:
                 flow.seed_nodes,
             )
         graph = render(flow, request.prompt, lambda: seed)
+        # LoRAs extra del usuario: se apilan sobre la copia del request (la
+        # plantilla no se modifica). Un grafo sin cadena de modelo se rechaza
+        # antes de encolar en vez de correr sin el LoRA en silencio.
+        # El stack se selecciona por el id del flujo RESUELTO, no por el pedido:
+        # si el perfil de GPU obligó a caer al flujo default, se aplica el stack
+        # de ese flujo (o ninguno), nunca el de un flujo distinto.
+        stacks = request.params.get("lora_stacks")
+        raw_stack = stacks.get(flow.id) if isinstance(stacks, Mapping) else None
+        loras = parse_lora_stack(raw_stack)
+        if loras:
+            try:
+                graph = apply_lora_stack(
+                    graph, loras, positive_node=flow.positive_node
+                )
+            except LoraInjectionError as exc:
+                logger.warning(
+                    "ComfyUI flow %s cannot take extra LoRAs (%s)",
+                    flow.id,
+                    type(exc).__name__,
+                )
+                raise ProviderInputError(
+                    "La plantilla no expone una cadena de modelo para el LoRA.",
+                    user_message=_LORA_INJECTION_MSG,
+                ) from exc
+            logger.info(
+                "ComfyUI flow %s: %d extra LoRA(s) applied", flow.id, len(loras)
+            )
         run_timeout = flow.timeout or (
             _COMFY_VIDEO_TIMEOUT if flow.media_type is MediaType.VIDEO else _COMFY_IMAGE_TIMEOUT
         )

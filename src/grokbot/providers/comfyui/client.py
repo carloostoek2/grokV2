@@ -21,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import uuid
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -57,6 +58,9 @@ _GENERIC_ERR_MSG = USER_MSG_GENERIC
 _WS_EXEC_ERROR = "execution_error"
 _WS_EXEC_INTERRUPTED = "execution_interrupted"
 _WS_EXECUTING = "executing"
+
+# ``/models/{folder}``: solo carpetas internas del catálogo, nunca un path.
+_MODEL_FOLDER_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
 class ComfyApiClient:
@@ -133,6 +137,42 @@ class ComfyApiClient:
         except asyncio.TimeoutError:
             logger.warning("comfyui /system_stats timed out.")
             self._raise_unavailable()
+
+    async def model_files(self, folder: str) -> tuple[str, ...]:
+        """Archivos visibles en una carpeta de ``models/`` (p. ej. ``loras``).
+
+        ComfyUI devuelve una lista plana de nombres relativos, incluidas
+        subcarpetas (``krea2/foo.safetensors``). La carpeta se valida contra un
+        patrón simple: jamás se interpola un path arbitrario en la URL.
+        """
+        name = (folder or "").strip().lower()
+        if not _MODEL_FOLDER_RE.match(name):
+            raise ProviderInputError(
+                "Carpeta de modelos inválida.",
+                user_message=_GENERIC_ERR_MSG,
+            )
+        session = await self._acquire_session()
+        try:
+            async with session.get(self._url(f"/models/{name}")) as resp:
+                if resp.status != 200:
+                    self._raise_unavailable()
+                body = await resp.json()
+        except aiohttp.ClientError as exc:
+            logger.warning(
+                "comfyui /models/%s unreachable: %s", name, type(exc).__name__
+            )
+            self._raise_unavailable()
+        except asyncio.TimeoutError:
+            logger.warning("comfyui /models/%s timed out.", name)
+            self._raise_unavailable()
+        if not isinstance(body, list):
+            raise ProviderGenerationError(
+                "ComfyUI devolvió un catálogo de modelos inválido.",
+                user_message=_GENERIC_ERR_MSG,
+            )
+        return tuple(
+            sorted({item for item in body if isinstance(item, str) and item})
+        )
 
     async def object_info(self) -> dict:
         """Full node registry (schemas + model dropdowns) from ``/object_info``."""

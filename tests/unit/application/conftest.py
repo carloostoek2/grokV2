@@ -544,3 +544,27 @@ def fast_sleep(monkeypatch):
         return None
 
     monkeypatch.setattr(asyncio, "sleep", _no_sleep)
+
+
+class FakeLoraCatalog:
+    """Catálogo de LoRAs del box en memoria (sin red).
+
+    ``fail=True`` simula el box caído para los caminos de degradación user-safe.
+    """
+
+    def __init__(self, names: tuple[str, ...] | None = None) -> None:
+        self.names = tuple(
+            names
+            if names is not None
+            else ("krea2/style_a.safetensors", "style_b.safetensors")
+        )
+        self.calls = 0
+        self.fail = False
+
+    async def list_loras(self) -> tuple[str, ...]:
+        self.calls += 1
+        if self.fail:
+            from grokbot.providers.base import ProviderUnavailableError
+
+            raise ProviderUnavailableError("box down", user_message="box down")
+        return self.names

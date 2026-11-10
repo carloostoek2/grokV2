@@ -580,3 +580,41 @@ persiste; la semilla elegida por lote no reemplaza la última semilla fija guard
 Los demás parámetros del sampler siguen en el flujo.
 
 Propuesta de edición automática por flujo: `comfyui/KSAMPLER_DINAMICO.md`.
+
+## LoRAs extra por Telegram (2026-11-10)
+
+`/config` → ComfyUI → **🎨 LoRAs** permite apilar LoRAs sobre el flujo activo sin
+editar templates ni usar la UI web. El diseño es **append-only**: los LoRAs
+horneados del workflow (identidad, estilo, Lightning de pocos pasos) **nunca** se
+sustituyen ni se quitan; el stack del usuario se inserta al final de la cadena de
+modelo con `LoraLoaderModelOnly` y se aplica solo al modelo (el CLIP queda como el
+flujo). Un stack vacío deja el grafo idéntico al de fábrica.
+
+- **Catálogo**: se lee de `GET /models/loras` del box (cache 60 s). El usuario
+  descarga el archivo y lo deja en `models/loras/`; no hay subida por Telegram.
+- **UI**: catálogo paginado (8/página) y búsqueda por fragmento de nombre. Por
+  LoRA: `−`/`+` ajusta la intensidad (0.0–2.0, paso 0.1, default 0.8), `🗑` lo
+  quita, y tocar el nombre muestra el archivo completo. `↩ Vaciar stack` deja el
+  flujo como de fábrica.
+- **Persistencia**: `ComfyUIConfig.lora_stacks` por usuario y **por flujo**
+  (`comfyui_lora_stacks` en `sessions.json`), máximo 5 LoRAs por flujo. Cambiar
+  de flujo no arrastra el stack de otro; un flujo retirado conserva el suyo.
+- **Inyección**: `workflows/loras.py` descubre el ancla (el MODEL que consume el
+  sampler principal; prioriza el que consume la condición positiva y descarta la
+  rama SeedVR2 de los flujos HQ). Si el sampler consume dos modelos (`model` +
+  `edit_model`, caso Donut), el ancla es el ancestro común para que el stack no se
+  aplique a medias. Un grafo sin enlace de modelo se rechaza con copy user-safe
+  **antes** de encolar, nunca corre sin el LoRA en silencio.
+- **Flujo resuelto, no pedido**: los stacks viajan como mapa por flujo y el
+  provider aplica el del flujo que realmente corre. Si la GPU no soporta el flujo
+  guardado y cae al default del perfil, **no** se inyecta el stack de otro flujo.
+- **Carga**: cambiar de LoRA obliga a ComfyUI a recargar pesos; la pantalla lo
+  avisa. Un archivo recién copiado puede tardar hasta 60 s en aparecer por la
+  cache del catálogo.
+- **Compatibilidad**: no se filtra por arquitectura (decisión del owner: el
+  usuario sabe para qué modelo es cada archivo). Un LoRA incompatible lo rechaza
+  ComfyUI con el mensaje genérico user-safe.
+- **Flujos dinámicos**: no requiere tocar `_meta` ni templates; el ancla se
+  autodetecta. Suite completa: **924 passed**.
+
+Propuesta de edición automática por flujo: `comfyui/KSAMPLER_DINAMICO.md`.

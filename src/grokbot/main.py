@@ -31,6 +31,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from dotenv import load_dotenv
 from pydantic import ValidationError
 
+from grokbot.application.comfy_loras import ListComfyLorasUseCase
 from grokbot.application.faceswap import SourceFacesUseCase, SwapFaceUseCase
 from grokbot.application.generate_image import GenerateImageUseCase
 from grokbot.application.generate_video import GenerateVideoUseCase
@@ -157,6 +158,8 @@ def build_deps(
     )
     update_config = UpdateUserConfigUseCase(sessions=sessions)
     manage_lists = ManageListsUseCase(variables=variables)
+    # Catálogo de LoRAs del box para el cargador de /config (puerto → provider).
+    comfy_loras = ListComfyLorasUseCase(catalog=comfyui)
     sources_repo = DiskSourceFacesRepository(settings.sources_dir)
     source_faces = SourceFacesUseCase(sessions=sessions, sources=sources_repo)
     swap_face = SwapFaceUseCase(sessions=sessions, sources=sources_repo, registry=registry)
@@ -183,6 +186,7 @@ def build_deps(
         swap_face=swap_face,
         integrate_refs=integrate_refs,
         comfyui=comfyui,
+        comfy_loras=comfy_loras,
         allowed_telegram_ids=settings.allowed_telegram_ids,
         variables_admin_ids=settings.variables_admin_ids,
     )

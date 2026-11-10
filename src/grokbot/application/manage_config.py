@@ -19,6 +19,10 @@ from grokbot.domain.catalog import (
     VALID_NANO_BANANA_VARIANTS,
 )
 from grokbot.domain.user_config import (
+    COMFYUI_LORA_STRENGTH_MAX,
+    COMFYUI_LORA_STRENGTH_MIN,
+    DEFAULT_COMFYUI_LORA_STRENGTH,
+    MAX_COMFYUI_LORAS_PER_FLOW,
     VALID_COMFYUI_MODELS,
     VALID_COMFYUI_SEED_MODES,
     VALID_VIDEO_ASPECT_RATIOS,
@@ -26,8 +30,11 @@ from grokbot.domain.user_config import (
     VALID_VIDEO_MODELS,
     VALID_VIDEO_MODES,
     VALID_VIDEO_RESOLUTIONS,
+    LoraStackEntry,
     is_valid_comfyui_seed,
     kie_aspect_ratio_fallback,
+    normalize_lora_name,
+    normalize_lora_strength,
 )
 from grokbot.repositories.base import SessionRepository
 
@@ -44,6 +51,32 @@ _VALID_VIDEO_FIELDS = {
 _VALID_COMFYUI_FIELDS = {
     "model": VALID_COMFYUI_MODELS,
 }
+
+
+def _normalize_stack_entries(
+    entries: object,
+) -> tuple[LoraStackEntry, ...] | None:
+    """Validar el stack completo; ``None`` si alguna entrada es inválida.
+
+    El stack se reemplaza entero (no se mergea por índice) para que la UI pueda
+    mandar lo que muestra y la persistencia no quede a medias si algo no encaja.
+    """
+    if not isinstance(entries, (list, tuple)):
+        return None
+    if len(entries) > MAX_COMFYUI_LORAS_PER_FLOW:
+        return None
+    out: list[LoraStackEntry] = []
+    seen: set[str] = set()
+    for entry in entries:
+        if not isinstance(entry, LoraStackEntry):
+            return None
+        name = normalize_lora_name(entry.name)
+        strength = normalize_lora_strength(entry.strength)
+        if name is None or strength is None or name in seen:
+            return None
+        seen.add(name)
+        out.append(LoraStackEntry(name=name, strength=strength))
+    return tuple(out)
 
 
 @dataclass(frozen=True)
@@ -178,3 +211,120 @@ class UpdateUserConfigUseCase:
         new_cfg = replace(cfg, comfyui=replace(comfyui, **{name: value}))
         self._sessions.save_config(user_id, new_cfg)
         return ConfigResult(ok=True, changed=True, field=f"comfyui.{name}", value=value)
+
+    # -- comfyui LoRA stack -------------------------------------------------
+
+    def set_comfyui_loras(
+        self,
+        user_id: int,
+        flow_id: str,
+        entries: object,
+    ) -> ConfigResult:
+        """Reemplazar el stack adicional de UN flujo (lista completa validada)."""
+        if flow_id not in VALID_COMFYUI_MODELS:
+            return ConfigResult(
+                ok=False, changed=False, field="comfyui.loras", value=flow_id
+            )
+        normalized = _normalize_stack_entries(entries)
+        if normalized is None:
+            return ConfigResult(
+                ok=False, changed=False, field="comfyui.loras", value=entries
+            )
+        cfg = self._sessions.get_config(user_id)
+        if cfg.comfyui.loras_for(flow_id) == normalized:
+            return ConfigResult(
+                ok=True, changed=False, field="comfyui.loras", value=flow_id
+            )
+        new_cfg = replace(
+            cfg, comfyui=cfg.comfyui.with_lora_stack(flow_id, normalized)
+        )
+        self._sessions.save_config(user_id, new_cfg)
+        return ConfigResult(ok=True, changed=True, field="comfyui.loras", value=flow_id)
+
+    def add_comfyui_lora(
+        self,
+        user_id: int,
+        flow_id: str,
+        name: object,
+        strength: object = DEFAULT_COMFYUI_LORA_STRENGTH,
+    ) -> ConfigResult:
+        """Agregar UN LoRA al final del stack del flujo (idempotente por nombre)."""
+        clean_name = normalize_lora_name(name)
+        clean_strength = normalize_lora_strength(strength)
+        if clean_name is None or clean_strength is None:
+            return ConfigResult(
+                ok=False, changed=False, field="comfyui.loras", value=name
+            )
+        cfg = self._sessions.get_config(user_id)
+        current = list(cfg.comfyui.loras_for(flow_id))
+        if any(entry.name == clean_name for entry in current):
+            return ConfigResult(
+                ok=True, changed=False, field="comfyui.loras", value=clean_name
+            )
+        if len(current) >= MAX_COMFYUI_LORAS_PER_FLOW:
+            return ConfigResult(
+                ok=False, changed=False, field="comfyui.loras", value=clean_name
+            )
+        current.append(LoraStackEntry(name=clean_name, strength=clean_strength))
+        return self.set_comfyui_loras(user_id, flow_id, current)
+
+    def remove_comfyui_lora(
+        self,
+        user_id: int,
+        flow_id: str,
+        index: object,
+    ) -> ConfigResult:
+        """Quitar el LoRA en ``index`` del stack del flujo."""
+        if type(index) is not int or index < 0:
+            return ConfigResult(
+                ok=False, changed=False, field="comfyui.loras", value=index
+            )
+        cfg = self._sessions.get_config(user_id)
+        current = list(cfg.comfyui.loras_for(flow_id))
+        if index >= len(current):
+            return ConfigResult(
+                ok=False, changed=False, field="comfyui.loras", value=index
+            )
+        current.pop(index)
+        return self.set_comfyui_loras(user_id, flow_id, current)
+
+    def shift_comfyui_lora_strength(
+        self,
+        user_id: int,
+        flow_id: str,
+        index: object,
+        delta: object,
+    ) -> ConfigResult:
+        """Sumar ``delta`` a la intensidad del LoRA en ``index`` (con clamp)."""
+        if type(index) is not int or index < 0:
+            return ConfigResult(
+                ok=False, changed=False, field="comfyui.loras", value=index
+            )
+        if type(delta) not in (int, float):
+            return ConfigResult(
+                ok=False, changed=False, field="comfyui.loras", value=delta
+            )
+        cfg = self._sessions.get_config(user_id)
+        current = list(cfg.comfyui.loras_for(flow_id))
+        if index >= len(current):
+            return ConfigResult(
+                ok=False, changed=False, field="comfyui.loras", value=index
+            )
+        entry = current[index]
+        value = round(entry.strength + float(delta), 2)
+        value = max(COMFYUI_LORA_STRENGTH_MIN, min(COMFYUI_LORA_STRENGTH_MAX, value))
+        strength = normalize_lora_strength(value)
+        if strength is None:
+            return ConfigResult(
+                ok=False, changed=False, field="comfyui.loras", value=value
+            )
+        if strength == entry.strength:
+            return ConfigResult(
+                ok=True, changed=False, field="comfyui.loras", value=strength
+            )
+        current[index] = LoraStackEntry(name=entry.name, strength=strength)
+        return self.set_comfyui_loras(user_id, flow_id, current)
+
+    def clear_comfyui_loras(self, user_id: int, flow_id: str) -> ConfigResult:
+        """Vaciar el stack adicional del flujo (los horneados no se tocan)."""
+        return self.set_comfyui_loras(user_id, flow_id, ())

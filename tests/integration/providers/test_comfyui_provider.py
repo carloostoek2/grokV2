@@ -47,6 +47,11 @@ class FakeClient:
         self.graph: dict | None = None
         self.timeout: float | None = None
         self.prompt_id = "p1"
+        self.model_files_calls: list[str] = []
+
+    async def model_files(self, folder: str) -> tuple[str, ...]:
+        self.model_files_calls.append(folder)
+        return ("a.safetensors", "b.safetensors")
 
     async def run_workflow(self, workflow: dict, *, timeout: float) -> str:
         self.graph = workflow
@@ -286,3 +291,126 @@ async def test_incomplete_seed_mapping_never_claims_reproducibility(tmp_path):
     assert "seed" not in result.meta
     assert calls[0].graph["1"]["inputs"]["seed"] == 42
     assert calls[0].graph["17"]["inputs"]["noise_seed"] == 7
+
+
+@pytest.mark.asyncio
+async def test_list_loras_reads_the_box_and_caches_within_ttl(tmp_path):
+    transport = FakeTransport("box")
+    calls: list[FakeClient] = []
+    prov = ComfyUIProvider(
+        "box", 22, transport=transport,
+        client_factory=lambda url: calls.append(FakeClient(url)) or calls[-1],
+        tmpdir=tmp_path,
+    )
+
+    assert await prov.list_loras() == ("a.safetensors", "b.safetensors")
+    assert await prov.list_loras() == ("a.safetensors", "b.safetensors")
+
+    assert len(calls) == 1
+    assert calls[0].model_files_calls == ["loras"]
+    assert calls[0].closed is True
+
+
+@pytest.mark.asyncio
+async def test_list_loras_without_a_box_raises_not_configured(tmp_path):
+    prov = _provider(FakeTransport(host=""), tmp_path)
+
+    with pytest.raises(ProviderNotConfiguredError):
+        await prov.list_loras()
+
+
+@pytest.mark.asyncio
+async def test_generate_applies_extra_loras_on_top_of_the_flow(tmp_path):
+    transport = FakeTransport("box")
+    calls: list[FakeClient] = []
+    prov = ComfyUIProvider(
+        "box", 22, transport=transport,
+        client_factory=lambda url: calls.append(FakeClient(url)) or calls[-1],
+        tmpdir=tmp_path, seed_factory=lambda: 42,
+    )
+
+    await prov.generate(
+        _req(
+            params={
+                "model": "grok_style",
+                "lora_stacks": {
+                    "grok_style": [
+                        {"name": "style.safetensors", "strength": 0.7}
+                    ]
+                },
+            }
+        )
+    )
+
+    graph = calls[-1].graph
+    assert graph["900000"]["class_type"] == "LoraLoaderModelOnly"
+    assert graph["900000"]["inputs"]["lora_name"] == "style.safetensors"
+    assert graph["900000"]["inputs"]["strength_model"] == 0.7
+    # Base y refine consumen el stack; la LoRA horneada sigue en el grafo.
+    assert graph["1"]["inputs"]["model"] == ["900000", 0]
+    assert graph["17"]["inputs"]["model"] == ["900000", 0]
+    assert graph["100"]["inputs"]["lora_name"] == "grokstyle_krea2_v2.safetensors"
+
+
+@pytest.mark.asyncio
+async def test_generate_ignores_an_invalid_lora_stack(tmp_path):
+    transport = FakeTransport("box")
+    calls: list[FakeClient] = []
+    prov = ComfyUIProvider(
+        "box", 22, transport=transport,
+        client_factory=lambda url: calls.append(FakeClient(url)) or calls[-1],
+        tmpdir=tmp_path, seed_factory=lambda: 42,
+    )
+
+    await prov.generate(
+        _req(
+            params={
+                "model": "grok_style",
+                "lora_stacks": {"grok_style": [{"name": "", "strength": 99}]},
+            }
+        )
+    )
+
+    assert "900000" not in calls[-1].graph
+    assert calls[-1].graph["1"]["inputs"]["model"] == ["100", 0]
+
+
+@pytest.mark.asyncio
+async def test_generate_uses_the_resolved_flow_stack_not_the_requested_one(tmp_path):
+    """Si el perfil cae al flujo default, se aplica SU stack (o ninguno)."""
+    from grokbot.providers.comfyui.workflows.resolver import set_active_profile
+
+    transport = FakeTransport("box")
+    calls: list[FakeClient] = []
+    prov = ComfyUIProvider(
+        "box", 22, transport=transport,
+        client_factory=lambda url: calls.append(FakeClient(url)) or calls[-1],
+        tmpdir=tmp_path, seed_factory=lambda: 42,
+    )
+    set_active_profile("t4")  # agil_edit_hq (a100) no existe: cae a grok_style
+    try:
+        await prov.generate(
+            _req(
+                params={
+                    "model": "agil_edit_hq",
+                    "lora_stacks": {
+                        "agil_edit_hq": [
+                            {"name": "hq_only.safetensors", "strength": 1.0}
+                        ],
+                        "grok_style": [
+                            {"name": "style.safetensors", "strength": 0.7}
+                        ],
+                    },
+                }
+            )
+        )
+    finally:
+        set_active_profile(None)
+
+    graph = calls[-1].graph
+    # El flujo resuelto es grok_style: se aplica SU stack, nunca el de HQ.
+    assert graph["900000"]["inputs"]["lora_name"] == "style.safetensors"
+    assert all(
+        "hq_only.safetensors" not in str(node)
+        for node in graph.values()
+    )

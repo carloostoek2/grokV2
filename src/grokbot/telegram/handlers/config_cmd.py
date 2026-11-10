@@ -208,13 +208,17 @@ def _comfyui_screen_text(cfg, *, updated: bool = False) -> str:
     flow_name = COMFYUI_FLOW_LABELS.get(cc.model, cc.model)
     perfil = active_profile()
     linea_perfil = f"<b>Tarjeta:</b> {perfil.label}\n" if perfil is not None else ""
+    extra_loras = len(cc.loras_for(cc.model))
+    linea_loras = f"<b>LoRAs extra:</b> {extra_loras}\n" if extra_loras else ""
     return (
         f"{header}"
         f"{linea_perfil}"
         f"<b>Flujo:</b> {flow_name}\n"
         f"<b>Semilla (imágenes):</b> {_seed_label(cc)}\n"
+        f"{linea_loras}"
         "Para fijar un número: /semilla 123456\n\n"
-        "Elige el flujo: cada uno trae su modelo y LoRA configurados en la GPU."
+        "Elige el flujo: cada uno trae su modelo y LoRA configurados en la GPU.\n"
+        "Con 🎨 LoRAs puedes apilar LoRAs extra sin modificar el flujo."
     )
 
 
@@ -315,6 +319,30 @@ async def _show_provider_screen(target: types.Message, state: FSMContext, deps: 
     )
 
 
+async def _render_comfyui_panel(
+    ui: ChatUI,
+    message_id: int,
+    deps: BotDeps,
+    uid: int,
+    *,
+    updated: bool = False,
+) -> None:
+    """Pintar/refrescar la pantalla ComfyUI (flujos + acceso a LoRAs).
+
+    Refresca la GPU antes de pintar: el perfil decide qué flujos existen en esta
+    tarjeta. Best-effort: si el box no responde, se conserva el último perfil.
+    """
+    provider = getattr(deps, "comfyui", None)
+    if provider is not None:
+        await provider.refresh_profile(force=True)
+    cfg = deps.sessions.get_config(uid)
+    await ui.edit_text(
+        message_id,
+        _comfyui_screen_text(cfg, updated=updated),
+        reply_markup=config_comfyui_keyboard(cfg.comfyui),
+    )
+
+
 async def _show_configure_screen(
     target: types.Message,
     state: FSMContext,
@@ -352,17 +380,7 @@ async def _show_configure_screen(
         )
         return
     if model_key == "comfyui":
-        # Refrescar la GPU antes de pintar el menú: el perfil decide qué flujos
-        # existen en esta tarjeta. Best-effort: si el box no responde, se
-        # conserva el último perfil conocido.
-        provider = getattr(deps, "comfyui", None)
-        if provider is not None:
-            await provider.refresh_profile(force=True)
-        await ui.edit_text(
-            target.message_id,
-            _comfyui_screen_text(cfg, updated=updated),
-            reply_markup=config_comfyui_keyboard(cfg.comfyui),
-        )
+        await _render_comfyui_panel(ui, target.message_id, deps, uid, updated=updated)
         return
     await ui.edit_text(
         target.message_id,

@@ -6,7 +6,12 @@ variables_flow.py). Sin red ni Telegram.
 
 from __future__ import annotations
 
-from grokbot.domain.user_config import ComfyUIConfig, UserConfig, VideoConfig
+from grokbot.domain.user_config import (
+    ComfyUIConfig,
+    LoraStackEntry,
+    UserConfig,
+    VideoConfig,
+)
 from grokbot.telegram import keyboards as kb
 from conftest import flat_callback_data
 
@@ -95,6 +100,7 @@ def test_config_comfyui_keyboard_lists_seeds_and_flows():
         "cfg:comfyui:flow:agil_moody_hq",
         "cfg:comfyui:flow:grok_edit_hq",
         "cfg:comfyui:flow:agil_edit_hq",
+        "cfg:lora:open",
         "cfg:back:model",
         "cfg:close",
     ]
@@ -228,3 +234,68 @@ def test_comfy_result_keyboard_is_stage_gated():
     assert flat_callback_data(kb.comfy_result_keyboard("krea2")) == ["regen"]
     assert flat_callback_data(kb.comfy_result_keyboard(None)) == ["regen"]
     assert flat_callback_data(kb.image_regenerate_keyboard()) == ["regen"]
+
+
+def test_config_comfyui_lora_stack_keyboard_rows():
+    cfg = ComfyUIConfig(
+        model="grok_style",
+        lora_stacks=(
+            (
+                "grok_style",
+                (LoraStackEntry("krea2/very_long_style_name.safetensors", 0.8),),
+            ),
+        ),
+    )
+    rows = kb.config_comfyui_lora_keyboard(cfg).inline_keyboard
+
+    assert [b.callback_data for b in rows[0]] == [
+        "cfg:lora:d:0",
+        "cfg:lora:s:0",
+        "cfg:lora:u:0",
+        "cfg:lora:x:0",
+    ]
+    assert rows[0][1].text.endswith("…")
+    assert [b.callback_data for b in rows[1]] == ["cfg:lora:add", "cfg:lora:search"]
+    assert rows[2][0].callback_data == "cfg:lora:clear"
+    assert rows[3][0].callback_data == "cfg:lora:back"
+    assert rows[4][0].callback_data == "cfg:close"
+
+
+def test_config_comfyui_lora_stack_keyboard_without_entries():
+    cfg = ComfyUIConfig(model="grok_style")
+
+    rows = kb.config_comfyui_lora_keyboard(cfg).inline_keyboard
+
+    assert [b.callback_data for b in rows[0]] == ["cfg:lora:add", "cfg:lora:search"]
+    assert all(
+        b.callback_data != "cfg:lora:clear" for row in rows for b in row
+    )
+
+
+def test_config_comfyui_lora_catalog_paginates_and_marks_selected():
+    from grokbot.telegram.lora_ids import lora_short_id
+
+    names = tuple(f"lora_{index}.safetensors" for index in range(10))
+    rows = kb.config_comfyui_lora_catalog_keyboard(
+        names, page=0, selected=("lora_0.safetensors",)
+    ).inline_keyboard
+
+    assert len(rows) == 8 + 1 + 2  # 8 items + nav + buscar + volver
+    assert rows[0][0].text.startswith("✅ ")
+    assert rows[0][0].callback_data == (
+        f"cfg:lora:a:{lora_short_id('lora_0.safetensors')}"
+    )
+    nav = rows[8]
+    assert nav[0].callback_data == "cfg:lora:n"
+    assert nav[-1].callback_data == "cfg:lora:p:1"
+
+    second = kb.config_comfyui_lora_catalog_keyboard(names, page=1).inline_keyboard
+    assert second[0][0].callback_data == (
+        f"cfg:lora:a:{lora_short_id('lora_8.safetensors')}"
+    )
+
+
+def test_config_comfyui_lora_search_keyboard_offers_cancel():
+    data = flat_callback_data(kb.config_comfyui_lora_search_keyboard())
+
+    assert data == ["cfg:lora:back"]

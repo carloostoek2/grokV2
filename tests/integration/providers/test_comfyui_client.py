@@ -275,3 +275,40 @@ async def test_generation_deadline_raises_unavailable():
 
     with pytest.raises(ProviderUnavailableError):
         await client.run_workflow({"1": {}}, timeout=0.05)
+
+
+@pytest.mark.asyncio
+async def test_model_files_returns_sorted_unique_names():
+    session = FakeSession()
+    session.add(
+        "get",
+        "/models/loras",
+        payload=["krea2/b.safetensors", "a.safetensors", "a.safetensors", 7],
+    )
+    client = _make_client(session=session)
+
+    assert await client.model_files("loras") == (
+        "a.safetensors",
+        "krea2/b.safetensors",
+    )
+    assert session.calls[0][1].endswith("/models/loras")
+
+
+@pytest.mark.asyncio
+async def test_model_files_rejects_an_unsafe_folder():
+    session = FakeSession()
+    client = _make_client(session=session)
+
+    with pytest.raises(ProviderInputError):
+        await client.model_files("../etc")
+    assert session.calls == []
+
+
+@pytest.mark.asyncio
+async def test_model_files_unreachable_raises_unavailable():
+    session = FakeSession()
+    session.add("get", "/models/loras", status=503, payload=[])
+    client = _make_client(session=session)
+
+    with pytest.raises(ProviderUnavailableError):
+        await client.model_files("loras")

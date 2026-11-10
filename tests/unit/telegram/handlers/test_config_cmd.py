@@ -12,9 +12,13 @@ from datetime import datetime, timezone
 from aiogram import Bot
 from aiogram.types import CallbackQuery, Message
 
+from grokbot.application.comfy_loras import ListComfyLorasUseCase
+from grokbot.telegram.lora_ids import lora_short_id
+
 from conftest import (
     CHAT_ID,
     USER_ID,
+    FakeLoraCatalog,
     callback_query,
     callback_update,
     flat_callback_data,
@@ -399,3 +403,155 @@ async def test_comfyui_seed_button_rejects_unknown_mode():
     assert ans["text"] == "Opción inválida."
     assert ans["show_alert"] is True
     assert deps.sessions.get_config(_UID) == before
+
+
+# --- ComfyUI: LoRAs extra ------------------------------------------------------
+
+async def _open_comfyui(deps=None):
+    dp, deps = await _open_config(deps)
+    mid = _panel_id(deps)
+    await dp.feed_update(
+        _BOT, callback_update(callback_query("cfg:model:comfyui", message_id=mid))
+    )
+    return dp, deps, mid
+
+
+def _labels(edit) -> list[str]:
+    return [b.text for row in edit["reply_markup"].inline_keyboard for b in row]
+
+
+async def test_comfyui_lora_open_shows_stack_and_catalog():
+    dp, deps, mid = await _open_comfyui()
+    assert "🎨 LoRAs" in _labels(_last_edit_text(deps))
+
+    await dp.feed_update(
+        _BOT, callback_update(_bot_panel_callback("cfg:lora:open", mid))
+    )
+    edit = _last_edit_text(deps)
+    assert "LoRAs extra de <b>Grok Style</b>" in edit["text"]
+    assert "Sin LoRAs extra" in edit["text"]
+    assert deps.lora_catalog.names == (
+        "krea2/style_a.safetensors",
+        "style_b.safetensors",
+    )
+
+    await dp.feed_update(
+        _BOT, callback_update(_bot_panel_callback("cfg:lora:add", mid))
+    )
+    edit = _last_edit_text(deps)
+    assert "LoRAs disponibles para <b>Grok Style</b>" in edit["text"]
+    labels = _labels(edit)
+    assert any("style_a" in label for label in labels)
+    assert any("style_b" in label for label in labels)
+
+
+async def test_comfyui_lora_add_adjust_and_remove():
+    dp, deps, mid = await _open_comfyui()
+    await dp.feed_update(
+        _BOT, callback_update(_bot_panel_callback("cfg:lora:open", mid))
+    )
+    await dp.feed_update(
+        _BOT, callback_update(_bot_panel_callback("cfg:lora:add", mid))
+    )
+
+    short = lora_short_id("style_b.safetensors")
+    await dp.feed_update(
+        _BOT, callback_update(_bot_panel_callback(f"cfg:lora:a:{short}", mid))
+    )
+    entries = deps.sessions.get_config(_UID).comfyui.loras_for("grok_style")
+    assert [entry.name for entry in entries] == ["style_b.safetensors"]
+    assert entries[0].strength == 0.8
+    assert _last_answer(deps)["text"] == (
+        "LoRA agregado. Se aplicará a las próximas imágenes."
+    )
+    assert "<code>style_b.safetensors</code>" in _last_edit_text(deps)["text"]
+
+    await dp.feed_update(
+        _BOT, callback_update(_bot_panel_callback("cfg:lora:u:0", mid))
+    )
+    entries = deps.sessions.get_config(_UID).comfyui.loras_for("grok_style")
+    assert entries[0].strength == 0.9
+    assert _last_answer(deps)["text"] == "Intensidad: 0.9"
+
+    await dp.feed_update(
+        _BOT, callback_update(_bot_panel_callback("cfg:lora:x:0", mid))
+    )
+    assert deps.sessions.get_config(_UID).comfyui.loras_for("grok_style") == ()
+    assert _last_answer(deps)["text"] == "LoRA extra quitado."
+
+
+async def test_comfyui_lora_search_filters_and_adds():
+    dp, deps, mid = await _open_comfyui()
+    await dp.feed_update(
+        _BOT, callback_update(_bot_panel_callback("cfg:lora:open", mid))
+    )
+    await dp.feed_update(
+        _BOT, callback_update(_bot_panel_callback("cfg:lora:search", mid))
+    )
+    assert "Envía un fragmento" in _last_edit_text(deps)["text"]
+
+    await dp.feed_update(_BOT, message_update(text_message("style_b")))
+
+    edit = _last_edit_text(deps)
+    assert "Coincidencias con «style_b»" in edit["text"]
+    labels = _labels(edit)
+    assert any("style_b" in label for label in labels)
+    assert not any("style_a" in label for label in labels)
+
+    short = lora_short_id("style_b.safetensors")
+    await dp.feed_update(
+        _BOT, callback_update(_bot_panel_callback(f"cfg:lora:a:{short}", mid))
+    )
+    assert [
+        entry.name
+        for entry in deps.sessions.get_config(_UID).comfyui.loras_for("grok_style")
+    ] == ["style_b.safetensors"]
+
+
+async def test_comfyui_lora_box_down_degrades_to_user_safe_copy():
+    catalog = FakeLoraCatalog()
+    catalog.fail = True
+    deps = make_deps(comfy_loras=ListComfyLorasUseCase(catalog=catalog))
+    dp, deps, mid = await _open_comfyui(deps)
+
+    await dp.feed_update(
+        _BOT, callback_update(_bot_panel_callback("cfg:lora:open", mid))
+    )
+    assert "No se pudo leer el catálogo de LoRAs" in _last_edit_text(deps)["text"]
+
+    await dp.feed_update(
+        _BOT, callback_update(_bot_panel_callback("cfg:lora:add", mid))
+    )
+    answer = _last_answer(deps)
+    assert "No se pudo leer el catálogo de LoRAs" in answer["text"]
+    assert answer["show_alert"] is True
+    assert deps.sessions.get_config(_UID).comfyui.loras_for("grok_style") == ()
+
+
+async def test_comfyui_lora_stack_is_isolated_per_flow():
+    dp, deps, mid = await _open_comfyui()
+    await dp.feed_update(
+        _BOT, callback_update(_bot_panel_callback("cfg:lora:open", mid))
+    )
+    await dp.feed_update(
+        _BOT, callback_update(_bot_panel_callback("cfg:lora:add", mid))
+    )
+    await dp.feed_update(
+        _BOT,
+        callback_update(
+            _bot_panel_callback(f"cfg:lora:a:{lora_short_id('style_b.safetensors')}", mid)
+        ),
+    )
+    assert deps.sessions.get_config(_UID).comfyui.loras_for("grok_style")
+
+    await dp.feed_update(
+        _BOT, callback_update(_bot_panel_callback("cfg:lora:back", mid))
+    )
+    await dp.feed_update(
+        _BOT, callback_update(_bot_panel_callback("cfg:comfyui:flow:agil_solo", mid))
+    )
+    await dp.feed_update(
+        _BOT, callback_update(_bot_panel_callback("cfg:lora:open", mid))
+    )
+    assert "Sin LoRAs extra" in _last_edit_text(deps)["text"]
+    assert deps.sessions.get_config(_UID).comfyui.loras_for("grok_style")

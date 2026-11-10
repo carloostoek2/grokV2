@@ -12,7 +12,11 @@ from dataclasses import replace
 from grokbot.application.events import ItemFailed, ItemResult
 from grokbot.application.generate_video import GenerateVideoUseCase
 from grokbot.domain.generation import MediaType
-from grokbot.domain.user_config import ComfyUIConfig, UserConfig
+from grokbot.domain.user_config import (
+    ComfyUIConfig,
+    LoraStackEntry,
+    UserConfig,
+)
 from grokbot.providers.base import ProviderRateLimitError, ProviderTimeoutError
 
 from conftest import USER_ID, FakeComfyuiProvider, FakeVideoProvider, make_registry, make_result
@@ -199,3 +203,33 @@ async def test_success_sets_elapsed_in_meta(sessions):
     assert ev.result is result
     assert isinstance(ev.result.meta.get("elapsed_sec"), int)
     assert ev.result.meta["elapsed_sec"] >= 0
+
+
+async def test_comfyui_video_sends_per_flow_lora_stacks(sessions):
+    cfg = replace(
+        UserConfig.defaults(),
+        model="comfyui",
+        comfyui=ComfyUIConfig(
+            model="wan_i2v",
+            lora_stacks=(("wan_i2v", (LoraStackEntry("motion.safetensors", 0.6),)),),
+        ),
+    )
+    sessions.save_config(USER_ID, cfg)
+    prov = FakeComfyuiProvider(
+        outcomes=[
+            make_result(
+                provider="comfyui",
+                model_id="comfyui",
+                file_path="/tmp/v.mp4",
+                media_type=MediaType.VIDEO,
+            )
+        ]
+    )
+    reg = make_registry(comfyui=prov)
+
+    await _run(_uc(reg, sessions), user_id=USER_ID, prompt="escena")
+
+    request, _ = prov.calls[0]
+    assert request.params["lora_stacks"] == {
+        "wan_i2v": [{"name": "motion.safetensors", "strength": 0.6}]
+    }

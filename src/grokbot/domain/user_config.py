@@ -9,8 +9,8 @@ application/telegram layers (items 4-5). Extra keys a real record may carry
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, replace
 
 from grokbot.domain.catalog import (
     DEFAULT_GROK_IMAGINE_PROVIDER,
@@ -159,11 +159,104 @@ def comfy_chain_destination(
         if name == stage:
             return dest
     return None
-# ``lora``/``refine`` quedaron dormidos tras el slice HTTP/WS: el LoRA forma
-# parte del workflow y refine no se ofrece. Se conservan en la config persistida
-# por compat (from_record/to_record) pero no participan en la resolución.
+# ``lora``/``refine`` (escalares legacy) quedaron dormidos tras el slice HTTP/WS:
+# el LoRA horneado forma parte del workflow y refine no se ofrece. Se conservan en
+# la config persistida por compat (from_record/to_record) pero no participan en la
+# resolución. El stack NUEVO del usuario vive en ``ComfyUIConfig.lora_stacks``
+# (por flujo) y sí se aplica al generar.
 DEFAULT_COMFYUI_LORA = "none"
 DEFAULT_COMFYUI_REFINE = "1"  # "1" = final refine ON (JSON parity: str "0"/"1")
+
+# --- ComfyUI user LoRA stack ------------------------------------------------
+# El usuario APILA LoRAs encima del workflow: los horneados en el template no se
+# tocan (una LoRA de identidad o de destilado es estructural), y el stack se
+# inserta al final de la cadena de modelo. Cada flujo mantiene su propio stack.
+MAX_COMFYUI_LORAS_PER_FLOW = 5
+DEFAULT_COMFYUI_LORA_STRENGTH = 0.8
+COMFYUI_LORA_STRENGTH_MIN = 0.0
+COMFYUI_LORA_STRENGTH_MAX = 2.0
+_COMFYUI_LORA_NAME_MAX = 200
+
+
+@dataclass(frozen=True)
+class LoraStackEntry:
+    """Un LoRA extra del usuario: nombre de archivo + intensidad."""
+
+    name: str
+    strength: float = DEFAULT_COMFYUI_LORA_STRENGTH
+
+    def to_record(self) -> dict:
+        return {"name": self.name, "strength": self.strength}
+
+
+def normalize_lora_name(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    name = value.strip()
+    if not name or len(name) > _COMFYUI_LORA_NAME_MAX:
+        return None
+    if any(ord(ch) < 32 for ch in name):
+        return None
+    return name
+
+
+def normalize_lora_strength(value: object) -> float | None:
+    if type(value) not in (int, float):
+        return None
+    strength = float(value)
+    if strength != strength:  # NaN
+        return None
+    if not (COMFYUI_LORA_STRENGTH_MIN <= strength <= COMFYUI_LORA_STRENGTH_MAX):
+        return None
+    return round(strength, 2)
+
+
+def parse_lora_stack(raw: object) -> tuple[LoraStackEntry, ...]:
+    """Normalizar el stack de UN flujo: descarta inválidos, dedupe, tope.
+
+    Acepta ``[{"name", "strength"}]`` (record) o ``[str]`` (legacy). Un JSON
+    corrupto nunca rompe la lectura: se ignoran las entradas que no encajan.
+    """
+    if not isinstance(raw, (list, tuple)):
+        return ()
+    out: list[LoraStackEntry] = []
+    seen: set[str] = set()
+    for item in raw:
+        if len(out) >= MAX_COMFYUI_LORAS_PER_FLOW:
+            break
+        if isinstance(item, Mapping):
+            name = normalize_lora_name(item.get("name"))
+            strength = normalize_lora_strength(
+                item.get("strength", DEFAULT_COMFYUI_LORA_STRENGTH)
+            )
+        elif isinstance(item, str):
+            name = normalize_lora_name(item)
+            strength = DEFAULT_COMFYUI_LORA_STRENGTH
+        else:
+            continue
+        if name is None or strength is None or name in seen:
+            continue
+        seen.add(name)
+        out.append(LoraStackEntry(name=name, strength=strength))
+    return tuple(out)
+
+
+def _normalize_lora_stacks(raw: object) -> tuple[tuple[str, tuple[LoraStackEntry, ...]], ...]:
+    """Normalizar ``{flow_id: [entries]}`` conservando flujos desconocidos.
+
+    Un flujo temporalmente retirado del catálogo (p. ej. los Dirty\\*) mantiene
+    su stack para cuando vuelva; solo se descartan claves no textuales o vacías.
+    """
+    if not isinstance(raw, Mapping):
+        return ()
+    out: list[tuple[str, tuple[LoraStackEntry, ...]]] = []
+    for flow_id, entries in raw.items():
+        if not isinstance(flow_id, str) or not flow_id.strip():
+            continue
+        parsed = parse_lora_stack(entries)
+        if parsed:
+            out.append((flow_id, parsed))
+    return tuple(out)
 
 # --- ComfyUI seed policy ---------------------------------------------------
 # One seed per image ("random"), one seed shared by a batch ("batch"), or a
@@ -311,6 +404,10 @@ class ComfyUIConfig:
     ``model`` es el id de flujo (p. ej. ``"grok_style"``); el workflow de ese
     flujo trae su modelo/LoRA horneados. ``lora``/``refine`` quedan dormidos
     (persistidos por compat; no participan en la resolución).
+
+    ``lora_stacks`` es el stack **adicional** por flujo que el usuario arma
+    desde Telegram: se inyecta al final de la cadena de modelo y nunca sustituye
+    lo horneado. Un flujo sin entrada no lleva LoRAs extra.
     """
 
     model: str = DEFAULT_COMFYUI_MODEL
@@ -318,6 +415,8 @@ class ComfyUIConfig:
     refine: str = DEFAULT_COMFYUI_REFINE  # "0"/"1" as str (JSON parity)
     seed_mode: str = VALID_COMFYUI_SEED_MODES[0]
     seed: int = 0
+    # Tuple of (flow_id, entries): frozen + ordered, same semantics as a dict.
+    lora_stacks: tuple[tuple[str, tuple[LoraStackEntry, ...]], ...] = ()
 
     @classmethod
     def from_record(cls, rec: Mapping) -> "ComfyUIConfig":
@@ -343,14 +442,58 @@ class ComfyUIConfig:
         seed = rec.get("seed", 0)
         if not is_valid_comfyui_seed(seed):
             seed = 0
-        return cls(model=model, lora=lora, refine=refine, seed_mode=seed_mode, seed=seed)
+        lora_stacks = _normalize_lora_stacks(rec.get("lora_stacks"))
+        return cls(
+            model=model,
+            lora=lora,
+            refine=refine,
+            seed_mode=seed_mode,
+            seed=seed,
+            lora_stacks=lora_stacks,
+        )
 
     def to_record(self) -> dict:
-        return {"model": self.model, "lora": self.lora, "refine": self.refine, "seed_mode": self.seed_mode, "seed": self.seed}
+        return {
+            "model": self.model,
+            "lora": self.lora,
+            "refine": self.refine,
+            "seed_mode": self.seed_mode,
+            "seed": self.seed,
+            "lora_stacks": {
+                flow_id: [entry.to_record() for entry in entries]
+                for flow_id, entries in self.lora_stacks
+            },
+        }
 
     @property
     def refine_enabled(self) -> bool:
         return self.refine == "1"
+
+    def loras_for(self, flow_id: str) -> tuple[LoraStackEntry, ...]:
+        """Stack adicional del flujo (vacío si no tiene)."""
+        for stored_id, entries in self.lora_stacks:
+            if stored_id == flow_id:
+                return entries
+        return ()
+
+    def with_lora_stack(
+        self,
+        flow_id: str,
+        entries: Sequence[LoraStackEntry],
+    ) -> "ComfyUIConfig":
+        """Copia con el stack de ``flow_id`` reemplazado (inmutable).
+
+        Un stack vacío elimina la entrada del flujo, para que el record no
+        acumule claves muertas.
+        """
+        kept = tuple(
+            (stored_id, stored) for stored_id, stored in self.lora_stacks
+            if stored_id != flow_id
+        )
+        new_entries = tuple(entries)
+        if new_entries:
+            kept = kept + ((flow_id, new_entries),)
+        return replace(self, lora_stacks=kept)
 
 
 @dataclass(frozen=True)
@@ -447,4 +590,8 @@ class UserConfig:
             "comfyui_model": self.comfyui.model,
             "comfyui_lora": self.comfyui.lora,
             "comfyui_refine": self.comfyui.refine,
+            "comfyui_lora_stacks": {
+                flow_id: [entry.to_record() for entry in entries]
+                for flow_id, entries in self.comfyui.lora_stacks
+            },
         }

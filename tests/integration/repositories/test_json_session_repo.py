@@ -37,6 +37,7 @@ def canonical_record() -> dict:
         "comfyui_model": "grok_style",
         "comfyui_lora": "none",
         "comfyui_refine": "1",
+        "comfyui_lora_stacks": {},
         "_extra_user_key": "keep",
     }
 

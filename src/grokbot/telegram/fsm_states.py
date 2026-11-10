@@ -17,6 +17,8 @@ class ConfigStates(StatesGroup):
     select_model = State()
     select_provider = State()
     configure = State()
+    # Búsqueda de LoRA por texto dentro de la pantalla ComfyUI (un turno).
+    comfyui_lora_search = State()
 
 
 class VarStates(StatesGroup):

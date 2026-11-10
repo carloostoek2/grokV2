@@ -16,6 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from grokbot.application.comfy_loras import ListComfyLorasUseCase
 from grokbot.application.faceswap import SourceFacesUseCase, SwapFaceUseCase
 from grokbot.application.generate_image import GenerateImageUseCase
 from grokbot.application.generate_video import GenerateVideoUseCase
@@ -30,6 +31,7 @@ from grokbot.repositories.base import (
     SessionRepository,
     VariablesRepository,
 )
+from grokbot.telegram.lora_ids import lora_short_id
 from grokbot.telegram.ports import MediaDownloader, TelegramGateway
 
 if TYPE_CHECKING:
@@ -268,6 +270,27 @@ class ComfyChainMemory:
 
 
 @dataclass
+class LoraCatalogStore:
+    """Último catálogo de LoRAs del box + mapa ``short_id → filename``.
+
+    Efímero (no va a ``sessions.json``): la fuente de verdad es el box. El id
+    corto desacopla el ``callback_data`` del nombre largo de archivo.
+    """
+
+    names: tuple[str, ...] = ()
+    short_to_name: dict[str, str] = field(default_factory=dict)
+
+    def remember(self, names: tuple[str, ...]) -> None:
+        self.names = tuple(names)
+        self.short_to_name = {
+            lora_short_id(name): name for name in self.names
+        }
+
+    def resolve(self, short_id: str) -> str | None:
+        return self.short_to_name.get(short_id)
+
+
+@dataclass
 class BotDeps:
     """Dependencias de la capa telegram (use cases + seams + gates)."""
 
@@ -294,6 +317,10 @@ class BotDeps:
     # Provider ComfyUI (opcional): la pantalla de configuración lo usa para
     # refrescar el perfil de pesos según la GPU real del box.
     comfyui: "ComfyUIProvider | None" = None
+    # Catálogo de LoRAs del box (None = ComfyUI deshabilitado). La pantalla
+    # /config lo consulta por el caso de uso, nunca por el provider directo.
+    comfy_loras: ListComfyLorasUseCase | None = None
+    lora_catalog: LoraCatalogStore = field(default_factory=LoraCatalogStore)
     # Flag efímero awaiting-ref (A2): en memoria, NUNCA en cfg.state/sessions.json
     # (parity grok ``state["integrate_ref_awaiting"]``, se pierde al reiniciar).
     integrate_ref_pending: set[int] = field(default_factory=set)
@@ -306,6 +333,7 @@ __all__ = [
     "BotDeps",
     "ComfyChainMemory",
     "FaceswapPending",
+    "LoraCatalogStore",
     "LongPromptStore",
     "PendingPrompts",
 ]

@@ -12,7 +12,11 @@ from dataclasses import replace
 from grokbot.application.events import ItemFailed, ItemResult, RetryScheduled
 from grokbot.application.generate_image import GenerateImageUseCase
 from grokbot.domain.generation import MediaType
-from grokbot.domain.user_config import ComfyUIConfig, UserConfig
+from grokbot.domain.user_config import (
+    ComfyUIConfig,
+    LoraStackEntry,
+    UserConfig,
+)
 from grokbot.providers.base import (
     ProviderInputError,
     ProviderNotConfiguredError,
@@ -253,3 +257,32 @@ async def test_success_after_retry_includes_elapsed(sessions, fast_sleep):
     assert len(results) == 1
     assert isinstance(results[0].result.meta.get("elapsed_sec"), int)
     assert results[0].result.meta["elapsed_sec"] >= 0
+
+
+async def test_comfyui_sends_per_flow_lora_stacks(sessions):
+    cfg = replace(
+        UserConfig.defaults(),
+        model="comfyui",
+        comfyui=ComfyUIConfig(
+            model="grok_style",
+            lora_stacks=(
+                ("grok_style", (LoraStackEntry("style.safetensors", 0.7),)),
+                ("agil_solo", (LoraStackEntry("solo.safetensors", 1.0),)),
+            ),
+        ),
+    )
+    sessions.save_config(USER_ID, cfg)
+    prov = FakeComfyuiProvider(
+        outcomes=[make_result(provider="comfyui", model_id="comfyui", file_path="/tmp/a.jpg")]
+    )
+    reg = make_registry(comfyui=prov)
+
+    await _run(_uc(reg, sessions), user_id=USER_ID, prompt="un retrato")
+
+    request, _ = prov.calls[0]
+    # El provider elige por id de flujo resuelto: viaja el mapa completo.
+    assert request.params["lora_stacks"] == {
+        "grok_style": [{"name": "style.safetensors", "strength": 0.7}],
+        "agil_solo": [{"name": "solo.safetensors", "strength": 1.0}],
+    }
+    assert "loras" not in request.params

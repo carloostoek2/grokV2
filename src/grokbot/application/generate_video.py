@@ -34,6 +34,13 @@ def build_video_request(
     ComfyUI se pasan model/lora en ``params`` para el guard ``supports()``.
     """
     params = {"model": cfg.comfyui.model} if res.name == "comfyui" else {}
+    if res.name == "comfyui":
+        stacks = {
+            flow_id: [entry.to_record() for entry in entries]
+            for flow_id, entries in cfg.comfyui.lora_stacks
+        }
+        if stacks:
+            params["lora_stacks"] = stacks
     return GenerationRequest(
         provider=res.name,
         model_id=res.model_id,

@@ -38,9 +38,10 @@ def _comfy_params(cfg: UserConfig, prompts: list[str] | None) -> dict:
 
     La semilla se resuelve UNA vez aquí, antes del bucle de reintentos: ``fixed``
     usa la guardada y el resto sortea una por imagen (el modo ``batch`` llega ya
-    convertido a ``fixed`` por ``RunVariableBatchUseCase``). El modelo/LoRA del
-    flujo los define su workflow; lora/refine quedaron dormidos. ``prompts``
-    multipose ya no aplica (sin flujo qwen).
+    convertido a ``fixed`` por ``RunVariableBatchUseCase``). El modelo y los LoRAs
+    horneados los define el workflow del flujo; ``loras`` es el stack **extra** del
+    usuario (se apila sin tocar los horneados) y ``refine`` sigue dormido.
+    ``prompts`` multipose ya no aplica (sin flujo qwen).
     """
     params = {"model": cfg.comfyui.model}
     params["seed"] = (
@@ -48,6 +49,15 @@ def _comfy_params(cfg: UserConfig, prompts: list[str] | None) -> dict:
         if cfg.comfyui.seed_mode == "fixed"
         else random.randrange(COMFYUI_SEED_LIMIT)
     )
+    # Stacks extra POR FLUJO: el provider elige el del flujo que realmente corre
+    # (puede caer al default del perfil si el pedido no existe en esta GPU), así
+    # que un stack configurado para otro flujo nunca se inyecta por error.
+    stacks = {
+        flow_id: [entry.to_record() for entry in entries]
+        for flow_id, entries in cfg.comfyui.lora_stacks
+    }
+    if stacks:
+        params["lora_stacks"] = stacks
     if prompts:
         params["prompts"] = list(prompts)
     return params

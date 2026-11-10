@@ -40,6 +40,7 @@ FakeIntegrateRefsRepo = _app_conftest.FakeIntegrateRefsRepo
 FakeImageProvider = _app_conftest.FakeImageProvider
 FakeVideoProvider = _app_conftest.FakeVideoProvider
 FakeComfyuiProvider = _app_conftest.FakeComfyuiProvider
+FakeLoraCatalog = _app_conftest.FakeLoraCatalog
 make_result = _app_conftest.make_result
 make_registry = _app_conftest.make_registry
 
@@ -60,6 +61,7 @@ from aiogram.types import (  # noqa: E402
     User,
 )
 
+from grokbot.application.comfy_loras import ListComfyLorasUseCase  # noqa: E402
 from grokbot.application.faceswap import SourceFacesUseCase, SwapFaceUseCase  # noqa: E402
 from grokbot.application.generate_image import GenerateImageUseCase  # noqa: E402
 from grokbot.application.integrate_refs import IntegrateRefsUseCase  # noqa: E402
@@ -473,6 +475,7 @@ def make_deps(
     source_repo: FakeSourceFacesRepo | None = None,
     integrate_refs_repo: FakeIntegrateRefsRepo | None = None,
     pending: PendingPrompts | None = None,
+    comfy_loras: ListComfyLorasUseCase | None = None,
     allowed_telegram_ids: set[int] | None = None,
     variables_admin_ids: set[int] | None = None,
     **overrides,
@@ -511,6 +514,7 @@ def make_deps(
     swap_face = SwapFaceUseCase(sessions=sessions, sources=source_repo, registry=registry)
     integrate_refs_repo = integrate_refs_repo or FakeIntegrateRefsRepo()
     integrate_refs = IntegrateRefsUseCase(sessions=sessions, refs=integrate_refs_repo)
+    comfy_loras = comfy_loras or ListComfyLorasUseCase(catalog=FakeLoraCatalog())
     return BotDeps(
         gateway=gateway,
         downloader=downloader,
@@ -527,6 +531,7 @@ def make_deps(
         source_faces=source_faces,
         swap_face=swap_face,
         integrate_refs=integrate_refs,
+        comfy_loras=comfy_loras,
         pending=pending or PendingPrompts(),
         allowed_telegram_ids=allowed_telegram_ids,
         variables_admin_ids=variables_admin_ids,

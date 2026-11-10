@@ -42,6 +42,11 @@ from grokbot.telegram.formatters import (
     comfyui_seed_label,
     prov_label,
 )
+from grokbot.telegram.lora_ids import lora_short_id
+
+# Cuántos LoRAs por página en el catálogo (el catálogo real suele ser corto,
+# pero la lista de Telegram no debe volverse un muro en el móvil).
+COMFYUI_LORA_PAGE_SIZE = 8
 
 # ---------------------------------------------------------------------------
 # Generación (confirm / cancel / regen / refine) — bot.py 429-452 / 685-713
@@ -246,8 +251,9 @@ def config_variant_keyboard(
 def config_comfyui_keyboard(cfg: ComfyUIConfig) -> InlineKeyboardMarkup:
     """Pantalla ComfyUI: un botón por **flujo** (por nombre).
 
-    Cada flujo trae su modelo/LoRA en el workflow; no hay selectores de
-    modelo/LoRA/refine (dormidos tras el slice HTTP/WS). Flujos en
+    Cada flujo trae su modelo/LoRA horneados en el workflow; el botón 🎨 LoRAs
+    abre el stack **extra** del usuario (no sustituye los horneados). No hay
+    selectores legacy de modelo/LoRA/refine. Flujos en
     ``COMFYUI_MENU_HIDDEN_FLOWS`` no se muestran, pero siguen siendo ids válidos.
     """
     rows = [
@@ -275,8 +281,105 @@ def config_comfyui_keyboard(cfg: ComfyUIConfig) -> InlineKeyboardMarkup:
                 callback_data=f"cfg:comfyui:flow:{flow_id}",
             )
         ])
+    extra_loras = len(cfg.loras_for(cfg.model))
+    rows.append([
+        InlineKeyboardButton(
+            text=f"🎨 LoRAs ({extra_loras})" if extra_loras else "🎨 LoRAs",
+            callback_data="cfg:lora:open",
+        )
+    ])
     rows.append([InlineKeyboardButton(text="← Modelo", callback_data="cfg:back:model")])
     rows.append([InlineKeyboardButton(text="Cerrar", callback_data="cfg:close")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def _lora_label(name: str, limit: int = 26) -> str:
+    """Etiqueta corta de botón (los nombres completos no caben en móvil)."""
+    return name if len(name) <= limit else name[: limit - 1] + "…"
+
+
+def config_comfyui_lora_keyboard(cfg: ComfyUIConfig) -> InlineKeyboardMarkup:
+    """Pantalla del stack extra del flujo activo.
+
+    Cada fila ajusta/elimina UN LoRA; el botón del nombre muestra el archivo
+    completo (los botones no tienen tooltip). Los LoRAs horneados del flujo no
+    aparecen aquí: nunca se tocan.
+    """
+    entries = cfg.loras_for(cfg.model)
+    rows = []
+    for index, entry in enumerate(entries):
+        rows.append([
+            InlineKeyboardButton(text="−", callback_data=f"cfg:lora:d:{index}"),
+            InlineKeyboardButton(
+                text=_lora_label(entry.name, 22),
+                callback_data=f"cfg:lora:s:{index}",
+            ),
+            InlineKeyboardButton(text="+", callback_data=f"cfg:lora:u:{index}"),
+            InlineKeyboardButton(text="🗑", callback_data=f"cfg:lora:x:{index}"),
+        ])
+    rows.append([
+        InlineKeyboardButton(text="➕ Agregar", callback_data="cfg:lora:add"),
+        InlineKeyboardButton(text="🔎 Buscar", callback_data="cfg:lora:search"),
+    ])
+    if entries:
+        rows.append([
+            InlineKeyboardButton(text="↩ Vaciar stack", callback_data="cfg:lora:clear")
+        ])
+    rows.append([InlineKeyboardButton(text="← Flujos", callback_data="cfg:lora:back")])
+    rows.append([InlineKeyboardButton(text="Cerrar", callback_data="cfg:close")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def config_comfyui_lora_search_keyboard() -> InlineKeyboardMarkup:
+    """Prompt de búsqueda de LoRA: solo cancelar/vuelve a la pantalla ComfyUI."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="← Cancelar", callback_data="cfg:lora:back")],
+    ])
+
+
+def config_comfyui_lora_catalog_keyboard(
+    names,
+    *,
+    page: int = 0,
+    selected=(),
+) -> InlineKeyboardMarkup:
+    """Catálogo paginado de LoRAs del box (``cfg:lora:a:<short_id>``).
+
+    ``selected`` marca con ✅ los que ya están en el stack; siguen siendo
+    tocables para que el handler responda "ya está" en vez de ocultarlos.
+    """
+    items = tuple(names)
+    total_pages = max(1, (len(items) + COMFYUI_LORA_PAGE_SIZE - 1) // COMFYUI_LORA_PAGE_SIZE)
+    page = min(max(0, int(page)), total_pages - 1)
+    start = page * COMFYUI_LORA_PAGE_SIZE
+    chosen = set(selected)
+    rows = []
+    for name in items[start : start + COMFYUI_LORA_PAGE_SIZE]:
+        prefix = "✅ " if name in chosen else ""
+        rows.append([
+            InlineKeyboardButton(
+                text=f"{prefix}{_lora_label(name, 34)}",
+                callback_data=f"cfg:lora:a:{lora_short_id(name)}",
+            )
+        ])
+    if total_pages > 1:
+        nav = []
+        if page > 0:
+            nav.append(
+                InlineKeyboardButton(text="«", callback_data=f"cfg:lora:p:{page - 1}")
+            )
+        nav.append(
+            InlineKeyboardButton(
+                text=f"{page + 1}/{total_pages}", callback_data="cfg:lora:n"
+            )
+        )
+        if page < total_pages - 1:
+            nav.append(
+                InlineKeyboardButton(text="»", callback_data=f"cfg:lora:p:{page + 1}")
+            )
+        rows.append(nav)
+    rows.append([InlineKeyboardButton(text="🔎 Buscar", callback_data="cfg:lora:search")])
+    rows.append([InlineKeyboardButton(text="← LoRAs", callback_data="cfg:lora:open")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

@@ -17,6 +17,14 @@
 > Vast/18188, leer Colab/8188. El diseño del slice (transporte, cliente, render,
 > descarga) sigue vigente.
 >
+> **Update 2026-11-10 — LoRAs extra desde Telegram.** `/config` → ComfyUI →
+> 🎨 LoRAs apila LoRAs del usuario sobre el flujo activo sin tocar el template:
+> se insertan al final de la cadena de modelo (`LoraLoaderModelOnly`) y los
+> horneados quedan intactos. Catálogo desde `GET /models/loras` (cache 60 s),
+> stack persistido por usuario y flujo (`comfyui_lora_stacks`), UI paginada con
+> búsqueda y ajuste de intensidad. La inyección y la detección del ancla viven en
+> `workflows/loras.py`; el detalle de producto, en `docs/PRODUCT_STATUS.md`.
+>
 > **Update 2026-11-07 — set Krea en fp8 y Dirty\* retirados:** todos los flujos Krea
 > comparten `krea2_turbo_fp8_scaled` + `qwen3vl_4b_fp8_scaled` + `qwen_image_vae`
 > (incluidos los `*_hq` y `grok_edit`) para no cargar dos copias del mismo peso al
@@ -178,6 +186,15 @@ directa no se toca). Contrato:
 2. Registrar el flujo en `domain/user_config.COMFYUI_FLOWS`:
    `(("grok_style", "Grok Style"), ("<id>", "<Nombre>"))`. El id entra a
    `VALID_COMFYUI_MODELS` (validación/normalización) y la UI lo lista por `name`.
+3. Los **LoRAs extra del usuario** no se declaran en el `_meta`. El provider
+   descubre el ancla —el MODEL que consume el sampler principal— y apila
+   `LoraLoaderModelOnly` al final de esa cadena (`workflows/loras.py`). Si el
+   sampler consume más de un MODEL (`model` + `edit_model`, caso Donut), el ancla
+   es el ancestro común más cercano y el stack entra en ambas ramas. Si el grafo
+   tiene una rama secundaria (p. ej. el UNET SeedVR2 de upscale), esa rama **no**
+   recibe el stack. El stack se elige por el **flujo resuelto** (mapa por id): un
+   fallback de perfil nunca hereda el stack de otro flujo. Un grafo sin enlace de
+   modelo se rechaza antes de encolar con copy user-safe.
 
 El resolver descubre el template solo (`flows()`/`get_flow`); `_meta` (top-level y el de
 *cada nodo* del export) se descarta antes de encolar (ComfyUI nunca lo ve). Probar offline

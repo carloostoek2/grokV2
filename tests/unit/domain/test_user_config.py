@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from grokbot.domain.user_config import ComfyUIConfig, UserConfig, VideoConfig
+from grokbot.domain.user_config import (
+    MAX_COMFYUI_LORAS_PER_FLOW,
+    ComfyUIConfig,
+    LoraStackEntry,
+    UserConfig,
+    VideoConfig,
+    parse_lora_stack,
+)
 
 # Session record de sesión real de grok (HEAD 81832a5) con IDs/identidad
 # anonimizados (R3): usuario dummy 111111111 + source_path dummy de forma similar.
@@ -151,6 +158,7 @@ def test_round_trip_canonical_record():
     expected["nano_banana_variant"] = "banana2"
     expected["comfyui_seed_mode"] = "random"
     expected["comfyui_seed"] = 0
+    expected["comfyui_lora_stacks"] = {}
     assert out == expected
 
 
@@ -193,7 +201,14 @@ def test_video_config_and_comfyui_config_standalone():
     assert vc.to_record() == {"duration": 15, "aspect_ratio": "3:2", "resolution": "480p",
                               "model": "grok-imagine-video-1.5", "mode": "fun"}
     cc = ComfyUIConfig.from_record({"model": "grok_style", "lora": "none", "refine": "1"})
-    assert cc.to_record() == {"model": "grok_style", "lora": "none", "refine": "1", "seed_mode": "random", "seed": 0}
+    assert cc.to_record() == {
+        "model": "grok_style",
+        "lora": "none",
+        "refine": "1",
+        "seed_mode": "random",
+        "seed": 0,
+        "lora_stacks": {},
+    }
     assert cc.refine_enabled is True
 
 
@@ -277,3 +292,84 @@ def test_comfy_seed_roundtrip_and_legacy():
     assert ComfyUIConfig.from_record({}).seed_mode == "random"
     for value in (-1, 1 << 63, True, "123"):
         assert ComfyUIConfig.from_record({"seed": value}).seed == 0
+
+
+# --- ComfyUI LoRA stack --------------------------------------------------------
+
+def test_parse_lora_stack_normalizes_and_caps():
+    raw = [
+        {"name": " a.safetensors ", "strength": 0.75},
+        {"name": "a.safetensors", "strength": 1.0},  # duplicado
+        {"name": "", "strength": 1.0},  # nombre inválido
+        {"name": "b.safetensors", "strength": 99},  # fuera de rango
+        {"name": "c.safetensors", "strength": 1.25},
+    ]
+
+    entries = parse_lora_stack(raw)
+
+    assert entries == (
+        LoraStackEntry("a.safetensors", 0.75),
+        LoraStackEntry("c.safetensors", 1.25),
+    )
+
+
+def test_parse_lora_stack_accepts_legacy_names_and_garbage():
+    assert parse_lora_stack(["a.safetensors"]) == (
+        LoraStackEntry("a.safetensors", 0.8),
+    )
+    assert parse_lora_stack("not-a-list") == ()
+    assert parse_lora_stack([42, None, {"nope": 1}]) == ()
+
+
+def test_parse_lora_stack_caps_the_stack():
+    raw = [{"name": f"lora_{i}.safetensors", "strength": 1.0} for i in range(10)]
+
+    assert len(parse_lora_stack(raw)) == MAX_COMFYUI_LORAS_PER_FLOW
+
+
+def test_comfyui_config_round_trips_lora_stacks():
+    cc = ComfyUIConfig(
+        lora_stacks=(
+            ("grok_style", (LoraStackEntry("a.safetensors", 0.6),)),
+            ("agil_solo", (LoraStackEntry("b.safetensors", 1.2),)),
+        )
+    )
+
+    restored = ComfyUIConfig.from_record(cc.to_record())
+
+    assert restored.lora_stacks == cc.lora_stacks
+    assert restored.loras_for("grok_style") == (LoraStackEntry("a.safetensors", 0.6),)
+    assert restored.loras_for("unknown") == ()
+
+
+def test_comfyui_config_drops_corrupt_stacks_but_keeps_other_flows():
+    cc = ComfyUIConfig.from_record(
+        {
+            "lora_stacks": {
+                "grok_style": [
+                    {"name": "ok.safetensors", "strength": 0.9},
+                    {"name": "bad.safetensors", "strength": "high"},
+                ],
+                "retired_flow": [{"name": "keep.safetensors", "strength": 0.5}],
+                "": [{"name": "ignored.safetensors"}],
+            }
+        }
+    )
+
+    assert cc.loras_for("grok_style") == (LoraStackEntry("ok.safetensors", 0.9),)
+    # Un flujo retirado conserva su stack para cuando vuelva.
+    assert cc.loras_for("retired_flow") == (
+        LoraStackEntry("keep.safetensors", 0.5),
+    )
+    assert cc.loras_for("") == ()
+
+
+def test_with_lora_stack_removes_the_key_when_emptied():
+    cc = ComfyUIConfig(
+        lora_stacks=(("grok_style", (LoraStackEntry("a.safetensors"),)),)
+    )
+
+    emptied = cc.with_lora_stack("grok_style", ())
+
+    assert emptied.lora_stacks == ()
+    assert cc.loras_for("grok_style") == (LoraStackEntry("a.safetensors"),)

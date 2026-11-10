@@ -17,6 +17,7 @@ from aiogram import Dispatcher
 from grokbot.telegram.deps import BotDeps
 from grokbot.telegram.handlers import (
     config_cmd,
+    config_lora,
     faceswap,
     familias_cmd,
     generation,
@@ -36,6 +37,9 @@ def register_all(dp: Dispatcher, deps: BotDeps) -> None:
     # Orden: comandos de panel/estado primero (no dejan que el texto los capture).
     start.register_start(dp, deps)
     config_cmd.register_config(dp, deps)
+    # LoRAs extra del flujo: mismo FSM de /config, inmediatamente después para
+    # que la búsqueda por texto no la capture el handler genérico de generación.
+    config_lora.register_config_lora(dp, deps)
     listas_cmd.register_listas(dp, deps)
     familias_cmd.register_familias(dp, deps)
     variables_cmd.register_variables(dp, deps)
