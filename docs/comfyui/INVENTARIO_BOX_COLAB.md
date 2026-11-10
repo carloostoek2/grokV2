@@ -234,7 +234,22 @@ y aporta detalle real al 100 %. El envoltorio de prompt probado («Photorealisti
 texture, visible pores, no retouching») **empeoró** la microtextura (0,0673 → 0,0648) y se
 descartó.
 
-### 6.4 Arranque en frío tras recrear la VM
+### 6.4 Arranque en dos fases (CPU → GPU)
+
+Desde 2026-11-10 `colab-comfy` no crea la VM de GPU para verificar/descargar pesos. Antes de
+abrir la tarjeta levanta una sesión **solo CPU** (`<sesión>-prep`): monta Drive y ejecuta
+`preparar_modelos.py` (el mismo código de la celda 5 con `MODO_PREPARACION=1`, donde el perfil
+sale de `PERFIL_PESOS` sin importar `torch`). Si no falta ningún peso **no instala `aria2`**;
+si falta algo, lo instala y descarga ahí, sin gastar unidades de GPU. Al terminar cierra la
+VM CPU y solo entonces crea la sesión GPU y corre el cuaderno.
+
+Si la fase CPU deja `PREPARACION_INCOMPLETA` (Drive sin montar, token de Civitai ausente,
+descarga fallida), el lanzador **aborta antes de abrir la GPU**; `--sin-preparar` fuerza el
+comportamiento antiguo (verificar/descargar dentro de la GPU). Con la sesión GPU ya activa no
+se repite la fase CPU; `--preparar` la reinicia para re-verificar. Detalle en
+`~/comfy-colab/preparacion.log`.
+
+### 6.5 Arranque en frío tras recrear la VM
 
 Tras un reinicio del runtime, la primera pasada de un flujo que carga 20 GB desde Drive tarda
 **7–10 min** (ComfyUI 0.43 los lee de Drive con `fast_disk=False`); las siguientes son

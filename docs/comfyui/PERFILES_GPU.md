@@ -57,6 +57,25 @@ botón «Detalle cara» ya no aparece bajo ningún resultado.
   provider cae al `default_flow` del perfil. El menú de Telegram se filtra con
   `active_flow_ids()`.
 
+## Arranque en dos fases (CPU → GPU)
+
+Desde 2026-11-10, `arrancar_comfy.sh` separa la preparación de la ejecución:
+
+1. **Fase CPU** (`<sesión>-prep`): runtime sin GPU. Monta Drive y ejecuta
+   `preparar_modelos.py` — el mismo código de la celda 5 con
+   `MODO_PREPARACION=1`, así que el perfil sale de `PERFIL_PESOS` y no importa
+   `torch`. Si no falta ningún peso **no instala `aria2`**; si falta alguno, lo
+   instala y descarga solo esos. La descarga ocurre con CPU, sin unidades GPU.
+2. **Fase GPU**: solo si la fase CPU imprimió `PREPARACION_COMPLETA` se crea la
+   sesión de la tarjeta y se ejecuta el cuaderno. Si quedó
+   `PREPARACION_INCOMPLETA` (Drive, token de Civitai, descarga fallida) el
+   lanzador aborta antes de gastar GPU; `--sin-preparar` fuerza el arranque
+   antiguo.
+
+La celda 5 sigue verificando los pesos en la GPU como red de seguridad (si
+todo está presente son solo `os.path.getsize`, segundos). Con la sesión GPU ya
+activa no se repite la fase CPU; `--preparar` la reinicia para re-verificar.
+
 ## Parche de ComfyUI-GGUF
 
 `ComfyUI-GGUF` tiene una lista hardcodeada `IMG_ARCH_LIST` que no incluía
