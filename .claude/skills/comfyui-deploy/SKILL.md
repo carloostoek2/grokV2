@@ -1,8 +1,8 @@
 ---
 name: comfyui-deploy
-description: "Use when el usuario pida desplegar, arrancar, apagar, reparar o diagnosticar ComfyUI para grokbot en Google Colab o en una instancia vast.ai, o cuando pregunte cómo se preparan los pesos, qué scripts se usan, cómo se conecta el bot con la GPU, o por qué el bot no genera. Cubre rutas exactas, fases CPU→GPU, perfiles a100/l4/t4, túneles SSH y verificación."
+description: "Use when el usuario pida desplegar, arrancar, apagar, reparar o diagnosticar ComfyUI para grokbot en Google Colab o en una instancia vast.ai, o cuando pregunte cómo se preparan los pesos, qué scripts se usan, cómo se conecta el bot con la GPU, o por qué el bot no genera. Cubre el reconocimiento previo de la máquina (GPU, disco, velocidad), la elección de perfil, el arranque mínimo con agil_solo y el resto en segundo plano, fases CPU→GPU, perfiles a100/l4/t4, túneles SSH y verificación."
 metadata:
-  version: "1.0.0"
+  version: "1.1.0"
   source: repo-docs-and-deploy-scripts
 ---
 
@@ -16,6 +16,11 @@ cómo verificar** que el bot puede generar. No sustituye a las otras dos skills 
 | `comfy-add-flow` | Registrar o reemplazar un **flujo** (`templates/<id>.json` + `COMFYUI_FLOWS`) |
 | `comfyui-hyperrealism-krea2` | Diseñar/optimizar un **workflow** (modelo, sampler, pasos, LoRA) |
 | **`comfyui-deploy`** (esta) | **Llevar ComfyUI a una GPU y conectarlo con el bot** |
+
+> **Alcance de esta versión (1.1.0).** El despliegue **Vast** es por fases obligatorias:
+> **medir la máquina → elegir perfil → dejar `agil_solo` funcionando de punta a punta →
+> recién entonces descargar el resto en segundo plano.** **Colab no cambia**: su ruta sigue
+> igual en `references/colab.md`.
 
 ## 1. Los tres lugares que hay que distinguir
 
@@ -111,6 +116,7 @@ vast_faceswap/               # despliegue aparte de FaceFusion en Vast (opcional
 | Uso diario del bot | **Colab A100 80 GB** (runtime actual desde 2026-10-24) |
 | Probar en GPU chica | Colab T4/L4 (perfil de pesos automático) |
 | Colab no disponible / se quiere un box persistente | **Vast** con imagen de ComfyUI |
+| Instancia Vast nueva o recreada | **§5 en orden 5.1 → 5.2 → 5.3 → 5.4** (nunca `--download` de entrada) |
 | Reconstruir Vast desde cero | `scripts/provision_vast_box.sh` (fases) |
 | Preparar Vast rápido tras recrear | `~/comfy-colab/provision_vast.sh` |
 
@@ -156,28 +162,178 @@ Qué hace `arrancar_comfy.sh`, en orden:
 
 Detalle completo: `references/colab.md`.
 
-## 5. Vast en 60 segundos
+## 5. Vast: despliegue por fases (obligatorio)
 
-### Camino rápido (instancia nueva con imagen de ComfyUI)
+El orden no se negocia: **primero se mide, después se descarga; primero un flujo
+funcionando, después el resto.** `--download` no se usa hasta cerrar la fase 1.
+
+### 5.1 Fase 0 — Reconocer la máquina (antes de descargar nada)
 
 ```bash
-cd /home/ubuntu/comfy-colab
+SSH="ssh -o BatchMode=yes -p <SSH_PORT> root@<HOST>"
 
-# 1) Inventario + copia de descargador/tokens/shim + ComfyUI-Manager
-./provision_vast.sh <HOST> <SSH_PORT>
+# GPU real, VRAM y driver
+$SSH 'nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader'
 
-# 2) Además descarga modelos y nodos en segundo plano
-./provision_vast.sh <HOST> <SSH_PORT> --download
+# Disco donde viven los pesos: libres en GB y tipo de montaje
+$SSH 'df -B1 /workspace | tail -1 | awk "{printf \"libres: %.1f GB\n\", \$4/1e9}"; \
+      findmnt -T /workspace -o TARGET,SOURCE,FSTYPE'
 
-# 3) Seguir la descarga
-ssh -p <SSH_PORT> root@<HOST> 'tail -f /root/descarga.log'
+# Velocidad real contra Hugging Face (fuente de todos los pesos del mínimo)
+$SSH 'curl -L -r 0-104857600 --max-time 15 -o /dev/null -w "HF: %{speed_download} B/s\n" \
+  https://huggingface.co/Comfy-Org/Krea-2/resolve/main/diffusion_models/krea2_turbo_fp8_scaled.safetensors'
 ```
 
-`provision_vast.sh` asume que la imagen ya trae `/workspace/ComfyUI`, `/venv/main`,
-supervisor `comfyui` en el puerto **18188** y los packs base. Copia a `/root/`:
-`descargar_local.py`, `secrets.env`, `DESCARGAS_LOCALES.md` y `sitecustomize.py`;
-instala `comfyui-manager`; habilita `--enable-manager`; luego ejecuta
-`python3 descargar_local.py /workspace/ComfyUI --python /venv/main/bin/python`.
+Anotar **GPU/VRAM, GB libres y MB/s**. Sin esos tres números no se elige perfil ni se
+lanza descarga alguna. Exportar `SSH=...` en la sesión: los bloques siguientes lo reutilizan.
+
+### 5.2 Fase 0.5 — Elegir el perfil
+
+La GPU/VRAM fija el **techo**; el disco puede forzar un perfil menor; la velocidad decide
+**qué se baja ahora y qué queda para segundo plano**, no el perfil.
+
+| GPU real | Perfil | Mínimo `agil_solo` | Perfil completo |
+|---|---|---|---|
+| A100/H100 (≥ 40 GB) | `a100` | ≈ 33 GB | ≈ 120 GB |
+| L4/L40 (≥ 20 GB) | `l4` | ≈ 17 GB | ≈ 58 GB |
+| T4 o < 20 GB | `t4` | ≈ 12 GB | ≈ 14 GB |
+
+Tamaños según `weights[].min_size` de `profiles/*.json`; reservar 15 % de margen.
+
+Reglas:
+
+1. **Disco**: libres ≥ completo + margen → plan completo, pero igual se empieza por la
+   fase 1. Libres ≥ mínimo + margen pero < completo → solo el mínimo, el resto no se
+   lanza y se reporta cuánto falta. Libres < mínimo → no descargar; bajar a `t4` si la
+   tarjeta lo permite o pedir más disco.
+2. **Velocidad** contra HF: ≥ 50 MB/s → el resto acaba en < 1 h; 10–50 MB/s → mínimo
+   primero y resto en segundo plano; < 10 MB/s → mínimo primero, resto en segundo plano
+   y avisar el ETA.
+3. **GPU desconocida o VRAM < 20 GB** → `t4`. Nunca se elige un perfil mayor que la
+   tarjeta.
+
+El perfil elegido manda en todo: pesos, `COMFYUI_PERFIL` y flujos visibles en el menú.
+
+### 5.3 Fase 1 — Mínimo viable (bloqueante)
+
+Meta: **`agil_solo` generando de verdad desde Telegram**. Nada de descargas completas
+hasta que esto pase.
+
+1. **ComfyUI base.** La imagen debe traer `/workspace/ComfyUI/main.py` y `/venv/main`.
+   Si falta, recrear la instancia con la imagen de ComfyUI: esta skill no instala ComfyUI
+   desde cero. `agil_solo` solo usa nodos core (`UNETLoader`/`CLIPLoader`/`VAELoader`/
+   `KSampler`); la excepción es `t4`, que usa GGUF y necesita `ComfyUI-GGUF` con el
+   parche `krea2`.
+2. **Copiar descargador, tokens y shim** (sin descargar todavía):
+
+   ```bash
+   cd /home/ubuntu/comfy-colab
+   ./provision_vast.sh <HOST> <SSH_PORT>     # sin --download: inventario + copia + Manager
+   ```
+
+3. **Pesos mínimos** — solo los 3 archivos que referencia `agil_solo` tras aplicar el
+   perfil. Todos son HF sin token:
+
+   ```bash
+   cd /home/ubuntu/repos/grokV2
+   PERFIL=<a100|l4|t4>
+   .venv/bin/python - "$PERFIL" <<'PY' > /tmp/minimo_agil.sh
+   import json, sys
+   from pathlib import Path
+   from grokbot.providers.comfyui.workflows.profiles import (
+       apply_profile, get_profile, TEMPLATES_DIR)
+   p = get_profile(sys.argv[1])
+   g = apply_profile(json.loads((TEMPLATES_DIR / "agil_solo.json").read_text()), p)
+   names = {n["inputs"][k] for n in g.values() if isinstance(n, dict)
+            for k in ("unet_name", "clip_name", "vae_name") if k in n.get("inputs", {})}
+   print("set -euo pipefail")
+   for w in p.weights:
+       if Path(w["path"]).name not in names:
+           continue
+       dest = "/workspace/ComfyUI/models/" + w["path"]
+       print(f'mkdir -p "$(dirname {dest})"')
+       print(f'if [ ! -s {dest} ]; then')
+       print(f'  curl -L --fail --show-error -o "{dest}.part" "{w["url"]}"')
+       print(f'  mv "{dest}.part" "{dest}"')
+       print("fi")
+   PY
+   ssh -p <SSH_PORT> root@<HOST> 'bash -s' < /tmp/minimo_agil.sh
+   ```
+
+   Quedan: el UNET del perfil (`krea2_turbo_bf16` en `a100`,
+   `krea2_turbo_fp8_scaled` en `l4`, `Krea-2-Turbo-Q4_K_M.gguf` en `t4`), el TE
+   `qwen3vl_4b_{bf16|fp8_scaled}.safetensors` y `vae/qwen_image_vae.safetensors`.
+4. **Perfiles al box (siempre) y nodo solo si `t4`**. La fase 2 necesita `profiles.py` +
+   `profiles/` en el box; en `t4` además se aplica el parche GGUF. `descargar_local.py`
+   lee esos perfiles por `--perfiles`:
+
+   ```bash
+   cd /home/ubuntu/repos/grokV2
+   ssh -p <SSH_PORT> root@<HOST> 'mkdir -p /root/comfy_profiles'
+   scp -P <SSH_PORT> src/grokbot/providers/comfyui/workflows/profiles.py \
+     root@<HOST>:/root/comfy_profiles/
+   scp -P <SSH_PORT> -r src/grokbot/providers/comfyui/workflows/profiles \
+     root@<HOST>:/root/comfy_profiles/
+   $SSH 'python3 /root/descargar_local.py /workspace/ComfyUI --solo-nodos --perfil t4 \
+     --perfiles /root/comfy_profiles/profiles.py --python /venv/main/bin/python'
+   ```
+
+5. **Flujo**: copiar **solo** `agil_solo.json`, nombrado por `_meta.id`:
+
+   ```bash
+   cd /home/ubuntu/repos/grokV2
+   scp -P <SSH_PORT> src/grokbot/providers/comfyui/workflows/templates/agil_solo.json \
+     root@<HOST>:/workspace/ComfyUI/user/default/api_workflows/agil_solo.json
+   ```
+
+6. **Arrancar el box y comprobar salud**:
+
+   ```bash
+   $SSH 'supervisorctl restart comfyui'
+   $SSH 'curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:18188/system_stats'  # 200
+   $SSH 'tail -200 /var/log/portal/comfyui.log | grep -iE "IMPORT FAILED|Traceback"'   # vacío
+   $SSH 'curl -s http://127.0.0.1:18188/object_info/CLIPLoader | grep -o "\"krea2\""' # debe salir "krea2"
+   ```
+
+7. **Túnel y bot**: `.env` con las coordenadas (§6) y `COMFYUI_PERFIL=<PERFIL>` fijado
+   durante la fase 1; luego `grokbot restart` y comprobar
+   `curl -s http://127.0.0.1:18188/system_stats`.
+8. **Prueba real**: un prompt de texto con `agil_solo` desde Telegram. La fase 1 se
+   cierra solo si la imagen llega y el journal dice
+   `Loaded ComfyUI workflow agil_solo from remote`.
+
+Si algo falla, se arregla **antes** de la fase 2; la descarga completa no se lanza "por
+si acaso". Mientras corre la fase 2, los demás flujos del menú fallarán: el único
+garantizado es `agil_solo`.
+
+### 5.4 Fase 2 — El resto, en segundo plano
+
+Solo con la fase 1 cerrada. Descarga el perfil completo (pesos restantes + nodos):
+
+```bash
+cd /home/ubuntu/repos/grokV2
+$SSH 'cd /root && setsid nohup python3 -u descargar_local.py /workspace/ComfyUI \
+  --perfil <PERFIL> --perfiles /root/comfy_profiles/profiles.py \
+  --python /venv/main/bin/python > /root/descarga.log 2>&1 < /dev/null & \
+  echo "PID=$! log=/root/descarga.log"'
+
+$SSH 'tail -f /root/descarga.log'      # seguimiento
+```
+
+Al terminar:
+
+```bash
+$SSH 'supervisorctl restart comfyui'   # cargar nodos nuevos
+scripts/provision_vast_box.sh --only verify
+```
+
+`descargar_local.py` salta por tamaño lo ya presente: los 3 pesos de la fase 1 no se
+re-descargan. El reinicio de ComfyUI para cargar nodos va al final, no a mitad de la
+descarga.
+
+> `provision_vast.sh --download` lanza el mismo `descargar_local.py` pero **sin**
+> `--perfiles`: en un box sin `/home/ubuntu/repos/grokV2` falla. En ese caso usar el
+> comando directo de arriba.
 
 ### Camino completo (reconstruir el box desde el repo)
 
@@ -193,6 +349,10 @@ CIVITAI_TOKEN=... scripts/provision_vast_box.sh   # necesario para Civitai
 
 Fases: `preflight → env → nodes → models → links → workflows → restart → verify`.
 Lee `COMFYUI_HOST`/`COMFYUI_PORT` de `.env` (o `--host`/`--port`).
+
+> El manifiesto de pesos de `provision_vast_box.sh` es histórico y **no** conoce los
+> perfiles `a100/l4/t4`. Úsalo para infraestructura (`--skip models --only ...`) y deja
+> los pesos al flujo por perfil de §5.3–5.4.
 
 Detalle completo, rutas y gotchas: `references/vast.md`.
 
@@ -252,6 +412,11 @@ grokbot logs
 Una generación real vale más que un `200`: manda un prompt de texto y, si el flujo es de
 edición, una foto con caption.
 
+**Puerta de la fase 1 (Vast):** no se considera desplegado hasta que una generación real
+con `agil_solo` llega a Telegram y el journal del bot registra
+`Loaded ComfyUI workflow agil_solo from remote`. Un `200` en `/system_stats` solo prueba
+que ComfyUI está vivo, no que el bot puede generar.
+
 ## 8. Diagnóstico rápido
 
 | Síntoma | Causa probable | Qué hacer |
@@ -282,11 +447,16 @@ edición, una foto con caption.
 6. **Reiniciar el bot** (`grokbot restart`) tras cambiar código, `.env`, perfiles o flujos.
 7. Un cambio de flujo va por `comfy-add-flow`; uno de calidad, por
    `comfyui-hyperrealism-krea2`. Esta skill no redefine grafos.
+8. **Vast por fases**: prohibido lanzar `--download` o una descarga completa antes de
+   medir GPU, disco y velocidad (§5.1), elegir perfil (§5.2) y cerrar `agil_solo` de punta
+   a punta (§5.3). El resto va en segundo plano (§5.4).
+9. **Colab no cambia**: esta política por fases es solo para Vast. Colab sigue con
+   `references/colab.md` y su arranque CPU→GPU.
 
 ## 10. Referencias
 
 - `references/colab.md` — despliegue Colab completo (fases, cuaderno, perfiles, rutas).
-- `references/vast.md` — provisión rápida y reconstrucción completa del box Vast.
+- `references/vast.md` — despliegue Vast por fases, provisión rápida y reconstrucción completa.
 - `references/bot-connection.md` — túnel, variables, `embed` vs `remote`, perfiles y errores.
 - Docs del repo: `docs/comfyui/INVENTARIO_BOX_COLAB.md`,
   `docs/comfyui/INVENTARIO_BOX_VAST.md`, `docs/comfyui/AVANCE_VAST_HTTP.md`,
