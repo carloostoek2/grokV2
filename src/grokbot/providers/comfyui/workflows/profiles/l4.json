@@ -8,6 +8,7 @@
     "agil_nsfw",
     "agil_moody",
     "agil_edit_qwen",
+    "agil_edit_nsfw",
     "grok_edit",
     "grok_style_hq",
     "agil_solo_hq",
@@ -98,6 +99,12 @@
       "url": "https://huggingface.co/yufusoft/Krea2_NSFW_V4/resolve/main/KNP_000003000.safetensors",
       "auth": "none",
       "min_size": 400000000
+    },
+    {
+      "path": "checkpoints/Qwen-Rapid-AIO-NSFW-v23.safetensors",
+      "url": "https://huggingface.co/Phr00t/Qwen-Image-Edit-Rapid-AIO/resolve/main/v23/Qwen-Rapid-AIO-NSFW-v23.safetensors",
+      "auth": "none",
+      "min_size": 25000000000
     }
   ],
   "symlinks": [
