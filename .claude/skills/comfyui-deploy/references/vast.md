@@ -4,11 +4,11 @@
 > (ver `references/colab.md`). Las coordenadas de una instancia Vast —IP, puerto SSH, GPU,
 > driver, disco— **rotan al recrearla** y viven en `.env`, nunca en documentación.
 >
-> Esta guía conserva las dos vías: provisión rápida sobre una imagen de ComfyUI y
-> reconstrucción completa desde el repo.
+> Esta guía conserva las tres vías: provisión rápida sobre una imagen de ComfyUI,
+> reconstrucción completa desde el repo e **instalación desde cero** en una imagen limpia.
 >
-> **Desde 2026-11-11:** el despliegue Vast es por fases (medir → elegir perfil → `agil_solo`
-> → resto en segundo plano). `Colab no cambia`.
+> **Desde 2026-11-11:** el despliegue Vast es por fases (medir → elegir perfil → asegurar
+> la base → `agil_solo` → resto en segundo plano). `Colab no cambia`.
 
 ## 0. Orden obligatorio del despliegue (fases)
 
@@ -16,8 +16,9 @@ Una instancia nueva o recreada **no** se provee con `--download` de entrada. El 
 
 | Fase | Objetivo | ¿Bloquea a la siguiente? |
 |---|---|---|
-| **0. Reconocer** | GPU/VRAM, disco libre, velocidad real de descarga | Sí |
-| **0.5. Elegir perfil** | `a100` / `l4` / `t4` según esos tres números | Sí |
+| **0. Reconocer** | GPU/VRAM, disco libre, velocidad real de descarga y si la base está limpia | Sí |
+| **0.5. Elegir perfil** | `a100` / `l4` / `t4` según esos números | Sí |
+| **0.7. Asegurar base** | ComfyUI instalado (o instalarlo desde cero si la imagen está limpia) | Sí |
 | **1. Mínimo viable** | ComfyUI arriba + túnel + bot conectado + `agil_solo` generando | Sí |
 | **2. Resto** | Pesos y nodos del perfil completo, en segundo plano | No |
 
@@ -29,9 +30,14 @@ SSH="ssh -o BatchMode=yes -p <SSH_PORT> root@<HOST>"
 # GPU, VRAM y driver
 $SSH 'nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader'
 
-# Almacenamiento: libres y tipo de montaje
-$SSH 'df -B1 /workspace | tail -1 | awk "{printf \"libres: %.1f GB\n\", \$4/1e9}"; \
-      findmnt -T /workspace -o TARGET,SOURCE,FSTYPE'
+# Almacenamiento: libres y tipo de montaje (/workspace puede no existir en una imagen limpia)
+$SSH 'P=/workspace; [ -d "$P" ] || P=/; \
+      df -B1 "$P" | tail -1 | awk "{printf \"libres: %.1f GB\n\", \$4/1e9}"; \
+      findmnt -T "$P" -o TARGET,SOURCE,FSTYPE'
+
+# ¿La imagen ya trae ComfyUI?
+$SSH 'test -f /workspace/ComfyUI/main.py && test -x /venv/main/bin/python \
+  && echo "imagen con ComfyUI" || echo "instalación limpia"'
 
 # Velocidad real contra Hugging Face (de ahí salen todos los pesos del mínimo)
 $SSH 'curl -L -r 0-104857600 --max-time 15 -o /dev/null -w "HF: %{speed_download} B/s\n" \
@@ -42,9 +48,14 @@ Interpretación:
 
 - `speed_download` viene en **bytes/s**. Dividir entre 1e6 para MB/s.
 - La prueba tarda ~15 s y corta con `-r`; no descarga el archivo completo.
+- Si `curl` no existe, instalarlo (`apt-get install -y curl`) y repetir la medición; no se
+  elige perfil sin ese dato.
 - Si `/workspace` es un montaje de red (`FSTYPE` tipo `nfs`, `fuse`, `9p`), la descarga y
   la carga de pesos serán más lentas aunque la red vaya bien: anotarlo.
-- Guardar los tres números (GPU/VRAM, GB libres, MB/s) en el reporte del despliegue.
+- `instalación limpia` significa que hay que instalar ComfyUI en la fase 0.7; no se recrea
+  la instancia por eso.
+- Guardar los números (GPU/VRAM, GB libres, MB/s, base limpia o no) en el reporte del
+  despliegue.
 
 ### 0.2 Fase 0.5 — Elegir el perfil
 
@@ -56,6 +67,11 @@ Interpretación:
 
 Cifras a partir de `weights[].min_size` en `profiles/*.json`; reservar **15 %** de margen
 para temporales, outputs y `.download` parciales.
+
+**Imagen limpia:** sumar al total **12–18 GB** de stack (venv, torch CUDA, código de
+ComfyUI y dependencias de nodos) antes de aplicar las reglas. Queda `a100` completo
+≈ 138 GB, `l4` mínimo ≈ 35 GB y `t4` mínimo ≈ 30 GB. Sin ese margen, la fase 2 puede
+llenar el disco.
 
 Reglas:
 
@@ -70,7 +86,27 @@ Reglas:
    - < 10 MB/s → fase 1 y resto en segundo plano; reportar ETA
      (`GB × 1000 / MB/s / 3600` horas).
 
-### 0.3 Fase 1 — Mínimo viable
+### 0.3 Fase 0.7 — Asegurar la base de ComfyUI
+
+```bash
+$SSH 'test -f /workspace/ComfyUI/main.py && test -x /venv/main/bin/python \
+  && echo "imagen con ComfyUI" || echo "instalación limpia"'
+```
+
+- **Imagen con ComfyUI** → nada que hacer; pasar a §0.4.
+- **Instalación limpia** → instalar sistema (apt), venv `/venv/main`, torch según driver,
+  ComfyUI, dependencias, custom nodes y supervisor en `18188`. Receta completa:
+  [`vast-clean-install.md`](vast-clean-install.md).
+
+La instalación limpia deja las mismas rutas que asume el resto de esta guía. Puerta antes
+de la fase 1:
+
+```bash
+$SSH 'curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:18188/system_stats'  # 200
+$SSH 'curl -s http://127.0.0.1:18188/object_info/CLIPLoader | grep -o "\"krea2\""' # "krea2"
+```
+
+### 0.4 Fase 1 — Mínimo viable
 
 Objetivo único: **`agil_solo` generando desde Telegram**. Pesos necesarios (todos HF sin
 token, tras aplicar sustituciones del perfil):
@@ -83,11 +119,13 @@ token, tras aplicar sustituciones del perfil):
 
 Pasos:
 
-1. **ComfyUI base**: la imagen debe traer `/workspace/ComfyUI/main.py` y `/venv/main`.
-   Si falta, recrear la instancia con la imagen de ComfyUI; la skill no lo instala desde
-   cero.
+1. **ComfyUI base**: la fase 0.7 ya la aseguró. Si `/workspace/ComfyUI/main.py` o
+   `/venv/main` faltan, instalar con [`vast-clean-install.md`](vast-clean-install.md); no
+   recrear la instancia solo por eso.
 2. **Preparar `/root` sin descargar**: `./provision_vast.sh <HOST> <SSH_PORT>` (sin
-   `--download`).
+   `--download`). **En instalación limpia se omite**: la fase 0.7 ya copió el descargador,
+   los secretos, el shim y los perfiles, e instaló los nodos. Ejecutarlo después duplica
+   el Manager (pip + nodo git).
 3. **Bajar solo esos 3 pesos**. El siguiente bloque los deriva del repo (plantilla
    `agil_solo` + perfil) para no duplicar URLs:
 
@@ -127,7 +165,7 @@ Pasos:
      root@<HOST>:/root/comfy_profiles/
    scp -P <SSH_PORT> -r src/grokbot/providers/comfyui/workflows/profiles \
      root@<HOST>:/root/comfy_profiles/
-   $SSH 'python3 /root/descargar_local.py /workspace/ComfyUI --solo-nodos --perfil t4 \
+   $SSH 'python3 /root/descargar_local.py /workspace/ComfyUI --solo-nodos --perfil <PERFIL> \
      --perfiles /root/comfy_profiles/profiles.py --python /venv/main/bin/python'
    ```
 
@@ -156,7 +194,7 @@ Pasos:
 8. **Prueba real**: prompt de texto con `agil_solo`. Cierre de fase: llega la imagen y el
    journal dice `Loaded ComfyUI workflow agil_solo from remote`.
 
-### 0.4 Fase 2 — Resto en segundo plano
+### 0.5 Fase 2 — Resto en segundo plano
 
 Solo tras cerrar la fase 1:
 
@@ -168,17 +206,18 @@ $SSH 'cd /root && setsid nohup python3 -u descargar_local.py /workspace/ComfyUI 
 $SSH 'tail -f /root/descarga.log'
 ```
 
-Al terminar: `$SSH 'supervisorctl restart comfyui'` y
-`scripts/provision_vast_box.sh --only verify`. Los 3 pesos de la fase 1 se saltan por
-tamaño. Mientras descarga, `agil_solo` sigue operativo; el resto de flujos del menú
-fallará hasta que termine.
+Al terminar: `$SSH 'supervisorctl restart comfyui'` (o `$SSH 'comfyui-restart'` si vienes
+de la instalación limpia) y `scripts/provision_vast_box.sh --only verify`. Los 3 pesos de
+la fase 1 se saltan por tamaño. Mientras descarga, `agil_solo` sigue operativo; el resto de
+flujos del menú fallará hasta que termine.
 
-## 1. Dos caminos
+## 1. Tres caminos
 
 | Camino | Script | Cuándo usarlo |
 |---|---|---|
 | **Provisión rápida** | `~/comfy-colab/provision_vast.sh` | La instancia ya trae imagen de ComfyUI (`/workspace/ComfyUI`, `/venv/main`, supervisor en 18188); solo faltan modelos, nodos y Manager |
-| **Reconstrucción completa** | `/home/ubuntu/repos/grokV2/scripts/provision_vast_box.sh` | Hay que dejar igual el stack de torch, los custom nodes, los pesos y los workflows |
+| **Reconstrucción completa** | `/home/ubuntu/repos/grokV2/scripts/provision_vast_box.sh` | Hay que dejar igual el stack de torch, los custom nodes, los pesos y los workflows. Exige ComfyUI ya instalado |
+| **Instalación limpia** | [`vast-clean-install.md`](vast-clean-install.md) | La imagen **no** trae ComfyUI: instala sistema, torch, ComfyUI, nodos y supervisor desde cero |
 
 No confundir los descargadores:
 
@@ -193,7 +232,9 @@ No confundir los descargadores:
 
 En la instancia Vast:
 
-- Imagen con ComfyUI: `/workspace/ComfyUI/main.py`, `/venv/main/bin/python`.
+- Imagen con ComfyUI: `/workspace/ComfyUI/main.py`, `/venv/main/bin/python`. Si faltan,
+  instalar primero con [`vast-clean-install.md`](vast-clean-install.md); este script aborta
+  sin ellos.
 - Servicio supervisor `comfyui` escuchando en `127.0.0.1:18188`.
 - Acceso SSH como `root` con clave (sin contraseña interactiva).
 
@@ -206,8 +247,8 @@ En la máquina local (`/home/ubuntu/comfy-colab`):
 
 ### 2.2 Uso
 
-`provision_vast.sh` **no** es el primer comando del despliegue: antes van las fases 0 y 0.5
-de §0. Con el perfil ya elegido:
+`provision_vast.sh` **no** es el primer comando del despliegue: antes van las fases 0, 0.5
+y 0.7 de §0. Con el perfil ya elegido:
 
 ```bash
 cd /home/ubuntu/comfy-colab
@@ -215,7 +256,7 @@ cd /home/ubuntu/comfy-colab
 # Fase 1: inventario + copia de archivos + ComfyUI-Manager + lista (no descarga)
 ./provision_vast.sh <HOST> <SSH_PORT>
 
-# Ahora los 3 pesos mínimos y el flujo agil_solo (§0.3), y se cierra la fase 1
+# Ahora los 3 pesos mínimos y el flujo agil_solo (§0.4), y se cierra la fase 1
 # con túnel + bot + una generación real.
 
 # Fase 2 (solo tras cerrar la fase 1): descarga el perfil completo en segundo plano
@@ -227,12 +268,13 @@ ssh -p <SSH_PORT> root@<HOST> 'tail -f /root/descarga.log'
 
 > `--download` ejecuta `descargar_local.py` **sin** `--perfiles`. En un box sin
 > `/home/ubuntu/repos/grokV2` falla al cargar los perfiles: para la fase 2 usar el comando
-> directo de §0.4, que copia `profiles.py` + `profiles/` y pasa `--perfiles`.
+> directo de §0.5, que copia `profiles.py` + `profiles/` y pasa `--perfiles`.
 
 ### 2.3 Qué hace, paso a paso
 
 1. **Inventario**: `nvidia-smi` (nombre y VRAM), `df -h /workspace`, y verifica que exista
-   `/workspace/ComfyUI/main.py`. Si no existe, aborta.
+   `/workspace/ComfyUI/main.py`. Si no existe, aborta: usar la fase 0.7
+   ([`vast-clean-install.md`](vast-clean-install.md)) y volver a correrlo.
 2. **Copia a `/root/`**: `descargar_local.py`, `secrets.env`, `DESCARGAS_LOCALES.md`,
    `sitecustomize.py`.
 3. **Shim**: `chmod 600 /root/secrets.env`; copia `sitecustomize.py` al `purelib` del venv
@@ -248,7 +290,7 @@ ssh -p <SSH_PORT> root@<HOST> 'tail -f /root/descarga.log'
      en la fase 1.
    - Con `--download`: `setsid nohup python3 -u descargar_local.py /workspace/ComfyUI
      --python /venv/main/bin/python > /root/descarga.log 2>&1 &`. Solo en la fase 2, y
-     requiere `--perfiles` si el box no tiene el repo (ver §0.4).
+     requiere `--perfiles` si el box no tiene el repo (ver §0.5).
 
 ### 2.4 `descargar_local.py`
 
@@ -320,7 +362,7 @@ Lee `COMFYUI_HOST` y `COMFYUI_PORT` de `.env` si no se pasan por parámetro.
 | Fase | Qué hace |
 |---|---|
 | `preflight` | SO, GPU, driver, disco, presencia de ComfyUI y del venv. Avisa si el driver es < 580.65 |
-| `env` | Instala/verifica torch `2.11.0+cu130` (torchvision/torchaudio `0.26.0+cu130`) y comprueba `ldd` sin faltantes |
+| `env` | Instala/verifica torch `2.11.0+cu130` (torchvision/torchaudio `0.26.0+cu130`) y comprueba `ldd` sin faltantes. `cu130` exige driver ≥ 580.65; si la instancia es anterior, usar `cu128` (ver `vast-clean-install.md` §5) o no ejecutar esta fase |
 | `nodes` | Clona `ComfyUI-Krea2-NAG` (`0afb38d`) y `comfyui-krea2edit` (`86f886d`) |
 | `models` | Descarga los pesos con origen verificado del manifiesto (tokens en un archivo 0600, nunca en `argv`) |
 | `links` | Symlink `vae/qwen-image/qwen_image_vae.safetensors` y hardlink `Wan2_1_VAE_fp32` |
@@ -332,7 +374,9 @@ Lee `COMFYUI_HOST` y `COMFYUI_PORT` de `.env` si no se pasan por parámetro.
 
 1. **La imagen base del box.** El script asume una instancia Vast con la imagen de ComfyUI:
    `/workspace/ComfyUI`, `/venv/main`, supervisor `comfyui` en 18188, portal, `comfy-cli` y
-   los packs base (Manager, GGUF, rgthree, ...). Nada de eso lo crea el script.
+   los packs base (Manager, GGUF, rgthree, ...). Nada de eso lo crea el script. Si la imagen
+   está limpia, instalar primero con [`vast-clean-install.md`](vast-clean-install.md); el
+   `preflight` aborta mientras falte ComfyUI.
 2. **Pesos sin origen verificado.** El manifiesto solo descarga los que tienen URL
    comprobada; el resto se reporta como `FALTA`/`ok`. Lista histórica:
    `qwen-image-edit-2511-Q4_K_M.gguf`, `qwen_image_2.1_int8_convrot`,
@@ -351,15 +395,18 @@ Lee `COMFYUI_HOST` y `COMFYUI_PORT` de `.env` si no se pasan por parámetro.
 
 ## 4. Checklist para preparar una instancia Vast
 
-1. **Crear la instancia** con la imagen de ComfyUI y VRAM acorde al perfil:
+1. **Crear la instancia** con VRAM acorde al perfil:
    - `a100` → 80 GB (A100/H100).
    - `l4` → 24 GB.
    - `t4` → 16 GB.
+
+   Si se puede, usar la imagen de ComfyUI (ahorra la fase 0.7). Si es una imagen limpia,
+   no recrear por eso: instalar con [`vast-clean-install.md`](vast-clean-install.md).
 2. **Anotar** host y puerto SSH (rotan; no hardcodearlos en docs).
-3. **Fase 0 — medir** GPU/VRAM, GB libres y MB/s contra HF (§0.1). No seguir sin los tres
-   números.
+3. **Fase 0 — medir** GPU/VRAM, GB libres, MB/s contra HF y si la base está limpia
+   (§0.1). No seguir sin esos números.
 4. **Fase 0.5 — elegir perfil** con las reglas de §0.2 (GPU fija el techo; disco y
-   velocidad ajustan el plan).
+   velocidad ajustan el plan; la imagen limpia suma 12–18 GB).
 5. **Verificar** que la imagen trae lo esperado:
 
 ```bash
@@ -368,10 +415,13 @@ $SSH 'nvidia-smi; df -h /workspace; test -f /workspace/ComfyUI/main.py && echo C
       test -x /venv/main/bin/python && echo venv OK; supervisorctl status comfyui'
 ```
 
-6. **Fase 1 — mínimo viable** (§0.3): `provision_vast.sh` sin `--download`, los 3 pesos de
-   `agil_solo`, el flujo `agil_solo.json`, túnel, `.env`, `grokbot restart` y **una
-   generación real**. Sin este cierre no se pasa a la fase 2.
-7. **Fase 2 — resto en segundo plano** (§0.4): `descargar_local.py --perfil <PERFIL>
+Si falta ComfyUI o el venv → **fase 0.7** antes de seguir.
+
+6. **Fase 1 — mínimo viable** (§0.4): `provision_vast.sh` sin `--download` (omitir en
+   instalación limpia), los 3 pesos de `agil_solo`, el flujo `agil_solo.json`, túnel,
+   `.env`, `grokbot restart` y **una generación real**. Sin este cierre no se pasa a la
+   fase 2.
+7. **Fase 2 — resto en segundo plano** (§0.5): `descargar_local.py --perfil <PERFIL>
    --perfiles ...` con `nohup`, seguimiento por `/root/descarga.log` y reinicio de ComfyUI
    al terminar.
 8. **Verificar** ComfyUI, nodos y flujos (sección 7).
@@ -431,9 +481,11 @@ Notas:
 /venv/main/bin/python                                # Python del entorno
 /etc/supervisor/conf.d/comfyui.conf                  # servicio supervisor
 /var/log/portal/comfyui.log                          # log
-/root/descargar_local.py                             # dejado por provision_vast.sh
+/root/descargar_local.py                             # dejado por provision_vast.sh o fase 0.7
 /root/secrets.env                                    # tokens 0600
+/root/comfy_profiles/                                # profiles.py + profiles/ para la fase 2
 /root/descarga.log                                   # log de descargas
+/usr/local/bin/comfyui-restart                       # solo instalación limpia (supervisor o nohup)
 ```
 
 Comando de arranque típico de la imagen (supervisor):
@@ -442,7 +494,9 @@ Comando de arranque típico de la imagen (supervisor):
 COMFYUI_ARGS = --disable-auto-launch --enable-cors-header --port 18188
 ```
 
-Tras `provision_vast.sh` se añade `--enable-manager`.
+Tras `provision_vast.sh` se añade `--enable-manager`. **En instalación limpia no**: allí el
+Manager es el nodo git `custom_nodes/ComfyUI-Manager` y el flag no se usa. Elegir una vía,
+no mezclarlas.
 
 ## 7. Verificación
 
@@ -454,7 +508,8 @@ $SSH '/venv/main/bin/python -c "import torch; print(torch.__version__, torch.ver
 $SSH 'ldd /venv/main/lib/python3.12/site-packages/torch/lib/libtorch_cuda.so | grep -c "not found"'   # debe dar 0
 
 # ComfyUI
-$SSH 'supervisorctl status comfyui'
+$SSH 'supervisorctl status comfyui || true'
+$SSH 'test -x /usr/local/bin/comfyui-restart && echo "instalación limpia: usar comfyui-restart" || true'
 $SSH 'curl -s http://127.0.0.1:18188/system_stats'
 $SSH 'tail -200 /var/log/portal/comfyui.log | grep -iE "IMPORT FAILED|Failed to import|Traceback"'
 
@@ -489,7 +544,8 @@ PY
 4. **`_meta` nunca se envía a ComfyUI**: `resolver.py` lo separa antes de encolar. Enviarlo
    crudo da `missing_node_type: Node 'ID #_meta' has no class_type`.
 5. **Tras instalar un custom node hay que reiniciar ComfyUI** (`supervisorctl restart
-   comfyui`). El bot es otro proceso: reiniciarlo no recarga los nodos del box.
+   comfyui`; en instalación limpia, `comfyui-restart`). El bot es otro proceso: reiniciarlo
+   no recarga los nodos del box.
 6. **No purgar paquetes `nvidia-*`.** Las variantes cu12 y cu13 comparten rutas
    (`nvidia/cusparselt/lib`, `nvidia/nccl`, `nvidia/nvshmem`) y desinstalar una borra `.so`
    de la otra. Síntoma: `ImportError: libcusparseLt.so.0`. `uv pip check` no lo detecta.
@@ -501,14 +557,22 @@ PY
 10. **`sitecustomize.py`**: si el Python del box no trae `os.memfd_create`, ComfyUI 0.43+
     falla al streamear safetensors. El shim debe quedar en el `site-packages` del venv.
 11. **No lanzar `--download` de entrada.** Sin la fase 0 no se sabe si el disco alcanza
-    (a100 ≈ 120 GB) ni cuánto va a tardar; y sin la fase 1 el bot puede quedarse horas sin
-    un solo flujo operativo. Primero `agil_solo`, después el resto.
+    (`a100` completo ≈ 120 GB, ≈ 138 GB si hay que instalar el stack) ni cuánto va a
+    tardar; y sin la fase 1 el bot puede quedarse horas sin un solo flujo operativo.
+    Primero `agil_solo`, después el resto.
 12. **El toolchain de `descargar_local.py` necesita los perfiles**: `profiles.py` busca
     `profiles/*.json` junto a él. En el box no existen salvo que se copien; pasar
     `--perfiles /root/comfy_profiles/profiles.py` (con el directorio `profiles/` al lado).
 13. **Disco por debajo del mínimo del perfil** → no descargar. Bajar a `t4` si la tarjeta lo
     permite; nunca dejar el disco al 100 % (los `.download` parciales y los outputs
     necesitan margen).
+14. **Imagen limpia ≠ instancia rota.** Si falta `/workspace/ComfyUI/main.py`, la ruta es
+    [`vast-clean-install.md`](vast-clean-install.md), no recrear la instancia. Tras
+    instalarla, no correr `provision_vast.sh` (duplica el Manager).
+15. **`cu130` exige driver ≥ 580.65.** Con un driver anterior, `cu128`; una wheel CUDA más
+    nueva que el driver da `no kernel image is available`. Verificarlo en la fase 0.
+16. **El stack ocupa 12–18 GB.** Sumarlo al presupuesto de disco antes de elegir perfil;
+    `--no-cache-dir` y limpiar `/var/lib/apt/lists` al instalar.
 
 ## 9. Face Swap en Vast (despliegue aparte)
 
