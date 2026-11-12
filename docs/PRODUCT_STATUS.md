@@ -353,8 +353,8 @@ local-forward** (`transport.py` → `client.py` → plantillas API-format en
   `COMFYUI_FLOWS` como flujo de video (también en `COMFY_VIDEO_MODELS`). Desde `737944c`
   está en `COMFYUI_MENU_HIDDEN_FLOWS`, así que no aparece en el teclado de `/config`.
 - **Alcance actual**: **22 flujos registrados** en `COMFYUI_FLOWS`; el menú depende del
-  perfil de GPU: **13 visibles en `a100`** (7 base + 6 `*_hq`), **12 en `l4`** y **4 en
-  `t4`**; el resto son legacy/ocultos (`COMFYUI_MENU_HIDDEN_FLOWS`). Salud real de cada
+  perfil de GPU: **13 visibles en `a100`** (7 base + 6 `*_hq`), **13 en `l4`** (con
+  `agil_edit_nsfw` desde `237b0fc`, 2026-11-11) y **4 en `t4`**; el resto son legacy/ocultos (`COMFYUI_MENU_HIDDEN_FLOWS`). Salud real de cada
   flujo y pesos instalados:
   `docs/comfyui/INVENTARIO_BOX_COLAB.md`; el inventario Vast queda como histórico.
 

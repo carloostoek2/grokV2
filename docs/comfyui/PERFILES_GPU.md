@@ -36,12 +36,17 @@ Consumidores del mismo JSON: el resolver del bot, `actualizar_cuaderno.py`
 | Perfil | Tarjeta | Krea | Qwen Edit | Flujos |
 |---|---|---|---|---|
 | `a100` | A100 / H100 | bf16 24,48 + 8,27 GB | fp8mixed 19,12 GB | 13 |
-| `l4` | L4 24 GB | fp8 12,24 + 4,88 GB | GGUF Q4_K_M 11,96 GB | 12 (sin Rapid AIO) |
+| `l4` | L4 24 GB | fp8 12,24 + 4,88 GB | GGUF Q4_K_M 11,96 GB | 13 (incluye `agil_edit_nsfw` con Rapid AIO) |
 | `t4` | T4 16 GB | GGUF Q4_K_M 6,97 GB | no | 4: `grok_style`, `agil_solo`, `agil_nsfw`, `grok_edit` |
 
 `face_detail_impact` («Detalle cara») queda **fuera de todos los perfiles**: la función
 está retirada (arquitectura SDXL/Impact antigua) y no se descargan sus pesos. Por eso el
 botón «Detalle cara» ya no aparece bajo ningún resultado.
+
+Desde el 2026-11-11 (`237b0fc`), `l4` incluye `agil_edit_nsfw` («Ágil Edit NSFW») y
+descarga su checkpoint `checkpoints/Qwen-Rapid-AIO-NSFW-v23.safetensors` (mínimo 25 GB),
+para poder editar en GPUs de 24–32 GB. Medido en Vast: 40 s en frío, 15 s en caliente y
+27,6 GB de VRAM.
 
 ## Detección
 
