@@ -10,6 +10,12 @@ Un **perfil** describe qué flujos puede correr una tarjeta y con qué pesos:
 - ``symlinks``: enlaces que ComfyUI necesita dentro de ``models/``.
 - ``node_patches``: parches idempotentes a custom nodes (p. ej. añadir
   ``krea2`` a la lista de arquitecturas de ComfyUI-GGUF).
+- ``min_vram_gb`` (opcional): ``flow_id`` → VRAM mínima en GB para ofrecer ese
+  flujo dentro del perfil. Sirve cuando un perfil cubre tarjetas de distinta
+  VRAM (``l4`` va de 20 a 39 GB) y un flujo no cabe en las más chicas. Con VRAM
+  desconocida (perfil forzado a mano o ``/system_stats`` sin dato) el flujo se
+  oculta: nunca se ofrece algo que puede quedarse sin memoria. Ver
+  :meth:`Profile.for_vram`.
 
 Cuando una plantilla acaba apuntando a un ``.gguf`` en un ``UNETLoader``,
 :func:`apply_profile` cambia el nodo a ``UnetLoaderGGUF`` y quita
@@ -24,7 +30,7 @@ from __future__ import annotations
 import copy
 import json
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -50,9 +56,30 @@ class Profile:
     symlinks: tuple[tuple[str, str], ...] = ()
     substitutions: dict[str, str] = field(default_factory=dict)
     node_patches: tuple[dict[str, Any], ...] = ()
+    min_vram_gb: dict[str, float] = field(default_factory=dict)
 
     def allows(self, flow_id: str) -> bool:
         return flow_id in self.flows
+
+    def for_vram(self, vram_gb: float | None) -> Profile:
+        """Copia del perfil sin los flujos que piden más VRAM que la tarjeta.
+
+        ``vram_gb`` ``None`` o ``0`` significa VRAM desconocida: se quitan
+        todos los flujos con requisito en ``min_vram_gb``. Sin requisitos
+        devuelve el mismo perfil.
+        """
+        if not self.min_vram_gb:
+            return self
+        vram = float(vram_gb or 0.0)
+        flows = tuple(
+            flow_id
+            for flow_id in self.flows
+            if flow_id not in self.min_vram_gb
+            or (vram > 0 and vram >= self.min_vram_gb[flow_id])
+        )
+        if flows == self.flows:
+            return self
+        return replace(self, flows=flows)
 
 
 def _profile_from_raw(raw: dict[str, Any], file_name: str) -> Profile:
@@ -82,6 +109,20 @@ def _profile_from_raw(raw: dict[str, Any], file_name: str) -> Profile:
     patches = tuple(
         dict(p) for p in (raw.get("node_patches") or ()) if isinstance(p, dict)
     )
+    min_vram: dict[str, float] = {}
+    for flow_id, value in (raw.get("min_vram_gb") or {}).items():
+        if flow_id not in flows:
+            raise ValueError(
+                f"perfil {file_name}: min_vram_gb de {flow_id!r}, que no está en flows"
+            )
+        if flow_id == default:
+            raise ValueError(
+                f"perfil {file_name}: el default_flow {default!r} no puede pedir VRAM mínima"
+            )
+        gb = float(value)
+        if gb <= 0:
+            raise ValueError(f"perfil {file_name}: min_vram_gb de {flow_id!r} debe ser > 0")
+        min_vram[str(flow_id)] = gb
     return Profile(
         id=str(raw["id"]),
         label=str(raw.get("label") or raw["id"]),
@@ -91,6 +132,7 @@ def _profile_from_raw(raw: dict[str, Any], file_name: str) -> Profile:
         symlinks=symlinks,
         substitutions=substitutions,
         node_patches=patches,
+        min_vram_gb=min_vram,
     )
 
 
