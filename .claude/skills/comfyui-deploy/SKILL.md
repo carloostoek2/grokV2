@@ -1,8 +1,8 @@
 ---
 name: comfyui-deploy
-description: "Use when el usuario pida desplegar, arrancar, apagar, reparar o diagnosticar ComfyUI para grokbot en Google Colab o en una instancia vast.ai, o cuando pregunte cómo se preparan los pesos, qué scripts se usan, cómo se conecta el bot con la GPU, o por qué el bot no genera. Cubre el reconocimiento previo de la máquina (GPU, disco, velocidad), la elección de perfil, la instalación de ComfyUI desde cero en una imagen Vast limpia (sistema, torch, ComfyUI, nodos y supervisor), el arranque mínimo con agil_solo y el resto en segundo plano, fases CPU→GPU, perfiles a100/l4/t4, túneles SSH y verificación."
+description: "Use when el usuario pida desplegar, arrancar, apagar, reparar o diagnosticar ComfyUI para grokbot en Google Colab o en una instancia vast.ai, o cuando pregunte cómo se preparan los pesos, qué scripts se usan, cómo se conecta el bot con la GPU, o por qué el bot no genera. Cubre el registro de la instancia de la sesión (dirección SSH que el usuario envía una sola vez, especificaciones y accesos en un archivo plano local), el reconocimiento previo de la máquina (GPU, disco, velocidad), la elección de perfil, la instalación de ComfyUI desde cero en una imagen Vast limpia (sistema, torch, ComfyUI, nodos y supervisor), el arranque mínimo con agil_solo y el resto en segundo plano, fases CPU→GPU, perfiles a100/l4/t4, túneles SSH y verificación."
 metadata:
-  version: "1.2.0"
+  version: "1.3.0"
   source: repo-docs-and-deploy-scripts
 ---
 
@@ -17,12 +17,47 @@ cómo verificar** que el bot puede generar. No sustituye a las otras dos skills 
 | `comfyui-hyperrealism-krea2` | Diseñar/optimizar un **workflow** (modelo, sampler, pasos, LoRA) |
 | **`comfyui-deploy`** (esta) | **Llevar ComfyUI a una GPU y conectarlo con el bot** |
 
-> **Alcance de esta versión (1.2.0).** El despliegue **Vast** es por fases obligatorias:
+> **Alcance de esta versión (1.3.0).** Antes de desplegar se **registra la instancia**
+> (§0): la dirección SSH que el usuario envía una sola vez y las especificaciones quedan en
+> un archivo plano local, y las sesiones siguientes lo reutilizan sin volver a pedir acceso.
+> El despliegue **Vast** sigue siendo por fases obligatorias:
 > **medir la máquina → elegir perfil → asegurar la base de ComfyUI → dejar `agil_solo`
 > funcionando de punta a punta → recién entonces descargar el resto en segundo plano.**
 > La fase «asegurar la base» **no asume** que la imagen traiga ComfyUI: si la instancia
 > está limpia, se instala desde cero (`references/vast-clean-install.md`). **Colab no
 > cambia**: su ruta sigue igual en `references/colab.md`.
+
+## 0. Registrar la instancia (una vez por sesión)
+
+Antes de desplegar, deja constancia local de **a qué máquina estamos conectados**. El
+usuario envía la dirección SSH **solo en el primer mensaje**; después se reutiliza el
+registro y no se vuelve a pedir.
+
+**Archivo canónico:** `/home/ubuntu/comfy-colab/instancia_actual.txt` — texto plano,
+`0600`, en `.gitignore`. Contiene host y puerto SSH: **no se commitea, no se pega en el
+chat, no se copia a `docs/`**. Plantilla, sondas y rotación: `references/instancia.md`.
+
+Secuencia:
+
+1. **Al empezar**, lee el archivo si existe. Si el primer mensaje trae una dirección SSH
+   (`ssh ...`, `root@host -p N`, `host:N`, `host:puerto` o el alias `colab-comfy`),
+   normaliza host, puerto y usuario.
+2. **Mismo `host:puerto`** → reutiliza el registro; no vuelvas a probar el acceso ni a
+   preguntar. **Distinto** → es una instancia nueva: avisa en una línea, pasa la anterior
+   a `[historial]` y reescribe.
+3. **Sin dirección y sin archivo** → pide el acceso **una sola vez**. No inventes
+   coordenadas ni asumas las de `.env`.
+4. **Mide y guarda** en una sola conexión: GPU/VRAM/driver, RAM, CPU, SO, disco y tipo de
+   montaje, si la base es `con-comfyui` o `limpia`, puerto/versión de ComfyUI y MB/s contra
+   HF. En Colab **no abras un segundo `colab ssh`**: usa el alias y el túnel vivos
+   (regla dura 3).
+5. Escribe el archivo con `umask 077` y `chmod 600`. Si el acceso falla, **no sobrescribas**
+   un registro bueno: reporta y conserva el anterior.
+6. Resume sin filtrar acceso: «instancia registrada: L4 23.7 GB, perfil l4, 118 GB libres».
+   Host y puerto se quedan en el archivo salvo que el usuario los pida.
+
+Los números de §5.1–§5.2 (GPU, VRAM, disco, MB/s, base limpia) se anotan **en este mismo
+archivo**, no solo en la conversación: una sesión posterior los recupera sin volver a medir.
 
 ## 1. Los tres lugares que hay que distinguir
 
@@ -77,6 +112,7 @@ nginx_comfy.conf             # proxy con caché 8189 → 8188
 nginx/                       # estado del proxy (run/cache/logs)
 secrets.env                  # CIVITAI_TOKEN / HF_TOKEN (0600, NO versionar)
 sessions.json                # estado de colab-cli (symlink a ~/.config/colab-cli/)
+instancia_actual.txt         # registro local de la instancia (0600, NO versionar) — §0
 vast_faceswap/               # despliegue aparte de FaceFusion en Vast (opcional)
 ```
 
@@ -197,10 +233,11 @@ $SSH 'curl -L -r 0-104857600 --max-time 15 -o /dev/null -w "HF: %{speed_download
   https://huggingface.co/Comfy-Org/Krea-2/resolve/main/diffusion_models/krea2_turbo_fp8_scaled.safetensors'
 ```
 
-Anotar **GPU/VRAM, GB libres, MB/s y si la base está limpia**. Sin esos números no se elige
-perfil ni se lanza descarga alguna. Si `curl` no existe en la imagen, instalarlo
-(`apt-get install -y curl`) y repetir la medición antes de elegir perfil. Exportar `SSH=...`
-en la sesión: los bloques siguientes lo reutilizan.
+Anotar **GPU/VRAM, GB libres, MB/s y si la base está limpia** en
+`instancia_actual.txt` (§0). Sin esos números no se elige perfil ni se lanza descarga
+alguna. Si `curl` no existe en la imagen, instalarlo (`apt-get install -y curl`) y repetir
+la medición antes de elegir perfil. El `SSH=...` sale de `host`/`puerto_ssh` del registro:
+no se vuelve a pedir el acceso al usuario, y los bloques siguientes lo reutilizan.
 
 ### 5.2 Fase 0.5 — Elegir el perfil
 
@@ -506,7 +543,9 @@ que ComfyUI está vivo, no que el bot puede generar.
 ## 9. Reglas duras
 
 1. **Nunca** imprimir, commitear ni pegar `secrets.env`, `sessions.json`, tokens, IPs o
-   puertos SSH en docs/commits. Las coordenadas de Vast rotan al recrear la instancia.
+   puertos SSH en docs/commits. Las coordenadas de Vast rotan al recrear la instancia. La
+   **única excepción** es `/home/ubuntu/comfy-colab/instancia_actual.txt`: registro local,
+   `0600`, gitignored, nunca versionado ni citado en la conversación.
 2. **No** editar a mano `Untitled0.ipynb` ni `preparar_modelos.py`: son generados por
    `actualizar_cuaderno.py` desde `profiles/` del repo. Editar el generador o el perfil.
 3. **No** abrir un segundo `colab ssh` con una sesión viva: puede dar 429 y tumbar la
@@ -527,10 +566,16 @@ que ComfyUI está vivo, no que el bot puede generar.
    la instalación limpia con `provision_vast.sh`.
 10. **Colab no cambia**: esta política por fases y la instalación limpia son solo para
     Vast. Colab sigue con `references/colab.md` y su arranque CPU→GPU.
+11. **La instancia se registra una vez.** Antes de pedir host/puerto, lee
+    `instancia_actual.txt` (§0). Solo se pide si no existe o si el usuario envía otra
+    dirección; un cambio de `host:puerto` se trata como instancia nueva y la anterior pasa
+    al historial.
 
 ## 10. Referencias
 
 - `references/colab.md` — despliegue Colab completo (fases, cuaderno, perfiles, rutas).
+- `references/instancia.md` — registro local de la instancia: formato, sondas, rotación y
+  consistencia con la `.env` del bot.
 - `references/vast.md` — despliegue Vast por fases, provisión rápida y reconstrucción completa.
 - `references/vast-clean-install.md` — instalación de ComfyUI desde cero en una imagen Vast
   limpia: sistema, venv, torch, ComfyUI, nodos, supervisor y verificación.
