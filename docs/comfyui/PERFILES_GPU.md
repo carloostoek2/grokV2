@@ -22,6 +22,7 @@ paginación a RAM.
 | `weights` | descargas: `path`, `url`, `auth`, `min_size` |
 | `symlinks` | enlaces dentro de `models/` |
 | `node_patches` | parches idempotentes a custom nodes |
+| `min_vram_gb` | opcional: `flow_id` → VRAM mínima (GB) para ofrecer ese flujo dentro del perfil |
 
 Las plantillas base viven en `templates/` y no se duplican: un perfil solo
 declara sustituciones. Si tras sustituir un `UNETLoader` el archivo acaba en
@@ -36,12 +37,31 @@ Consumidores del mismo JSON: el resolver del bot, `actualizar_cuaderno.py`
 | Perfil | Tarjeta | Krea | Qwen Edit | Flujos |
 |---|---|---|---|---|
 | `a100` | A100 / H100 | bf16 24,48 + 8,27 GB | fp8mixed 19,12 GB | 13 |
-| `l4` | L4 24 GB | fp8 12,24 + 4,88 GB | GGUF Q4_K_M 11,96 GB | 12 (sin Rapid AIO) |
+| `l4` | L4 24 GB (y cualquier tarjeta de 20–39 GB) | fp8 12,24 + 4,88 GB | GGUF Q4_K_M 11,96 GB | 12 con menos de 28 GB de VRAM; 13 con 28 GB o más (`agil_edit_nsfw`) |
 | `t4` | T4 16 GB | GGUF Q4_K_M 6,97 GB | no | 4: `grok_style`, `agil_solo`, `agil_nsfw`, `grok_edit` |
 
 `face_detail_impact` («Detalle cara») queda **fuera de todos los perfiles**: la función
 está retirada (arquitectura SDXL/Impact antigua) y no se descargan sus pesos. Por eso el
 botón «Detalle cara» ya no aparece bajo ningún resultado.
+
+Desde el 2026-11-11 (`237b0fc`), `l4` incluye `agil_edit_nsfw` («Ágil Edit NSFW») y
+descarga su checkpoint `checkpoints/Qwen-Rapid-AIO-NSFW-v23.safetensors`. Ese archivo
+ocupa **como mínimo 25 GB de disco** (`min_size` del manifiesto es el tamaño del
+archivo descargado, no la VRAM). Medido en Vast: 40 s en frío, 15 s en caliente y
+**27,6 GB de VRAM**, más de los 24 GB de una L4.
+
+Como `profile_for_device()` asigna `l4` a toda tarjeta de 20–39 GB, el flujo queda
+condicionado por VRAM: `l4.json` declara `"min_vram_gb": {"agil_edit_nsfw": 28}`. El
+bot solo lo ofrece (menú, botón «Editar» y resolver) si `/system_stats` reporta 28 GB
+o más; en una L4 de 24 GB, o con VRAM desconocida (por ejemplo `COMFYUI_PERFIL=l4`
+forzado), queda oculto y un ajuste guardado con ese flujo cae al `default_flow`. El
+checkpoint se sigue descargando en todo `l4`, así que una L4 necesita el disco aunque
+no use el flujo.
+
+**Pendiente**: medir `agil_edit_nsfw` en una L4 real de 24 GB. Si cabe (por ejemplo,
+con descarga parcial a RAM y un tiempo aceptable), baja el valor de `min_vram_gb` a
+la VRAM que reporta la L4 (~22 GB) o quita la entrada para ofrecerlo en todo `l4`, y
+actualiza el conteo fijado en `tests/unit/providers/test_workflow_profiles.py`.
 
 ## Detección
 
@@ -52,7 +72,9 @@ botón «Detalle cara» ya no aparece bajo ningún resultado.
 - **Bot**: `ComfyUIProvider.refresh_profile()` consulta `/system_stats` con un
   túnel ya activo (nunca abre uno), mapea GPU → perfil y refresca cada 5 min o
   al abrir la pantalla de configuración. `COMFYUI_PERFIL` permite forzar
-  `a100|l4|t4`; `auto` (default) detecta.
+  `a100|l4|t4`; `auto` (default) detecta. Con la VRAM detectada se quitan del
+  perfil los flujos cuyo `min_vram_gb` no alcanza; con un perfil forzado la VRAM
+  es desconocida y esos flujos se ocultan.
 - **Resolver**: `get_flow()` devuelve `None` para un flujo fuera del perfil; el
   provider cae al `default_flow` del perfil. El menú de Telegram se filtra con
   `active_flow_ids()`.

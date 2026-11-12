@@ -192,16 +192,24 @@ class ComfyUIProvider:
         name = str(first.get("name") or "")
         vram_gb = float(first.get("vram_total") or 0) / 1024**3
         profile = profile_for_device(name, vram_gb)
+        # Dentro de un perfil, la VRAM real decide los flujos con requisito
+        # (p. ej. ``agil_edit_nsfw`` en ``l4``: sí en 32 GB, no en una L4 24 GB).
+        efectivo = profile.for_vram(vram_gb)
         actual = active_profile()
-        if actual is not None and actual.id == profile.id:
+        if (
+            actual is not None
+            and actual.id == efectivo.id
+            and actual.flows == efectivo.flows
+        ):
             return False
-        set_active_profile(profile.id)
+        set_active_profile(profile.id, vram_gb=vram_gb)
         logger.info(
-            "ComfyUI GPU %s (%.1f GB) -> perfil de pesos %s (%s)",
+            "ComfyUI GPU %s (%.1f GB) -> perfil de pesos %s (%s), %d flujos",
             name or "desconocida",
             vram_gb,
             profile.id,
             profile.label,
+            len(efectivo.flows),
         )
         return True
 
