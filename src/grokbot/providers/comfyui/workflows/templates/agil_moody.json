@@ -11,7 +11,8 @@
       "732"
     ],
     "supports_source": false,
-    "source": "Synced from ComfyUI history of moodyKrea2Minimal_v40 (platform UI). LoRA bypassed in UI so omitted. UNET pinned to Moody nvfp4 on Vast. Re-sync from a successful UI /history prompt graph."
+    "source": "Synced from ComfyUI history of moodyKrea2Minimal_v40 (platform UI). LoRA bypassed in UI so omitted. UNET pinned to Moody nvfp4 on Vast. Re-sync from a successful UI /history prompt graph.",
+    "description": "Identity LoRA ohwx_krea2.safetensors baked at strength_model 1.0 / strength_clip 1.0 (LoraLoader node 900 between UNETLoader 761 + CLIPLoader 755 and KSamplerAdvanced 599 / CLIPTextEncode 627). Trigger is `ohwx woman`."
   },
   "599": {
     "inputs": {
@@ -28,7 +29,7 @@
       "end_at_step": 8,
       "return_with_leftover_noise": "enable",
       "model": [
-        "761",
+        "900",
         0
       ],
       "positive": [
@@ -50,8 +51,8 @@
     "inputs": {
       "text": "",
       "clip": [
-        "755",
-        0
+        "900",
+        1
       ]
     },
     "class_type": "CLIPTextEncode"
@@ -136,5 +137,21 @@
       "multiple": 32
     },
     "class_type": "ResolutionSelector"
+  },
+  "900": {
+    "inputs": {
+      "lora_name": "ohwx_krea2.safetensors",
+      "strength_model": 1.0,
+      "strength_clip": 1.0,
+      "model": [
+        "761",
+        0
+      ],
+      "clip": [
+        "755",
+        0
+      ]
+    },
+    "class_type": "LoraLoader"
   }
 }
