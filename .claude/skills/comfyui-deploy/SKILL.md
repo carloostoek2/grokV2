@@ -2,7 +2,7 @@
 name: comfyui-deploy
 description: "Use when el usuario pida desplegar, arrancar, apagar, reparar o diagnosticar ComfyUI para grokbot en Google Colab o en una instancia vast.ai, o cuando pregunte cómo se preparan los pesos, qué scripts se usan, cómo se conecta el bot con la GPU, o por qué el bot no genera. Cubre el registro de la instancia de la sesión (dirección SSH que el usuario envía una sola vez, especificaciones y accesos en un archivo plano local), el reconocimiento previo de la máquina (GPU, disco, velocidad), la elección de perfil, la instalación de ComfyUI desde cero en una imagen Vast limpia (sistema, torch, ComfyUI, nodos y supervisor), el arranque mínimo con agil_solo y el resto en segundo plano, fases CPU→GPU, perfiles a100/l4/t4, túneles SSH y verificación."
 metadata:
-  version: "1.3.0"
+  version: "1.4.0"
   source: repo-docs-and-deploy-scripts
 ---
 
@@ -17,15 +17,18 @@ cómo verificar** que el bot puede generar. No sustituye a las otras dos skills 
 | `comfyui-hyperrealism-krea2` | Diseñar/optimizar un **workflow** (modelo, sampler, pasos, LoRA) |
 | **`comfyui-deploy`** (esta) | **Llevar ComfyUI a una GPU y conectarlo con el bot** |
 
-> **Alcance de esta versión (1.3.0).** Antes de desplegar se **registra la instancia**
+> **Alcance de esta versión (1.4.0).** Antes de desplegar se **registra la instancia**
 > (§0): la dirección SSH que el usuario envía una sola vez y las especificaciones quedan en
 > un archivo plano local, y las sesiones siguientes lo reutilizan sin volver a pedir acceso.
 > El despliegue **Vast** sigue siendo por fases obligatorias:
 > **medir la máquina → elegir perfil → asegurar la base de ComfyUI → dejar `agil_solo`
 > funcionando de punta a punta → recién entonces descargar el resto en segundo plano.**
 > La fase «asegurar la base» **no asume** que la imagen traiga ComfyUI: si la instancia
-> está limpia, se instala desde cero (`references/vast-clean-install.md`). **Colab no
-> cambia**: su ruta sigue igual en `references/colab.md`.
+> está limpia, se instala desde cero (`references/vast-clean-install.md`). Esa fase
+> incluye,**siempre**, dejar el ComfyUI-Manager en condiciones de instalar desde la UI
+> (§5.3.1): en un box nuevo los flags de instalación nacen en `False` y cualquier
+> instalación falla con «A security error has occurred». **Colab no cambia**: su ruta
+> sigue igual en `references/colab.md`.
 
 ## 0. Registrar la instancia (una vez por sesión)
 
@@ -297,6 +300,53 @@ $SSH 'curl -s http://127.0.0.1:18188/object_info/CLIPLoader | grep -o "\"krea2\"
 Si `krea2` no aparece, ComfyUI es viejo o el stack no cargó: actualizar o corregir **antes**
 de la fase 1.
 
+### 5.3.1 Fase 0.8 — Dejar el Manager instalable desde la UI (obligatorio)
+
+En **cualquier** instalación nueva, el botón *Install* del ComfyUI-Manager falla con
+`A security error has occurred. Please check the terminal logs` (HTTP 403/404). No es culpa
+del nodo que se intenta instalar: Manager 3.x escribió `allow_git_url_install = False` en
+`user/__manager/config.ini`, y ese flag —junto con un `--listen` de loopback— es requisito.
+El terminal lo explica sin ambigüedad:
+
+```
+ERROR: This action requires BOTH: (1) 'allow_git_url_install = true' in config.ini
+([default] section), AND (2) ComfyUI launched with a loopback --listen (127.0.0.1 or ::1)
+... Both values are read once at ComfyUI startup ... Both are independent of security_level.
+```
+
+Los flags se leen **una sola vez al arrancar** y `config.ini` **no existe hasta el primer
+arranque** del Manager; por eso el paso va aquí y en este orden, con el servidor apagado:
+
+```bash
+$SSH 'supervisorctl stop comfyui'      # o: pkill -f "main.py --listen 127.0.0.1 --port 18188"
+$SSH 'CFG=/workspace/ComfyUI/user/__manager/config.ini
+  sed -i -E "s/^allow_git_url_install = .*/allow_git_url_install = True/;
+             s/^allow_pip_install = .*/allow_pip_install = True/" "$CFG"
+  grep -E "allow_git_url_install|allow_pip_install|security_level" "$CFG"'
+$SSH 'comfyui-restart'
+```
+
+Verificación sin instalar nada: la petición debe fallar por falta de `url`, **no** por
+seguridad.
+
+```bash
+$SSH 'curl -s -o /dev/null -w "%{http_code}\n" -X POST \
+  -H "Content-Type: application/json" -d "{}" \
+  http://127.0.0.1:18188/customnode/install/git_url'   # 400 = puerta abierta
+```
+
+`403`/`404` = sigue bloqueado: comprobar que el arranque sea con `--listen 127.0.0.1` y que
+el `sed` haya tocado el `config.ini` del Manager (no el de otro nodo).
+
+Reglas de este paso:
+
+- `security_level` se queda en `normal`; **`--enable-manager` no arregla esto** (§8).
+- Los dos flags están AND-ados con un *listener de loopback*: si el box se expone algún día
+  con `--listen 0.0.0.0`, las puertas se cierran solas. Es seguro dejarlos activados.
+- `allow_flagged_nodepack_install` no se toca: en loopback ya se permite.
+- `user/` es efímero por instancia: **cada box nuevo vuelve a nacer en `False`**. Por eso es
+  parte del despliegue y no un arreglo de una vez.
+
 ### 5.4 Fase 1 — Mínimo viable (bloqueante)
 
 Meta: **`agil_solo` generando de verdad desde Telegram**. Nada de descargas completas
@@ -539,6 +589,8 @@ que ComfyUI está vivo, no que el bot puede generar.
 | Un custom node nuevo no carga | ComfyUI no se reinició | `supervisorctl restart comfyui` |
 | El auto-off corta una generación | Límite de 2 h | `colab-comfy ampliar 1h` (no reinicia nada) |
 | Workflow remoto «funciona» pero ignora el box | El archivo no se llama por `_meta.id`; cayó a embed sin fallar | Renombrar a `<id>.json`; el journal sano dice `Loaded ... from remote` |
+| Manager: «A security error has occurred. Please check the terminal logs» al instalar | Manager 3.x nace con `allow_git_url_install = False` (y `allow_pip_install = False`) | §5.3.1: parar, poner ambos en `True`, arrancar; verificar con el `POST` que devuelve `400` |
+| El flag del Manager «no hace efecto» tras editarlo | Los flags se leen **solo al arrancar** y `config.ini` nace en el primer arranque | Editar con ComfyUI **parado** y volver a arrancarlo; comprobar la ruta `user/__manager/config.ini` |
 
 ## 9. Reglas duras
 
@@ -570,6 +622,11 @@ que ComfyUI está vivo, no que el bot puede generar.
     `instancia_actual.txt` (§0). Solo se pide si no existe o si el usuario envía otra
     dirección; un cambio de `host:puerto` se trata como instancia nueva y la anterior pasa
     al historial.
+12. **El Manager se deja instalable como parte del despliegue** (§5.3.1). Todo box nuevo
+    nace con `allow_git_url_install = False` en `user/__manager/config.ini`, así que
+    cualquier *Install* desde la UI falla con «A security error has occurred». No se
+    entrega un box sin haber abierto esa puerta (con `--listen 127.0.0.1`) y verificado
+    con el `POST` que devuelve `400`.
 
 ## 10. Referencias
 

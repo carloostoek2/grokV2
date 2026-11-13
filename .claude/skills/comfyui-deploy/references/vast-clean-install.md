@@ -331,6 +331,63 @@ En una instalación limpia, usar `comfyui-restart` en lugar de `supervisorctl re
 comfyui` en todas las fases. El wrapper no crea un segundo proceso si supervisor ya lo
 gestiona.
 
+### 9.1 Dejar el Manager instalable desde la UI (obligatorio)
+
+Un box nuevo **no puede instalar nodos desde la UI**: el botón *Install* devuelve
+`A security error has occurred. Please check the terminal logs`. Manager 3.x escribió en
+`user/__manager/config.ini`:
+
+```ini
+security_level = normal
+allow_git_url_install = False
+allow_pip_install = False
+```
+
+El *Install* de un nodo por git URL exige `allow_git_url_install = True` **y** un listener
+de loopback; el terminal lo dice literalmente (`SECURITY_MESSAGE_FLAG_GIT_URL`). Los dos
+flags se leen **una vez al arrancar**, y `config.ini` no existe hasta el primer arranque
+del Manager: por eso el paso es *arrancar → parar → editar → arrancar*, y va como parte de
+la instalación, no como un arreglo posterior.
+
+```bash
+$SSH 'supervisorctl stop comfyui'   # o el pkill del wrapper si no hay supervisor
+$SSH 'bash -s' <<'EOF'
+set -euo pipefail
+CFG=/workspace/ComfyUI/user/__manager/config.ini
+[ -f "$CFG" ] || { echo "ERROR: falta $CFG; ¿arrancó el Manager al menos una vez?"; exit 1; }
+sed -i -E 's/^allow_git_url_install = .*/allow_git_url_install = True/;
+           s/^allow_pip_install = .*/allow_pip_install = True/' "$CFG"
+grep -E 'allow_git_url_install|allow_pip_install|security_level' "$CFG"
+EOF
+$SSH 'comfyui-restart'
+```
+
+Verificación **sin instalar nada**: la petición tiene que fallar por falta de `url`, no por
+seguridad.
+
+```bash
+$SSH 'curl -s -o /dev/null -w "%{http_code}\n" -X POST \
+  -H "Content-Type: application/json" -d "{}" \
+  http://127.0.0.1:18188/customnode/install/git_url'   # 400 = puerta abierta
+```
+
+| Respuesta | Significado |
+|---|---|
+| `400` | La puerta pasó; solo falta el `url`. Correcto. |
+| `403` / `404` | Sigue bloqueado: `sed` sobre otro archivo, o el arranque no es `--listen 127.0.0.1`. |
+
+Detalles que importan:
+
+- **`--enable-manager` no es la solución.** El propio mensaje de Manager dice que los flags
+  son independientes de `security_level` y de la bandera del core.
+- `allow_flagged_nodepack_install` se queda como está: con loopback ya se permite.
+- Ambos flags están AND-ados con un listener de loopback: si el box se expone con
+  `--listen 0.0.0.0`, se cierran solos. Activarlos no crea una puerta pública.
+- `user/` es efímero por instancia. **Cada box nuevo hay que repetirlo**: es un paso de
+  despliegue, no una configuración de una vez.
+- Si el usuario confirma que instalará nodos por `pip` además de por git, ambos flags ya
+  quedan puestos con el `sed` de arriba.
+
 ## 10. Verificación de la instalación
 
 ```bash
@@ -359,6 +416,7 @@ Al terminar, volver a `references/vast.md` §0.4 (fase 1). Los pasos que ya qued
 | Perfiles y nodos | Hechos aquí (§7–§8); el bloque de §0.4 es idempotente |
 | Flujo `agil_solo.json` | Pendiente: hacerlo en §0.4 |
 | Arranque y verificación | Hecho aquí; en §0.4 usar `comfyui-restart` |
+| Manager instalable desde la UI | Hecho aquí (§9.1) |
 
 ## 11. Gotchas de la instalación limpia
 
@@ -384,3 +442,8 @@ Al terminar, volver a `references/vast.md` §0.4 (fase 1). Los pasos que ya qued
    Instalarlos ahora evita un `IMPORT FAILED` más tarde.
 10. **Si `/workspace` es un montaje de red**, la instalación y la carga de pesos serán más
     lentas aunque la red contra HF vaya bien. Anotarlo en el reporte.
+11. **El Manager nace cerrado a instalaciones (§9.1).** `allow_git_url_install = False` y
+    `allow_pip_install = False` de fábrica; cualquier *Install* desde la UI da
+    «A security error has occurred». Se abren con el servidor **parado** y solo valen con
+    `--listen` de loopback. `--enable-manager` **no** lo arregla: el mensaje del terminal
+    aclara que es independiente de `security_level` y de esa bandera.

@@ -106,6 +106,28 @@ $SSH 'curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:18188/system_sta
 $SSH 'curl -s http://127.0.0.1:18188/object_info/CLIPLoader | grep -o "\"krea2\""' # "krea2"
 ```
 
+#### Fase 0.8 — Manager instalable (en las dos vías)
+
+También con imagen «con ComfyUI»: el Manager de esa imagen suele ser el mismo 3.x y **nace
+con los flags de instalación en `False`**, así que el primer *Install* desde la UI falla con
+«A security error has occurred». No es un fallo del nodo.
+
+```bash
+$SSH 'supervisorctl stop comfyui'
+$SSH 'CFG=/workspace/ComfyUI/user/__manager/config.ini;
+  [ -f "$CFG" ] || { echo "arranca ComfyUI una vez primero"; exit 1; }
+  sed -i -E "s/^allow_git_url_install = .*/allow_git_url_install = True/;
+             s/^allow_pip_install = .*/allow_pip_install = True/" "$CFG";
+  grep -E "allow_(git_url|pip)_install" "$CFG"'
+$SSH 'supervisorctl restart comfyui'
+$SSH 'curl -s -o /dev/null -w "%{http_code}\n" -X POST -H "Content-Type: application/json" \
+  -d "{}" http://127.0.0.1:18188/customnode/install/git_url'   # 400 = puerta abierta
+```
+
+Va con el servidor parado porque los flags se leen una sola vez al arrancar, y `config.ini`
+solo existe después del primer arranque. Detalle y diagnóstico:
+[`vast-clean-install.md`](vast-clean-install.md) §9.1.
+
 ### 0.4 Fase 1 — Mínimo viable
 
 Objetivo único: **`agil_solo` generando desde Telegram**. Pesos necesarios (todos HF sin
@@ -573,6 +595,11 @@ PY
     nueva que el driver da `no kernel image is available`. Verificarlo en la fase 0.
 16. **El stack ocupa 12–18 GB.** Sumarlo al presupuesto de disco antes de elegir perfil;
     `--no-cache-dir` y limpiar `/var/lib/apt/lists` al instalar.
+17. **El Manager nace cerrado a instalaciones.** `allow_git_url_install = False` en
+    `user/__manager/config.ini` de fábrica → cualquier *Install* de la UI responde
+    «A security error has occurred. Please check the terminal logs» (403/404). Se abre con
+    ComfyUI parado (`True` en `allow_git_url_install` y `allow_pip_install`) y solo vale con
+    `--listen` de loopback. Es parte del despliegue (fase 0.8), no un arreglo posterior.
 
 ## 9. Face Swap en Vast (despliegue aparte)
 
