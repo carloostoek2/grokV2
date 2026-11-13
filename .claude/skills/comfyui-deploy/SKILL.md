@@ -627,6 +627,13 @@ que ComfyUI está vivo, no que el bot puede generar.
     cualquier *Install* desde la UI falla con «A security error has occurred». No se
     entrega un box sin haber abierto esa puerta (con `--listen 127.0.0.1`) y verificado
     con el `POST` que devuelve `400`.
+13. **Calidad máxima primero; nunca degradar por precaución.** Se despliega y se elige
+    variante con la **mayor calidad que la máquina pueda ejecutar**, aunque quede al límite
+    de VRAM. Bajar de cuantización, recortar pasos o caer a GGUF solo **después de medir**
+    que la variante máxima no se sostiene (OOM reproducible o tiempo inservible), y dejando
+    el número que lo justifica. Si el hardware hace imposible una pieza concreta (nvfp4
+    exige sm_100), se sustituye **esa pieza**, no todo el stack. Un flujo que corre pero
+    entrega baja calidad no cuenta como desplegado.
 
 ## 10. Referencias
 
