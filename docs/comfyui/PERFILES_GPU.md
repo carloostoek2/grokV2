@@ -101,3 +101,13 @@ el mismo GGUF no necesita descargar a RAM y debería bajar a ~2–4 min.
 2. Ejecuta `actualizar_cuaderno.py --listar` y `--archivos-perfil <id>`.
 3. Pasa `pytest tests/unit/providers/test_workflow_profiles.py`: el test cruzado
    falla si una plantilla pide un archivo que el perfil no declara.
+
+
+## Cambios del 2026-11-14
+
+- `a100` suma `minimax_h3_i2v` (14 flujos) y sus 4 pesos de
+  `Comfy-Org/MiniMax-H3` (`18bc56c`). `l4` y `t4` no lo incluyen.
+- Los tres perfiles descargan `loras/RealisticSnapshotKrea2.safetensors` (Civitai
+  3084537, `auth=civitai`) y enlazan `loras/KNP_000003000.safetensors` →
+  `Krea2NSFWV4.safetensors`, para que el LoRA extra que pide la config del usuario
+  exista en el box (`9121d6c`).

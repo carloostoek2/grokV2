@@ -618,3 +618,33 @@ flujo). Un stack vacío deja el grafo idéntico al de fábrica.
   autodetecta. Suite completa: **924 passed**.
 
 Propuesta de edición automática por flujo: `comfyui/KSAMPLER_DINAMICO.md`.
+
+
+## MiniMax H3, LoRAs de perfil y espera del túnel (2026-11-14)
+
+Commits directos a `master`: `18bc56c` y `9121d6c`.
+
+- **MiniMax H3 visible en `a100`** (`18bc56c`): `minimax_h3_i2v` ya tiene plantilla
+  (`workflows/templates/minimax_h3_i2v.json`: vídeo i2v con audio, 640×1152, 144
+  frames) y sale de `COMFYUI_MENU_HIDDEN_FLOWS`, así que aparece en el teclado de
+  `/config`. Solo el perfil `a100` lo incluye (14 flujos en ese perfil) y descarga sus
+  4 pesos de `Comfy-Org/MiniMax-H3`: `minimax_h3_fl2va_pruned_int8_convrot` (difusión),
+  `qwen3vl_32b_minimax_h3_nvfp4_awq` (text encoder), `minimax_h3_video_vae_fp16` y
+  `minimax_h3_audio_vae_fp32`. Esto reemplaza la nota de §2 que lo daba por oculto.
+- **Semilla en `noise_seed`** (`18bc56c`): el resolver parchea la semilla tanto en el
+  input `seed` (KSampler) como en `noise_seed` (`RandomNoise`/`KSamplerAdvanced`),
+  siempre que sea un entero literal. Antes solo escribía `seed` y H3 repetía siempre la
+  semilla 42 de la plantilla.
+- **Espera del túnel SSH** (`18bc56c`): `SshLocalForward` ya no duerme 3 s fijos tras
+  abrir el forward. Sondea el puerto local cada 0,2 s hasta que acepta conexiones, con
+  techo de 15 s. Si ssh sigue vivo pero el puerto no abre en ese tiempo, cierra el
+  túnel y responde con el mensaje user-safe de túnel caído. En boxes con ~200 ms de
+  latencia el forward tardaba ~4 s y el primer request fallaba con «ComfyUI no está
+  disponible en este momento».
+- **LoRAs que usa el menú en los perfiles** (`9121d6c`): los flujos de imagen fallaban
+  al validar cuando la config del usuario tenía un LoRA extra que no estaba en el box.
+  - `a100`, `l4` y `t4` descargan `loras/RealisticSnapshotKrea2.safetensors`
+    (Civitai 3084537, `auth=civitai`, 228 MB).
+  - Nuevo symlink `loras/KNP_000003000.safetensors` → `Krea2NSFWV4.safetensors`: los
+    flujos `agil_nsfw*` llevan horneado el segundo nombre y la config del usuario pide el
+    primero; un solo archivo sirve a los dos.
