@@ -15,7 +15,8 @@
     "agil_nsfw_hq",
     "agil_moody_hq",
     "grok_edit_hq",
-    "agil_edit_hq"
+    "agil_edit_hq",
+    "minimax_h3_i2v"
   ],
   "substitutions": {
     "krea2_turbo_fp8_scaled.safetensors": "krea2_turbo_bf16.safetensors",
@@ -111,6 +112,36 @@
       "url": "https://huggingface.co/yufusoft/Krea2_NSFW_V4/resolve/main/KNP_000003000.safetensors",
       "auth": "none",
       "min_size": 400000000
+    },
+    {
+      "path": "diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+      "auth": "none",
+      "min_size": 20970379616
+    },
+    {
+      "path": "text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      "auth": "none",
+      "min_size": 15687142551
+    },
+    {
+      "path": "vae/minimax_h3_video_vae_fp16.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_video_vae_fp16.safetensors",
+      "auth": "none",
+      "min_size": 5207808496
+    },
+    {
+      "path": "vae/minimax_h3_audio_vae_fp32.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_audio_vae_fp32.safetensors",
+      "auth": "none",
+      "min_size": 605254808
+    },
+    {
+      "path": "loras/RealisticSnapshotKrea2.safetensors",
+      "url": "https://civitai.com/api/download/models/3084537",
+      "auth": "civitai",
+      "min_size": 228587720
     }
   ],
   "symlinks": [
@@ -121,6 +152,7 @@
     ["unet/Moody-Krea-Mix-v4.1G_00001__clean_nvfp4.safetensors", "../diffusion_models/Moody-Krea-Mix-v4.1G_00001__clean_nvfp4.safetensors"],
     ["unet/qwen_image_edit_2511_fp8mixed.safetensors", "../diffusion_models/qwen_image_edit_2511_fp8mixed.safetensors"],
     ["unet/seedvr2_7b_int8_convrot.safetensors", "../diffusion_models/seedvr2_7b_int8_convrot.safetensors"],
-    ["vae/qwen-image/qwen_image_vae.safetensors", "../qwen_image_vae.safetensors"]
+    ["vae/qwen-image/qwen_image_vae.safetensors", "../qwen_image_vae.safetensors"],
+    ["loras/KNP_000003000.safetensors", "Krea2NSFWV4.safetensors"]
   ]
 }

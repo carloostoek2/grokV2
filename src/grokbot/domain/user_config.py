@@ -84,7 +84,6 @@ COMFYUI_MENU_HIDDEN_FLOWS = frozenset({
     "wan_i2v",
     "qwen21_t2i",
     "flux1_dev_t2i",
-    "minimax_h3_i2v",
     "face_detail_impact",
     "instantid_sdxl",
     "ohwx_krea2",

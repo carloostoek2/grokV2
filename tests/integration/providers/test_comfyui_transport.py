@@ -103,6 +103,46 @@ async def test_ensure_starts_and_returns_base_url():
 
 
 @pytest.mark.asyncio
+async def test_ensure_waits_until_local_port_is_ready():
+    """El forward abre tarde en enlaces lentos: se sondea el puerto, no se duerme fijo."""
+    proc = FakeProc(returncode=None)
+    calls = {"n": 0}
+
+    def checker(port: int) -> bool:
+        calls["n"] += 1
+        return calls["n"] >= 3
+
+    fwd = SshLocalForward(
+        TunnelConfig(host="box", ssh_port=2222, remote_port=18188, local_port=19000),
+        grace=2.0,
+        port_checker=checker,
+    )
+    fwd._spawner = FakeSpawner(proc)
+
+    url = await fwd.ensure()
+
+    assert url == "http://127.0.0.1:19000"
+    assert calls["n"] >= 3
+    await fwd.close()
+
+
+@pytest.mark.asyncio
+async def test_ensure_raises_when_local_port_never_opens():
+    """ssh vivo pero sin forward utilizable: falla con error tipado, no cuelga."""
+    proc = FakeProc(returncode=None)
+    fwd = SshLocalForward(
+        TunnelConfig(host="box", ssh_port=2222, remote_port=18188, local_port=19000),
+        grace=0.3,
+        port_checker=lambda p: False,
+    )
+    fwd._spawner = FakeSpawner(proc)
+
+    with pytest.raises(ProviderUnavailableError):
+        await fwd.ensure()
+    assert fwd.running is False
+
+
+@pytest.mark.asyncio
 async def test_ensure_not_configured_raises():
     fwd = _make_tunnel(host="")
 

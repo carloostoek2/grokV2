@@ -20,7 +20,8 @@ from grokbot.providers.comfyui.workflows.resolver import (
 )
 
 
-def test_patchable_seed_nodes_skips_missing_nodes_and_unsupported_inputs():
+def test_patchable_seed_nodes_accepts_seed_and_noise_seed():
+    """``seed`` (KSampler) y ``noise_seed`` (RandomNoise/KSamplerAdvanced) valen."""
     flow = Flow(
         id="custom",
         name="Custom",
@@ -34,7 +35,29 @@ def test_patchable_seed_nodes_skips_missing_nodes_and_unsupported_inputs():
         seed_nodes=("1", "2", "3", "9"),
     )
 
-    assert patchable_seed_nodes(flow) == ("1",)
+    assert patchable_seed_nodes(flow) == ("1", "2")
+
+
+def test_render_patches_noise_seed_on_random_noise():
+    flow = Flow(
+        id="custom",
+        name="Custom",
+        file="custom.json",
+        graph={
+            "6": {"class_type": "MiniMaxH3ImageToVideo", "inputs": {"prompt": ""}},
+            "10": {"class_type": "RandomNoise", "inputs": {"noise_seed": 42}},
+        },
+        media_type=MediaType.VIDEO,
+        positive_node="6",
+        positive_input="prompt",
+        seed_nodes=("10",),
+    )
+
+    graph = render(flow, "un vídeo", lambda: 7777)
+
+    assert graph["10"]["inputs"]["noise_seed"] == 7777
+    assert graph["6"]["inputs"]["prompt"] == "un vídeo"
+    assert flow.graph["10"]["inputs"]["noise_seed"] == 42
 
 
 def test_get_flow_grok_style_returns_flow():
@@ -88,6 +111,7 @@ def test_flows_returns_registered_flows():
         "instantid_sdxl",
         "ohwx_krea2",
         "ohwx_edit",
+        "minimax_h3_i2v",
     }
 
 
@@ -565,4 +589,12 @@ def test_get_flow_wan_i2v_supports_source_video():
     assert flow.requires_source is True
     assert flow.source_node == "1"
     assert flow.source_input == "image"
+
+
+
+# ---------------------------------------------------------------------------
+# Allowlist de menú por box (COMFYUI_MENU_FLOWS): un box con pocos pesos debe
+# enseñar solo los flujos que puede correr, sin tocar el catálogo del perfil.
+# ---------------------------------------------------------------------------
+
 

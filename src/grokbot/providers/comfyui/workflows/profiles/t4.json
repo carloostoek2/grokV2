@@ -47,12 +47,19 @@
       "url": "https://huggingface.co/yufusoft/Krea2_NSFW_V4/resolve/main/KNP_000003000.safetensors",
       "auth": "none",
       "min_size": 400000000
+    },
+    {
+      "path": "loras/RealisticSnapshotKrea2.safetensors",
+      "url": "https://civitai.com/api/download/models/3084537",
+      "auth": "civitai",
+      "min_size": 228587720
     }
   ],
   "symlinks": [
     ["clip/qwen3vl_4b_fp8_scaled.safetensors", "../text_encoders/qwen3vl_4b_fp8_scaled.safetensors"],
     ["unet/Krea-2-Turbo-Q4_K_M.gguf", "../diffusion_models/Krea-2-Turbo-Q4_K_M.gguf"],
-    ["vae/qwen-image/qwen_image_vae.safetensors", "../qwen_image_vae.safetensors"]
+    ["vae/qwen-image/qwen_image_vae.safetensors", "../qwen_image_vae.safetensors"],
+    ["loras/KNP_000003000.safetensors", "Krea2NSFWV4.safetensors"]
   ],
   "node_patches": [
     {

@@ -100,6 +100,7 @@ def test_config_comfyui_keyboard_lists_seeds_and_flows():
         "cfg:comfyui:flow:agil_moody_hq",
         "cfg:comfyui:flow:grok_edit_hq",
         "cfg:comfyui:flow:agil_edit_hq",
+        "cfg:comfyui:flow:minimax_h3_i2v",
         "cfg:lora:open",
         "cfg:back:model",
         "cfg:close",

@@ -37,7 +37,11 @@ _TUNNEL_DOWN_MSG = (
 )
 
 _DEFAULT_SSH_BIN = "ssh"
-_SSH_GRACE_SEC = 3.0  # window to detect an immediate ssh exit (bad key/auth/port)
+# Techo para detectar un ssh que muere (clave/puerto) y para esperar a que el
+# forward local acepte conexiones. La espera real termina en cuanto el puerto
+# está listo; el techo solo cubre enlaces de latencia alta (~4 s medidos).
+_SSH_GRACE_SEC = 15.0
+_READY_POLL_SEC = 0.2
 _DRAIN_LIMIT = 40
 
 
@@ -241,7 +245,7 @@ class SshLocalForward:
         self._bound = local
         self._drain_task = asyncio.create_task(self._drain_stderr(proc))
         if self._grace:
-            await asyncio.sleep(self._grace)
+            await self._wait_ready(proc, local, self._grace)
         if proc.returncode is not None:
             # Died during the grace window (auth refused, forward failure...).
             logger.warning(
@@ -251,6 +255,31 @@ class SshLocalForward:
             )
             await self.close()
             raise ProviderUnavailableError(_TUNNEL_DOWN_MSG, user_message=_TUNNEL_DOWN_MSG)
+        if self._grace and not self._port_checker(local):
+            # ssh sigue vivo pero el forward no acepta conexiones: en un enlace
+            # de latencia alta 3 s fijos no bastaban y el primer request fallaba.
+            logger.warning(
+                "comfyui tunnel did not open local port %d within %.1fs", local, self._grace
+            )
+            await self.close()
+            raise ProviderUnavailableError(_TUNNEL_DOWN_MSG, user_message=_TUNNEL_DOWN_MSG)
+
+    async def _wait_ready(self, proc: ProcessLike, port: int, timeout: float) -> None:
+        """Esperar a que el puerto local acepte conexiones (o a que ssh muera).
+
+        Un ``sleep`` fijo de 3 s funcionaba en enlaces rápidos pero en cajas con
+        ~200 ms de ida y vuelta el forward tarda ~4 s: el primer request de cada
+        arranque fallaba con «ComfyUI no está disponible». Sondeamos el puerto
+        y salimos en cuanto está listo; el timeout es solo el techo.
+        """
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        while loop.time() < deadline:
+            if proc.returncode is not None:
+                return
+            if self._port_checker(port):
+                return
+            await asyncio.sleep(_READY_POLL_SEC)
 
     async def _drain_stderr(self, proc: ProcessLike) -> None:
         """Read stderr line by line into a bounded tail (log-only)."""
