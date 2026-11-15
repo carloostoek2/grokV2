@@ -334,7 +334,7 @@ seguridad.
 ```bash
 $SSH 'curl -s -o /dev/null -w "%{http_code}\n" -X POST \
   -H "Content-Type: application/json" -d "{}" \
-  http://127.0.0.1:18188/customnode/install/git_url'   # 400 = puerta abierta
+  http://127.0.0.1:18188/customnode/install/git_url'   # 400 (3.x) / 405 (4.x) = abierta
 ```
 
 `403`/`404` = sigue bloqueado: comprobar que el arranque sea con `--listen 127.0.0.1` y que
@@ -628,7 +628,7 @@ que ComfyUI está vivo, no que el bot puede generar.
 | Un custom node nuevo no carga | ComfyUI no se reinició | `supervisorctl restart comfyui` |
 | El auto-off corta una generación | Límite de 2 h | `colab-comfy ampliar 1h` (no reinicia nada) |
 | Workflow remoto «funciona» pero ignora el box | El archivo no se llama por `_meta.id`; cayó a embed sin fallar | Renombrar a `<id>.json`; el journal sano dice `Loaded ... from remote` |
-| Manager: «A security error has occurred. Please check the terminal logs» al instalar | Manager 3.x nace con `allow_git_url_install = False` (y `allow_pip_install = False`) | §5.3.1: parar, poner ambos en `True`, arrancar; verificar con el `POST` que devuelve `400` |
+| Manager: «A security error has occurred. Please check the terminal logs» al instalar | Manager nace con `allow_git_url_install = False` (y `allow_pip_install = False`) | §5.3.1: parar, poner ambos en `True`, arrancar; el `POST` de prueba debe dar `400` (3.x) o `405` (4.x), nunca `403`/`404` |
 | El flag del Manager «no hace efecto» tras editarlo | Los flags se leen **solo al arrancar** y `config.ini` nace en el primer arranque | Editar con ComfyUI **parado** y volver a arrancarlo; comprobar la ruta `user/__manager/config.ini` |
 
 ## 9. Reglas duras
@@ -665,7 +665,7 @@ que ComfyUI está vivo, no que el bot puede generar.
     nace con `allow_git_url_install = False` en `user/__manager/config.ini`, así que
     cualquier *Install* desde la UI falla con «A security error has occurred». No se
     entrega un box sin haber abierto esa puerta (con `--listen 127.0.0.1`) y verificado
-    con el `POST` que devuelve `400`. El Manager activo es el del **paquete pip** con
+    con el `POST` (400 en 3.x, 405 en 4.x). El Manager activo es el del **paquete pip** con
     `--enable-manager`: sustituye al nodo y habilita el botón **«Install all»** del aviso
     de nodos faltantes.
 13. **Calidad máxima primero; nunca degradar por precaución.** Se despliega y se elige
