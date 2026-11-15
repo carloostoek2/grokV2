@@ -284,13 +284,15 @@ async def test_incomplete_seed_mapping_never_claims_reproducibility(tmp_path):
         "_meta": {"id": "grok_style", "media_type": "image", "positive_node": "4", "seed_nodes": ["1", "17"], "save_nodes": ["19"]},
         "4": {"class_type": "CLIPTextEncode", "inputs": {"text": ""}},
         "1": {"class_type": "KSampler", "inputs": {"seed": 0}},
-        "17": {"class_type": "KSamplerAdvanced", "inputs": {"noise_seed": 7}},
+        # Semilla enlazada a otro nodo: no es parcheable, así que el meta no
+        # debe anunciar reproducibilidad. (``noise_seed`` literal sí se parchea.)
+        "17": {"class_type": "KSamplerAdvanced", "inputs": {"seed": ["5", 0]}},
     }
     configure_workflow_source(source="remote", fetch=lambda _: json.dumps(graph))
     result = await prov.generate(_req(params={"model": "grok_style", "seed": 42}))
     assert "seed" not in result.meta
     assert calls[0].graph["1"]["inputs"]["seed"] == 42
-    assert calls[0].graph["17"]["inputs"]["noise_seed"] == 7
+    assert calls[0].graph["17"]["inputs"]["seed"] == ["5", 0]
 
 
 @pytest.mark.asyncio

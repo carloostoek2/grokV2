@@ -440,18 +440,34 @@ def get_flow(flow_id: str) -> Flow | None:
     return _get_embed_flow(flow_id)
 
 
-def patchable_seed_nodes(flow: Flow) -> tuple[str, ...]:
-    """``seed_nodes`` que existen en el grafo y exponen un input literal ``seed``.
+# Nombres de input que llevan una semilla literal. ``seed`` lo usan KSampler y
+# sus variantes; ``noise_seed`` lo usan ``RandomNoise`` y ``KSamplerAdvanced``
+# (p. ej. el flujo MiniMax H3). Solo se parchea el que exista como int.
+_SEED_INPUT_NAMES = ("seed", "noise_seed")
 
-    Un id ausente o un nodo con otro nombre de input (p. ej. ``noise_seed`` de
-    ``KSamplerAdvanced``) se ignora aquí; el provider usa esta lista para no
-    anunciar en ``meta["seed"]`` una semilla que nunca se escribió.
+
+def _seed_input_name(node: object) -> str | None:
+    """Input de semilla literal del nodo (``seed`` o ``noise_seed``), o ``None``."""
+    if not isinstance(node, dict):
+        return None
+    inputs = node.get("inputs", {})
+    for name in _SEED_INPUT_NAMES:
+        if type(inputs.get(name)) is int:
+            return name
+    return None
+
+
+def patchable_seed_nodes(flow: Flow) -> tuple[str, ...]:
+    """``seed_nodes`` que existen en el grafo y exponen una semilla literal.
+
+    Vale tanto ``seed`` como ``noise_seed``. Un id ausente o un nodo cuyo input
+    de semilla es un enlace (lista) se ignora aquí; el provider usa esta lista
+    para no anunciar en ``meta["seed"]`` una semilla que nunca se escribió.
     """
     return tuple(
         node_id
         for node_id in flow.seed_nodes
-        if isinstance(flow.graph.get(node_id), dict)
-        and type(flow.graph[node_id].get("inputs", {}).get("seed")) is int
+        if _seed_input_name(flow.graph.get(node_id)) is not None
     )
 
 
@@ -461,7 +477,7 @@ def render(flow: Flow, prompt: str, seed_factory) -> dict:
     El prompt se escribe en ``flow.positive_node`` / ``flow.positive_input``
     (default ``"text"`` para CLIPTextEncode; p. ej. ``"prompt"`` en un
     Wildcard Processor). Solo se parchean los nodos de
-    ``patchable_seed_nodes(flow)``.
+    ``patchable_seed_nodes(flow)``, en su input real (``seed`` o ``noise_seed``).
     """
     graph = copy.deepcopy(flow.graph)
     pos = graph.get(flow.positive_node)
@@ -472,5 +488,7 @@ def render(flow: Flow, prompt: str, seed_factory) -> dict:
         )
     pos["inputs"][flow.positive_input] = prompt
     for node_id in patchable_seed_nodes(flow):
-        graph[node_id]["inputs"]["seed"] = seed_factory()
+        name = _seed_input_name(graph[node_id])
+        if name is not None:
+            graph[node_id]["inputs"][name] = seed_factory()
     return graph
