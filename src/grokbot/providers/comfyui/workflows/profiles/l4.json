@@ -17,6 +17,9 @@
     "grok_edit_hq",
     "agil_edit_hq"
   ],
+  "min_vram_gb": {
+    "agil_edit_nsfw": 28
+  },
   "substitutions": {
     "qwen_image_edit_2511_fp8mixed.safetensors": "qwen-image-edit-2511-Q4_K_M.gguf",
     "Moody-Krea-Mix-v4.1G_00001__clean_nvfp4.safetensors": "Moody-Krea-Mix-v7_00002__clean_fp8.safetensors"

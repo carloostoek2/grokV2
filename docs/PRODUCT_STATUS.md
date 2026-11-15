@@ -350,11 +350,13 @@ local-forward** (`transport.py` → `client.py` → plantillas API-format en
   `agil_nsfw` y `grok_edit` (medido: 179 s por edición en caliente). Detalle en
   `docs/comfyui/PERFILES_GPU.md`.
 - **MiniMax H3 (`minimax_h3_i2v`, 2026-10-04, commit directo `f6bbae3`)**: se registra en
-  `COMFYUI_FLOWS` como flujo de video (también en `COMFY_VIDEO_MODELS`). Desde `737944c`
-  está en `COMFYUI_MENU_HIDDEN_FLOWS`, así que no aparece en el teclado de `/config`.
+  `COMFYUI_FLOWS` como flujo de video (también en `COMFY_VIDEO_MODELS`). Desde `18bc56c`
+  tiene plantilla y salió de `COMFYUI_MENU_HIDDEN_FLOWS`: aparece en el teclado de
+  `/config` y solo el perfil `a100` lo incluye. `l4` y `t4` no lo ofrecen.
 - **Alcance actual**: **22 flujos registrados** en `COMFYUI_FLOWS`; el menú depende del
-  perfil de GPU: **13 visibles en `a100`** (7 base + 6 `*_hq`), **12 en `l4`** y **4 en
-  `t4`**; el resto son legacy/ocultos (`COMFYUI_MENU_HIDDEN_FLOWS`). Salud real de cada
+  perfil de GPU: **14 visibles en `a100`** (7 base + 6 `*_hq` + MiniMax H3), **12 en una L4 de
+  24 GB** y **13 en tarjetas `l4` con 28 GB o más** (`agil_edit_nsfw`, desde `237b0fc`,
+  condicionado por `min_vram_gb`) y **4 en `t4`**; el resto son legacy/ocultos (`COMFYUI_MENU_HIDDEN_FLOWS`). Salud real de cada
   flujo y pesos instalados:
   `docs/comfyui/INVENTARIO_BOX_COLAB.md`; el inventario Vast queda como histórico.
 

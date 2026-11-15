@@ -134,8 +134,12 @@ def active_flow_ids() -> frozenset[str] | None:
     return frozenset(_active_profile.flows) if _active_profile is not None else None
 
 
-def set_active_profile(profile_id: str | None) -> None:
+def set_active_profile(profile_id: str | None, *, vram_gb: float | None = None) -> None:
     """Cambiar el perfil activo (``None`` o ``""`` = sin filtro).
+
+    ``vram_gb`` es la VRAM detectada de la tarjeta: quita los flujos del perfil
+    cuyo ``min_vram_gb`` no alcanza (ver :meth:`Profile.for_vram`). ``None``
+    (perfil forzado sin detección) oculta todos los flujos con requisito.
 
     Limpia las entradas en caché dependientes del perfil: los ``Flow``
     cargados llevan los pesos horneados y no valen para otro perfil.
@@ -151,7 +155,16 @@ def set_active_profile(profile_id: str | None) -> None:
             )
             _active_profile = None
         else:
-            _active_profile = perfiles[profile_id]
+            base = perfiles[profile_id]
+            _active_profile = base.for_vram(vram_gb)
+            ocultos = [f for f in base.flows if f not in _active_profile.flows]
+            if ocultos:
+                logger.info(
+                    "ComfyUI perfil %s: VRAM %s insuficiente para %s; se ocultan",
+                    base.id,
+                    f"{vram_gb:.1f} GB" if vram_gb else "desconocida",
+                    ", ".join(ocultos),
+                )
     _flows_cached.cache_clear()
     _remote_cache.clear()
     if _active_profile is not None:
@@ -289,11 +302,19 @@ def _profile_template(path: Path, profile: Profile | None) -> Flow:
 
 
 @lru_cache(maxsize=None)
-def _flows_cached(profile_id: str | None) -> tuple[Flow, ...]:
-    """Flujos efectivos del perfil (sin perfil: todas las plantillas base)."""
+def _flows_cached(
+    profile_id: str | None, flow_ids: tuple[str, ...] | None = None
+) -> tuple[Flow, ...]:
+    """Flujos efectivos del perfil (sin perfil: todas las plantillas base).
+
+    ``flow_ids`` son los ids ya filtrados por VRAM (``None`` = los del perfil).
+    """
     profile = _profile_by_id(profile_id)
     index = _template_index_cached()
-    ids = profile.flows if profile is not None else tuple(index)
+    if profile is None:
+        ids = tuple(index)
+    else:
+        ids = flow_ids if flow_ids is not None else profile.flows
     flows_list: list[Flow] = []
     for flow_id in ids:
         path = index.get(flow_id)
@@ -308,8 +329,9 @@ def _flows_cached(profile_id: str | None) -> tuple[Flow, ...]:
 
 def flows() -> tuple[Flow, ...]:
     """Flujos disponibles con el perfil activo (orden del perfil)."""
-    activo = _active_profile.id if _active_profile is not None else None
-    return _flows_cached(activo)
+    if _active_profile is None:
+        return _flows_cached(None)
+    return _flows_cached(_active_profile.id, _active_profile.flows)
 
 
 def _get_embed_flow(flow_id: str) -> Flow | None:
