@@ -36,7 +36,7 @@ Consumidores del mismo JSON: el resolver del bot, `actualizar_cuaderno.py`
 
 | Perfil | Tarjeta | Krea | Qwen Edit | Flujos |
 |---|---|---|---|---|
-| `a100` | A100 / H100 | bf16 24,48 + 8,27 GB | fp8mixed 19,12 GB | 13 |
+| `a100` | A100 / H100 | bf16 24,48 + 8,27 GB | fp8mixed 19,12 GB | 14 (incluye `minimax_h3_i2v`) |
 | `l4` | L4 24 GB (y cualquier tarjeta de 20–39 GB) | fp8 12,24 + 4,88 GB | GGUF Q4_K_M 11,96 GB | 12 con menos de 28 GB de VRAM; 13 con 28 GB o más (`agil_edit_nsfw`) |
 | `t4` | T4 16 GB | GGUF Q4_K_M 6,97 GB | no | 4: `grok_style`, `agil_solo`, `agil_nsfw`, `grok_edit` |
 

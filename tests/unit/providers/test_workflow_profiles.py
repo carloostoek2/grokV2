@@ -292,13 +292,10 @@ async def test_refresh_profile_reacciona_a_la_vram_dentro_de_l4():
 # --- Plantillas y conteo de flujos visibles ---------------------------------
 
 # Flujos registrados en COMFYUI_FLOWS que hoy NO tienen plantilla en
-# ``templates/``. Solo se aceptan si no se ofrecen: ocultos del menú y fuera de
-# todo perfil (así ``get_flow`` devuelve ``None`` y nadie los puede elegir).
-FLOWS_SIN_PLANTILLA = {
-    # MiniMax H3 I2V: el id se conserva para no invalidar configs guardadas,
-    # pero su plantilla nunca se agregó al repo (oculto desde 737944c).
-    "minimax_h3_i2v",
-}
+# ``templates/``. Comparada por igualdad exacta: si aparece una plantilla
+# nueva, el test obliga a sacarla de aquí. Tras ``18bc56c`` (MiniMax H3) el
+# set está vacío: todo flujo registrado tiene plantilla.
+FLOWS_SIN_PLANTILLA: set[str] = set()
 
 
 def test_todo_flujo_registrado_tiene_plantilla_salvo_la_lista_conocida():
@@ -310,16 +307,29 @@ def test_todo_flujo_registrado_tiene_plantilla_salvo_la_lista_conocida():
     assert sin_plantilla == FLOWS_SIN_PLANTILLA
 
 
-def test_flujos_sin_plantilla_no_se_ofrecen():
+def test_minimax_h3_i2v_se_ofrece_donde_el_perfil_lo_permite():
+    """Desde 18bc56c, MiniMax H3 tiene plantilla y solo el perfil a100 lo incluye.
+
+    Reemplaza ``test_flujos_sin_plantilla_no_se_ofrecen``: ya no hay flujos
+    sin plantilla, así que ese test quedaría vacío.
+    """
     from grokbot.domain.user_config import COMFYUI_MENU_HIDDEN_FLOWS
 
-    assert FLOWS_SIN_PLANTILLA <= COMFYUI_MENU_HIDDEN_FLOWS
-    for perfil in PROFILES.values():
-        assert not FLOWS_SIN_PLANTILLA & set(perfil.flows), perfil.id
+    assert "minimax_h3_i2v" not in COMFYUI_MENU_HIDDEN_FLOWS
+    assert "minimax_h3_i2v" in PROFILES["a100"].flows
+    assert "minimax_h3_i2v" not in PROFILES["l4"].flows
+    assert "minimax_h3_i2v" not in PROFILES["t4"].flows
     reset_workflow_source()
     try:
-        for flow_id in FLOWS_SIN_PLANTILLA:
-            assert get_flow(flow_id) is None
+        set_active_profile(None)
+        assert get_flow("minimax_h3_i2v") is not None
+        set_active_profile("a100", vram_gb=80.0)
+        assert get_flow("minimax_h3_i2v") is not None
+        # l4 con VRAM de sobra sigue sin H3: no está en el perfil.
+        set_active_profile("l4", vram_gb=VRAM_32)
+        assert get_flow("minimax_h3_i2v") is None
+        set_active_profile("t4", vram_gb=15.0)
+        assert get_flow("minimax_h3_i2v") is None
     finally:
         reset_workflow_source()
 
@@ -347,11 +357,11 @@ def _flujos_del_menu() -> list[str]:
 @pytest.mark.parametrize(
     ("perfil_id", "vram", "visibles"),
     [
-        (None, None, 13),  # sin perfil: catálogo completo menos ocultos
-        ("a100", 80.0, 13),
-        ("l4", VRAM_L4, 12),  # L4 24 GB: sin agil_edit_nsfw
+        (None, None, 14),  # sin perfil: catálogo completo menos ocultos (incluye MiniMax H3)
+        ("a100", 80.0, 14),
+        ("l4", VRAM_L4, 12),  # L4 24 GB: sin agil_edit_nsfw; H3 no está en l4
         ("l4", None, 12),  # COMFYUI_PERFIL=l4 forzado: VRAM desconocida
-        ("l4", VRAM_32, 13),  # tarjeta l4 de 32 GB: con agil_edit_nsfw
+        ("l4", VRAM_32, 13),  # tarjeta l4 de 32 GB: con agil_edit_nsfw; sin H3
         ("t4", 15.0, 4),
     ],
 )
