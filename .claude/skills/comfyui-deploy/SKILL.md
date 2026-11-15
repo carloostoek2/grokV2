@@ -17,7 +17,7 @@ cómo verificar** que el bot puede generar. No sustituye a las otras dos skills 
 | `comfyui-hyperrealism-krea2` | Diseñar/optimizar un **workflow** (modelo, sampler, pasos, LoRA) |
 | **`comfyui-deploy`** (esta) | **Llevar ComfyUI a una GPU y conectarlo con el bot** |
 
-> **Alcance de esta versión (1.4.0).** Antes de desplegar se **registra la instancia**
+> **Alcance de esta versión (1.5.0).** Antes de desplegar se **registra la instancia**
 > (§0): la dirección SSH que el usuario envía una sola vez y las especificaciones quedan en
 > un archivo plano local, y las sesiones siguientes lo reutilizan sin volver a pedir acceso.
 > El despliegue **Vast** sigue siendo por fases obligatorias:
@@ -27,8 +27,10 @@ cómo verificar** que el bot puede generar. No sustituye a las otras dos skills 
 > está limpia, se instala desde cero (`references/vast-clean-install.md`). Esa fase
 > incluye,**siempre**, dejar el ComfyUI-Manager en condiciones de instalar desde la UI
 > (§5.3.1): en un box nuevo los flags de instalación nacen en `False` y cualquier
-> instalación falla con «A security error has occurred». **Colab no cambia**: su ruta
-> sigue igual en `references/colab.md`.
+> instalación falla con «A security error has occurred». Además se instala el Manager por
+> pip y se arranca con `--enable-manager` (§5.3.2): es el que sustituye al nodo y pone el
+> botón **«Install all»** para resolver de golpe los nodos que falten. **Colab no cambia**:
+> su ruta sigue igual en `references/colab.md`.
 
 ## 0. Registrar la instancia (una vez por sesión)
 
@@ -347,6 +349,42 @@ Reglas de este paso:
 - `user/` es efímero por instancia: **cada box nuevo vuelve a nacer en `False`**. Por eso es
   parte del despliegue y no un arreglo de una vez.
 
+### 5.3.2 Fase 0.9 — Manager pip con «Install all» (obligatorio)
+
+El Manager que se instala con pip **sustituye al nodo** y es el que habilita el botón
+**«Install all»** en el aviso de nodos faltantes: ComfyUI enumera las clases que faltan y las
+instala todas de una vez, sin buscarlas ni una por una en el gestor. Por eso es un paso fijo
+del despliegue, no un arreglo de emergencia.
+
+```bash
+$SSH '/venv/main/bin/pip install -U --pre comfyui-manager'
+$SSH 'supervisorctl stop comfyui
+  for f in /etc/environment /etc/supervisor/conf.d/comfyui.conf; do
+    [ -f "$f" ] && sed -i "s|--enable-cors-header|--enable-cors-header --enable-manager|" "$f"
+  done
+  supervisorctl reread && supervisorctl update comfyui && supervisorctl restart comfyui
+  ps -eo args= | grep "[m]ain.py"'
+```
+
+- El paquete pip es el Manager activo; **no** hay que conservar además el nodo git. Si la
+  imagen trae `custom_nodes/ComfyUI-Manager`, el pip toma el relevo y la copia del nodo queda
+  inerte.
+- La bandera tiene que verse en el `ps` del proceso. Si el supervisor define su propio
+  `COMFYUI_ARGS` en `comfyui.conf`, editar **ese** archivo también: `/etc/environment` solo
+  no basta.
+- `--enable-manager` es lo que lo carga al arrancar: sin la bandera no aparece el botón.
+- Al abrir o encolar un flujo con nodos desconocidos sale el aviso con **Install all**:
+  pulsarlo instala todo lo que falta. Después, reiniciar ComfyUI y comprobar que cada clase
+  devuelve `200`:
+
+  ```bash
+  $SSH 'for n in <Clase1> <Clase2>; do printf "%s: " "$n"; \
+    curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:18188/object_info/$n; done'
+  ```
+
+- Si el flujo falla y todas sus clases responden `200`, el problema **no** son los nodos:
+  revisar pesos, nombres de archivo y `lora_name` (§8).
+
 ### 5.4 Fase 1 — Mínimo viable (bloqueante)
 
 Meta: **`agil_solo` generando de verdad desde Telegram**. Nada de descargas completas
@@ -585,7 +623,8 @@ que ComfyUI está vivo, no que el bot puede generar.
 | En Vast `python: not found` | SSH no interactivo no activa el venv | Usar `/venv/main/bin/python` |
 | Falta `/workspace/ComfyUI/main.py` o `/venv/main`; `provision_vast.sh` aborta | Imagen Vast limpia, sin ComfyUI | **No recrear**: instalar con la fase 0.7 (`references/vast-clean-install.md`) |
 | `torch` no importa / `CUDA error: no kernel image` | Wheel CUDA más nueva que el driver | Driver ≥ 580.65 para `cu130`; si no, `cu128` (fase 0.7) |
-| Dos Managers o `--enable-manager` ignorado | Se mezcló Manager pip con el nodo git | Elegir una vía: en instalación limpia usar el nodo git y **no** ejecutar `provision_vast.sh` |
+| `--enable-manager` «ignorado» o aparecen dos Managers | Se dudó entre el paquete pip y el nodo git | Desde Manager 3.x el pip **sustituye** al nodo: dejar el pip con `--enable-manager` (§5.3.2) y reiniciar |
+| ComfyUI avisa de nodos faltantes y ofrece «Install all» | El flujo usa clases no instaladas | Pulsar **Install all** (Manager pip, §5.3.2); luego reiniciar y comprobar `object_info/<Clase>` = 200 |
 | Un custom node nuevo no carga | ComfyUI no se reinició | `supervisorctl restart comfyui` |
 | El auto-off corta una generación | Límite de 2 h | `colab-comfy ampliar 1h` (no reinicia nada) |
 | Workflow remoto «funciona» pero ignora el box | El archivo no se llama por `_meta.id`; cayó a embed sin fallar | Renombrar a `<id>.json`; el journal sano dice `Loaded ... from remote` |
@@ -622,11 +661,13 @@ que ComfyUI está vivo, no que el bot puede generar.
     `instancia_actual.txt` (§0). Solo se pide si no existe o si el usuario envía otra
     dirección; un cambio de `host:puerto` se trata como instancia nueva y la anterior pasa
     al historial.
-12. **El Manager se deja instalable como parte del despliegue** (§5.3.1). Todo box nuevo
+12. **El Manager se deja instalable y con «Install all»** (§5.3.1 y §5.3.2). Todo box nuevo
     nace con `allow_git_url_install = False` en `user/__manager/config.ini`, así que
     cualquier *Install* desde la UI falla con «A security error has occurred». No se
     entrega un box sin haber abierto esa puerta (con `--listen 127.0.0.1`) y verificado
-    con el `POST` que devuelve `400`.
+    con el `POST` que devuelve `400`. El Manager activo es el del **paquete pip** con
+    `--enable-manager`: sustituye al nodo y habilita el botón **«Install all»** del aviso
+    de nodos faltantes.
 13. **Calidad máxima primero; nunca degradar por precaución.** Se despliega y se elige
     variante con la **mayor calidad que la máquina pueda ejecutar**, aunque quede al límite
     de VRAM. Bajar de cuantización, recortar pasos o caer a GGUF solo **después de medir**
