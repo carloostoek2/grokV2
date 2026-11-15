@@ -105,6 +105,12 @@
       "url": "https://huggingface.co/Phr00t/Qwen-Image-Edit-Rapid-AIO/resolve/main/v23/Qwen-Rapid-AIO-NSFW-v23.safetensors",
       "auth": "none",
       "min_size": 25000000000
+    },
+    {
+      "path": "loras/RealisticSnapshotKrea2.safetensors",
+      "url": "https://civitai.com/api/download/models/3084537",
+      "auth": "civitai",
+      "min_size": 228587720
     }
   ],
   "symlinks": [
@@ -114,6 +120,7 @@
     ["unet/Moody-Krea-Mix-v7_00002__clean_fp8.safetensors", "../diffusion_models/Moody-Krea-Mix-v7_00002__clean_fp8.safetensors"],
     ["unet/qwen-image-edit-2511-Q4_K_M.gguf", "../diffusion_models/qwen-image-edit-2511-Q4_K_M.gguf"],
     ["unet/seedvr2_7b_int8_convrot.safetensors", "../diffusion_models/seedvr2_7b_int8_convrot.safetensors"],
-    ["vae/qwen-image/qwen_image_vae.safetensors", "../qwen_image_vae.safetensors"]
+    ["vae/qwen-image/qwen_image_vae.safetensors", "../qwen_image_vae.safetensors"],
+    ["loras/KNP_000003000.safetensors", "Krea2NSFWV4.safetensors"]
   ]
 }
