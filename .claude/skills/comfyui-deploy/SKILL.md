@@ -372,6 +372,17 @@ $SSH 'supervisorctl stop comfyui
 - La bandera tiene que verse en el `ps` del proceso. Si el supervisor define su propio
   `COMFYUI_ARGS` en `comfyui.conf`, editar **ese** archivo también: `/etc/environment` solo
   no basta.
+- **Para que sobreviva a los reinicios**, dejar el valor en `${WORKSPACE}/.env` (0600), que
+  `comfyui.sh` carga **después** de `/etc/environment`. Ese último lo regenera Vast en cada
+  arranque desde el entorno del contenedor y se lleva la bandera consigo:
+
+  ```bash
+  # /workspace/.env  (solo esta línea; respetar las comillas simples)
+  COMFYUI_ARGS='--disable-auto-launch --enable-cors-header --enable-manager --port 18188'
+  ```
+
+  Verificado: quitando la bandera de `/etc/environment` y reiniciando, el proceso sigue
+  arrancando con `--enable-manager`.
 - `--enable-manager` es lo que lo carga al arrancar: sin la bandera no aparece el botón.
 - Al abrir o encolar un flujo con nodos desconocidos sale el aviso con **Install all**:
   pulsarlo instala todo lo que falta. Después, reiniciar ComfyUI y comprobar que cada clase
