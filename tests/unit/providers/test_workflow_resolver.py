@@ -60,14 +60,19 @@ def test_render_patches_noise_seed_on_random_noise():
     assert flow.graph["10"]["inputs"]["noise_seed"] == 42
 
 
-def test_get_flow_grok_style_returns_flow():
-    flow = get_flow("grok_style")
+def test_get_flow_agil_solo_edit_returns_flow():
+    flow = get_flow("agil_solo_edit")
     assert flow is not None
-    assert flow.name == "Grok Style"
+    assert flow.name == "Ágil Solo Edit"
     assert flow.media_type is MediaType.IMAGE
-    assert flow.graph["4"]["class_type"] == "CLIPTextEncode"
-    assert flow.save_nodes == ("19",)
-    assert flow.supports_source is False
+    assert flow.supports_source is True
+    assert flow.requires_source is True
+    assert flow.source_node == "1"
+    assert flow.source_input == "image"
+    assert flow.positive_node == "8"
+    assert flow.positive_input == "prompt"
+    assert flow.seed_nodes == ("13",)
+    assert flow.save_nodes == ("15",)
 
 
 def test_get_flow_ohwx_krea2_is_t2i_without_baked_trigger():
@@ -90,20 +95,13 @@ def test_get_flow_ohwx_krea2_is_t2i_without_baked_trigger():
 def test_flows_returns_registered_flows():
     ids = {f.id for f in flows()}
     assert ids == {
-        "grok_style",
-        "grok_style_hq",
-        "donut_face",
         "agil_solo",
+        "agil_solo_edit",
         "agil_solo_hq",
-        "agil_nsfw",
-        "agil_nsfw_hq",
         "agil_moody",
         "agil_moody_hq",
-        "agil_edit_qwen",
         "agil_edit_hq",
-        "agil_edit_nsfw",
-        "grok_edit",
-        "grok_edit_hq",
+        "donut_face",
         "wan_i2v",
         "qwen21_t2i",
         "flux1_dev_t2i",
@@ -138,14 +136,9 @@ def test_krea2_model_files_are_shared_fp8_across_flows():
         turbo_flows.add(flow.id)
 
     assert turbo_flows == {
-        "grok_style",
-        "grok_style_hq",
         "agil_solo",
+        "agil_solo_edit",
         "agil_solo_hq",
-        "agil_nsfw",
-        "agil_nsfw_hq",
-        "grok_edit",
-        "grok_edit_hq",
         "ohwx_krea2",
         "ohwx_edit",
         "donut_face",
@@ -194,7 +187,7 @@ def test_get_flow_unknown_is_none():
 
 
 def test_render_patches_prompt_and_seeds_without_mutating_template():
-    flow = get_flow("grok_style")
+    flow = get_flow("ohwx_krea2")
     seed_values = iter([111, 222])
 
     graph = render(flow, "un gato rojo", lambda: next(seed_values))
@@ -239,36 +232,6 @@ def test_render_agil_solo_patches_prompt_and_seed():
     assert all("_meta" not in node for node in graph.values())
     # La plantilla cacheada no se muta.
     assert flow.graph["5"]["inputs"]["text"] == ""
-    assert flow.graph["8"]["inputs"]["seed"] == 0
-
-
-def test_get_flow_agil_nsfw_has_lora():
-    flow = get_flow("agil_nsfw")
-    assert flow is not None
-    assert flow.name == "Ágil NSFW"
-    assert flow.media_type is MediaType.IMAGE
-    assert flow.positive_node == "5"
-    assert flow.seed_nodes == ("8",)
-    assert flow.save_nodes == ("10",)
-    assert flow.supports_source is False
-    lora = flow.graph["4"]
-    assert lora["class_type"] == "LoraLoader"
-    assert lora["inputs"]["lora_name"] == "Krea2NSFWV4.safetensors"
-    assert lora["inputs"]["strength_model"] == 1.0
-    assert lora["inputs"]["strength_clip"] == 1.0
-    assert flow.graph["8"]["inputs"]["model"] == ["4", 0]
-    assert flow.graph["5"]["inputs"]["clip"] == ["4", 1]
-
-
-def test_render_agil_nsfw_patches_prompt_and_seed():
-    flow = get_flow("agil_nsfw")
-    graph = render(flow, "retrato editorial", lambda: 987)
-    assert graph["5"]["inputs"]["text"] == "retrato editorial"
-    assert graph["8"]["inputs"]["seed"] == 987
-    assert "_meta" not in graph
-    assert all("_meta" not in node for node in graph.values())
-    # El LoRA sigue cableado tras el render y la plantilla no se muta.
-    assert graph["8"]["inputs"]["model"] == ["4", 0]
     assert flow.graph["8"]["inputs"]["seed"] == 0
 
 
@@ -460,28 +423,9 @@ def test_remote_rejects_path_traversal_flow_id():
     assert get_flow("agil_moody/../../x") is None
 
 
-def test_get_flow_agil_edit_qwen_supports_source():
-    flow = get_flow("agil_edit_qwen")
-    assert flow is not None
-    assert flow.id == "agil_edit_qwen"
-    assert flow.supports_source is True
-    assert flow.requires_source is True
-    assert flow.source_node == "78"
-    assert flow.positive_input == "prompt"
-
-
-def test_get_flow_agil_edit_nsfw_supports_source():
-    flow = get_flow("agil_edit_nsfw")
-    assert flow is not None
-    assert flow.id == "agil_edit_nsfw"
-    assert flow.supports_source is True
-    assert flow.requires_source is True
-    assert flow.source_node == "2"
-
-
 def test_txt2img_flows_do_not_require_source():
     """requires_source is only for flows that make no sense without a photo."""
-    for flow_id in ("grok_style", "agil_solo", "agil_moody", "qwen21_t2i", "flux1_dev_t2i", "ohwx_krea2"):
+    for flow_id in ("agil_solo", "agil_moody", "qwen21_t2i", "flux1_dev_t2i", "ohwx_krea2"):
         flow = get_flow(flow_id)
         assert flow.supports_source is False, flow_id
         assert flow.requires_source is False, flow_id
@@ -501,27 +445,26 @@ def test_face_detail_and_instantid_require_source():
     assert instant.requires_source is True
     assert instant.media_type is MediaType.IMAGE
 
-def test_get_flow_grok_edit_edits_and_keeps_grok_style():
-    """Grok Style Edit: Krea2 instruction editing (krea2edit) + grokstyle LoRA."""
-    flow = get_flow("grok_edit")
+def test_get_flow_agil_solo_edit_edits_with_identity_only():
+    """Ágil Solo Edit: Krea2 instruction editing sin LoRA de estilo."""
+    flow = get_flow("agil_solo_edit")
     assert flow is not None
-    assert flow.name == "Grok Style Edit"
+    assert flow.name == "Ágil Solo Edit"
     assert flow.media_type is MediaType.IMAGE
     assert flow.supports_source is True
     assert flow.requires_source is True
     assert flow.source_node == "1"
     assert flow.source_input == "image"
-    # El prompt es una INSTRUCCIÓN: va al grounded encode (input "prompt"), no a CLIPTextEncode.
+    # El prompt es una INSTRUCCIÓN: va al grounded encode (input "prompt").
     assert flow.positive_node == "8"
     assert flow.positive_input == "prompt"
     assert flow.seed_nodes == ("13",)
     assert flow.save_nodes == ("15",)
 
     g = flow.graph
-    # Arquitectura krea2edit: el parche recibe el latente de la fuente y el target latente.
+    # Arquitectura krea2edit: el patch recibe el latente de la fuente.
     assert g["7"]["class_type"] == "Krea2EditModelPatch"
     assert g["7"]["inputs"]["source_latent"] == ["10", 0]
-    assert g["7"]["inputs"]["target_latent"] == ["11", 0]
     assert g["10"]["class_type"] == "VAEEncode"
     assert g["11"]["class_type"] == "EmptySD3LatentImage"
     # Positivo y negativo son grounded encodes (el text encoder VE la imagen).
@@ -530,19 +473,25 @@ def test_get_flow_grok_edit_edits_and_keeps_grok_style():
     assert g["8"]["inputs"]["image"] == ["1", 0]
     assert g["13"]["inputs"]["positive"] == ["8", 0]
     assert g["13"]["inputs"]["negative"] == ["9", 0]
-    # Turbo: 10 pasos, cfg 1.
+    # Turbo: 10 pasos, cfg 1, er_sde/simple.
     assert g["13"]["inputs"]["steps"] == 10
     assert g["13"]["inputs"]["cfg"] == 1.0
-    # Las dos LoRAs apiladas: identidad (habilita editar) y grokstyle (el look).
-    assert g["5"]["class_type"] == "LoraLoaderModelOnly"
-    assert g["5"]["inputs"]["lora_name"] == "krea2/krea2_identity_edit_v1_2.safetensors"
-    assert g["6"]["inputs"]["lora_name"] == "grokstyle_krea2_v2.safetensors"
-    assert g["6"]["inputs"]["model"] == ["5", 0]
-    assert g["7"]["inputs"]["model"] == ["6", 0]
+    assert g["13"]["inputs"]["sampler_name"] == "er_sde"
+    assert g["13"]["inputs"]["scheduler"] == "simple"
+    # Una sola LoRA: identidad v2. Ni grokstyle ni la NSFW.
+    loras = [
+        n["inputs"]["lora_name"]
+        for n in g.values()
+        if n.get("class_type") == "LoraLoaderModelOnly"
+    ]
+    assert loras == ["krea2_identity_edit_v2.safetensors"]
+    assert g["5"]["inputs"]["model"] == ["2", 0]
+    assert g["7"]["inputs"]["model"] == ["5", 0]
+    assert g["13"]["inputs"]["model"] == ["7", 0]
 
 
-def test_render_grok_edit_patches_instruction():
-    flow = get_flow("grok_edit")
+def test_render_agil_solo_edit_patches_instruction():
+    flow = get_flow("agil_solo_edit")
     graph = render(flow, "Change the background to a beach at sunset.", lambda: 77)
     assert graph["8"]["inputs"]["prompt"] == "Change the background to a beach at sunset."
     assert graph["13"]["inputs"]["seed"] == 77
@@ -598,3 +547,44 @@ def test_get_flow_wan_i2v_supports_source_video():
 # ---------------------------------------------------------------------------
 
 
+def test_active_flow_ids_sin_perfil_ni_menu_es_none():
+    configure_workflow_source(source="embed", host="")
+
+    assert resolver_mod.active_flow_ids() is None
+
+
+def test_active_flow_ids_menu_sin_perfil_devuelve_el_menu():
+    configure_workflow_source(
+        source="embed", host="", flows="agil_solo, agil_solo_edit"
+    )
+
+    assert resolver_mod.active_flow_ids() == frozenset(
+        {"agil_solo", "agil_solo_edit"}
+    )
+
+
+def test_active_flow_ids_menu_interseccion_con_perfil():
+    configure_workflow_source(
+        source="embed", host="", profile="a100", flows="agil_solo,agil_solo_edit"
+    )
+
+    assert resolver_mod.active_flow_ids() == frozenset(
+        {"agil_solo", "agil_solo_edit"}
+    )
+
+
+def test_active_flow_ids_menu_descarta_flujos_fuera_del_perfil():
+    configure_workflow_source(
+        source="embed", host="", profile="t4", flows="agil_solo,agil_edit_hq"
+    )
+
+    assert resolver_mod.active_flow_ids() == frozenset({"agil_solo"})
+
+
+def test_active_flow_ids_reconfigure_sin_menu_limpia_allowlist():
+    configure_workflow_source(source="embed", host="", flows="agil_solo")
+    configure_workflow_source(source="embed", host="", profile="a100")
+
+    assert resolver_mod.active_flow_ids() == frozenset(
+        resolver_mod.load_profiles()["a100"].flows
+    )

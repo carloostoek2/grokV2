@@ -80,25 +80,18 @@ def test_config_variant_keyboard():
 
 
 def test_config_comfyui_keyboard_lists_seeds_and_flows():
-    cfg = ComfyUIConfig(model="grok_style")
+    cfg = ComfyUIConfig(model="agil_solo")
     data = flat_callback_data(kb.config_comfyui_keyboard(cfg))
     # Flujos del menú + navegación; sin legacy, sin flujos ocultos y sin Dirty*.
     assert data == [
         "cfg:comfyui:seed:random",
         "cfg:comfyui:seed:batch",
         "cfg:comfyui:seed:fixed",
-        "cfg:comfyui:flow:grok_style",
         "cfg:comfyui:flow:agil_solo",
-        "cfg:comfyui:flow:agil_nsfw",
+        "cfg:comfyui:flow:agil_solo_edit",
         "cfg:comfyui:flow:agil_moody",
-        "cfg:comfyui:flow:agil_edit_qwen",
-        "cfg:comfyui:flow:agil_edit_nsfw",
-        "cfg:comfyui:flow:grok_edit",
-        "cfg:comfyui:flow:grok_style_hq",
         "cfg:comfyui:flow:agil_solo_hq",
-        "cfg:comfyui:flow:agil_nsfw_hq",
         "cfg:comfyui:flow:agil_moody_hq",
-        "cfg:comfyui:flow:grok_edit_hq",
         "cfg:comfyui:flow:agil_edit_hq",
         "cfg:comfyui:flow:minimax_h3_i2v",
         "cfg:lora:open",
@@ -112,11 +105,11 @@ def test_config_comfyui_keyboard_lists_seeds_and_flows():
 
 
 def test_config_comfyui_has_no_legacy_model_lora_refine_rows():
-    cfg = ComfyUIConfig(model="grok_style")
+    cfg = ComfyUIConfig(model="agil_solo")
     rows = kb.config_comfyui_keyboard(cfg).inline_keyboard
     labels = [b.text for row in rows for b in row]
     assert labels[0] == "✅ Semilla aleatoria por imagen"
-    assert labels[3] == "✅ Grok Style"
+    assert labels[3] == "✅ Ágil solo"
     for row in rows:
         for b in row:
             if b.callback_data is None:
@@ -211,12 +204,12 @@ def test_config_variant_keyboard_nano_banana():
 
 
 def test_comfy_result_keyboard_is_stage_gated():
-    grok = flat_callback_data(kb.comfy_result_keyboard("grok_style"))
+    grok = flat_callback_data(kb.comfy_result_keyboard("agil_solo"))
     assert grok == ["regen", "pipe:edit", "pipe:detail", "pipe:retake"]
     flux = flat_callback_data(kb.comfy_result_keyboard("flux1_dev_t2i"))
     assert flux == ["regen", "pipe:detail", "pipe:retake"]
     assert "pipe:edit" not in flux
-    edit = flat_callback_data(kb.comfy_result_keyboard("grok_edit"))
+    edit = flat_callback_data(kb.comfy_result_keyboard("agil_solo_edit"))
     assert edit == ["regen", "pipe:detail"]
     detail = flat_callback_data(kb.comfy_result_keyboard("face_detail_impact"))
     assert detail == ["regen"]
@@ -239,10 +232,10 @@ def test_comfy_result_keyboard_is_stage_gated():
 
 def test_config_comfyui_lora_stack_keyboard_rows():
     cfg = ComfyUIConfig(
-        model="grok_style",
+        model="agil_solo",
         lora_stacks=(
             (
-                "grok_style",
+                "agil_solo",
                 (LoraStackEntry("krea2/very_long_style_name.safetensors", 0.8),),
             ),
         ),
@@ -263,7 +256,7 @@ def test_config_comfyui_lora_stack_keyboard_rows():
 
 
 def test_config_comfyui_lora_stack_keyboard_without_entries():
-    cfg = ComfyUIConfig(model="grok_style")
+    cfg = ComfyUIConfig(model="agil_solo")
 
     rows = kb.config_comfyui_lora_keyboard(cfg).inline_keyboard
 

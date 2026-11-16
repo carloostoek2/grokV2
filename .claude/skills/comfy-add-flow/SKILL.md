@@ -224,10 +224,9 @@ En `src/grokbot/domain/user_config.py`, añadir la tupla al **final** de `COMFYU
 
 ```python
 COMFYUI_FLOWS = (
-    ("grok_style", "Grok Style"),
-    ("donut_face", "Donut Face"),
     ("agil_solo", "Ágil solo"),
-    ("agil_nsfw", "Ágil NSFW"),
+    ("agil_solo_edit", "Ágil Solo Edit"),
+    ("agil_moody", "Ágil Moody"),
     ("<id_nuevo>", "<Label nuevo>"),   # ← añadir aquí
 )
 ```

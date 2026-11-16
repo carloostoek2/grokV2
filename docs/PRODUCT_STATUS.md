@@ -220,6 +220,8 @@ local-forward** (`transport.py` → `client.py` → plantillas API-format en
   background to a beach at sunset."), no una descripción. Es un flujo **separado** de
   `grok_style` y ambos conviven en el menú: unificarlos en un solo botón exigiría una noción de
   *variante* en el provider, descartada a propósito (decisión del owner, 2026-10-03).
+  **Reemplazado el 2026-11-16 por `agil_solo_edit`** (ver el punto de esa fecha al final de
+  esta sección): mismo grafo krea2edit, sin la LoRA de estilo Grok.
 - **Guard `requires_source` (2026-10-03)**: un flujo que **exige** foto lo declara en su `_meta`
   y el provider rechaza el request sin foto con mensaje user-safe. Sin ese flag un flujo de
   edición usado sin foto corría con el **placeholder horneado** (`example.png`, presente en el
@@ -249,9 +251,9 @@ local-forward** (`transport.py` → `client.py` → plantillas API-format en
   (nunca de Grok/xAI, Kie o Replicate) aparecen botones de cadena. Tocar uno no genera:
   deja `model=comfyui` con el flujo destino, recuerda en memoria `last_comfy_path` y espera
   el siguiente texto.
-  - **Editar**: solo si el flujo tiene hermano de edición (`grok_style` → `grok_edit`,
-    `qwen21_t2i` / `agil_solo` / `agil_moody` → `agil_edit_qwen`, `agil_nsfw` →
-    `agil_edit_nsfw`). Flux no tiene, así que no lo muestra. Los Dirty*, retirados el
+  - **Editar**: solo si el flujo tiene hermano de edición (`agil_solo` / `agil_moody` →
+    `agil_solo_edit`, `agil_solo_hq` / `agil_moody_hq` → `agil_edit_hq`, `ohwx_krea2` →
+    `ohwx_edit`). Flux no tiene, así que no lo muestra. Los Dirty*, retirados el
     2026-11-07, ya no aparecen.
   - **Detalle cara**: manda la imagen a `face_detail_impact`; no aparece en video ni sobre
     un resultado de ese mismo flujo.
@@ -324,14 +326,14 @@ local-forward** (`transport.py` → `client.py` → plantillas API-format en
 - **Set Krea unificado en fp8 + retiro temporal de Dirty* (2026-11-07)**: todos los flujos
   que corren Krea2 Turbo comparten **los mismos archivos** `krea2_turbo_fp8_scaled.safetensors`
   + `qwen3vl_4b_fp8_scaled.safetensors` + `qwen_image_vae.safetensors`, incluidos los `*_hq` y
-  `grok_edit`. Así cambiar de flujo no obliga a ComfyUI a cargar otra copia del mismo peso.
+  `agil_solo_edit`. Así cambiar de flujo no obliga a ComfyUI a cargar otra copia del mismo peso.
   `agil_moody` / `agil_moody_hq` conservan su UNET Moody propio y comparten el TE Krea.
-  `donut_face`, `agil_edit_qwen` y `agil_edit_hq` mantienen su familia (Krea con extras y
+  `donut_face` y `agil_edit_hq` mantienen su familia (Krea con extras y
   Qwen-Image-Edit fp8mixed). Los flujos **Dirty\*** (`dirty_realism`, `dirty_edit`,
   `dirty_realism_hq`, `dirty_edit_hq`) y `ohwx_dirty_edit` quedan **retirados temporalmente**:
   ids fuera de `COMFYUI_FLOWS`, templates en `workflows/templates/_disabled/` y checkpoint
   Dirty fuera de `descargar_local.py`. Una config guardada con un id retirado cae al flujo
-  default (`grok_style`). Reactivar = devolver las entradas a la tupla y mover los JSON de
+  default (`agil_solo`). Reactivar = devolver las entradas a la tupla y mover los JSON de
   vuelta a `templates/`.
 - **Preparación del box Vast RTX 5000 Ada (2026-11-08)**: instancia de 32 GB VRAM, 125 GB
   de RAM y 212 GB de disco; el set Krea canónico es **fp8** (`krea2_turbo_fp8_scaled` +
@@ -346,15 +348,27 @@ local-forward** (`transport.py` → `client.py` → plantillas API-format en
   Qwen Edit GGUF en `l4`, Krea GGUF Q4 en `t4`) y cambia `UNETLoader` → `UnetLoaderGGUF`
   cuando el archivo acaba en `.gguf`. El cuaderno detecta la GPU con `torch`; el bot con
   `/system_stats` (`COMFYUI_PERFIL=auto`), filtra el menú y cae al `default_flow` si el
-  flujo guardado no existe en esa tarjeta. `t4` solo ofrece `grok_style`, `agil_solo`,
-  `agil_nsfw` y `grok_edit` (medido: 179 s por edición en caliente). Detalle en
-  `docs/comfyui/PERFILES_GPU.md`.
+  flujo guardado no existe en esa tarjeta. `t4` solo ofrece `agil_solo` y
+  `agil_solo_edit`. Detalle en `docs/comfyui/PERFILES_GPU.md`.
 - **MiniMax H3 (`minimax_h3_i2v`, 2026-10-04, commit directo `f6bbae3`)**: se registra en
   `COMFYUI_FLOWS` como flujo de video (también en `COMFY_VIDEO_MODELS`). Desde `737944c`
   está en `COMFYUI_MENU_HIDDEN_FLOWS`, así que no aparece en el teclado de `/config`.
-- **Alcance actual**: **22 flujos registrados** en `COMFYUI_FLOWS`; el menú depende del
-  perfil de GPU: **13 visibles en `a100`** (7 base + 6 `*_hq`), **12 en `l4`** y **4 en
-  `t4`**; el resto son legacy/ocultos (`COMFYUI_MENU_HIDDEN_FLOWS`). Salud real de cada
+- **Menú ágil consolidado + Ágil Solo Edit (2026-11-16)**: `grok_edit` se reemplaza por
+  **`agil_solo_edit`** («Ágil Solo Edit»): mismo grafo krea2edit que corría Grok Style Edit,
+  pero **sin la LoRA `grokstyle` ni la NSFW**, solo `krea2_identity_edit_v2`; sampler
+  **er_sde/simple**, 10 pasos, cfg 1, 9:16 @ 1 MP. Así Ágil solo y Ágil Solo Edit comparten
+  el mismo par UNET/TE Krea (cambiar de flujo no recarga pesos). El menú de la familia queda
+  en **Ágil solo, Ágil Solo Edit y Ágil Moody** (+ sus HQ); salen del catálogo `grok_style`,
+  `grok_edit`, `agil_nsfw`, `agil_edit_nsfw`, `agil_edit_qwen`, `grok_style_hq`,
+  `agil_nsfw_hq` y `grok_edit_hq` (templates a `_disabled/`; una config guardada con esos
+  ids cae al default). `agil_edit_hq` (Qwen 2511 + SeedVR2) se conserva como edición HQ.
+  Los perfiles y `provision_vast_box.sh` descargan `krea2_identity_edit_v2.safetensors` (HF);
+  `grokstyle_krea2_v2` sigue disponible para los flujos ocultos/legacy que aún la usan.
+  Nuevo `COMFYUI_MENU_FLOWS` (CSV) para acotar el menú por box sin tocar el perfil.
+- **Alcance actual**: **15 flujos registrados** en `COMFYUI_FLOWS`; el menú depende del
+  perfil de GPU: **7 visibles en `a100`** (Ágil solo, Ágil Solo Edit, Ágil Moody, 3 `*_hq`
+  y MiniMax H3), **6 en `l4`** y **2 en `t4`**; el resto son legacy/ocultos
+  (`COMFYUI_MENU_HIDDEN_FLOWS`). Salud real de cada
   flujo y pesos instalados:
   `docs/comfyui/INVENTARIO_BOX_COLAB.md`; el inventario Vast queda como histórico.
 

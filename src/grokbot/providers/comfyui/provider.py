@@ -113,6 +113,7 @@ class ComfyUIProvider:
         workflows_dir: str = "/workspace/ComfyUI/user/default/api_workflows",
         workflow_cache_ttl: float = 45.0,
         weight_profile: str = "",
+        menu_flows: str = "",
         transport: SshLocalForward | None = None,
         client_factory: Callable[[str], ComfyApiClient] | None = None,
         tmpdir: str | Path | None = None,
@@ -129,6 +130,8 @@ class ComfyUIProvider:
         # Perfil de pesos: "auto" se detecta de la GPU en el primer uso;
         # un id concreto ("a100"|"l4"|"t4") lo fuerza; "" no gestiona perfil.
         self._weight_profile = (weight_profile or "").strip().lower()
+        # Allowlist de menú del box (CSV de ids); "" = sin filtro.
+        self._menu_flows = (menu_flows or "").strip()
         self._profile_checked_at = 0.0
         # Source-of-truth for API graphs: Vast api_workflows/ (SSH) with embed fallback.
         configure_workflow_source(
@@ -138,6 +141,7 @@ class ComfyUIProvider:
             workflows_dir=workflows_dir,
             cache_ttl=workflow_cache_ttl,
             profile=self._weight_profile or None,
+            flows=self._menu_flows or None,
         )
         self._client_factory = client_factory or (lambda url: ComfyApiClient(url))
         self._tmpdir = Path(tmpdir) if tmpdir is not None else _DEFAULT_TMPDIR

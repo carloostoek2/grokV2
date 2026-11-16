@@ -124,20 +124,22 @@ bf16 volvieron a descargarse ese día; ver §6.2):
 | `diffusion_models/` | `Moody-Krea-Mix-v4.1G_00001__clean_nvfp4.safetensors`, `Moody-Krea-Mix-v7_00002__clean_fp8.safetensors`, `krea2_turbo_bf16.safetensors`, `krea2_turbo_fp8_scaled.safetensors`, `krea2SATDirtyRealism_uncut_fp8.safetensors`, `z_image_turbo_bf16.safetensors`, `qwen_image_edit_2509_fp8_e4m3fn.safetensors`, `qwen_image_edit_2511_fp8mixed.safetensors`, `qwen-image-2.1-UC-fp8.safetensors`, `qwen_image_2.1_int8_convrot.safetensors`, `moss_image_sft_bf16.safetensors`, `moss_image_sft_int8_convrot.safetensors`, `ernie-image-turbo.safetensors`, `wan2.2_ti2v_5B_fp16.safetensors`, `turbo.safetensors`, **`seedvr2_7b_int8_convrot.safetensors`** |
 | `text_encoders/` | `qwen3vl_4b_bf16.safetensors`, `qwen3vl_4b_fp8_scaled.safetensors`, `qwen_3_4b.safetensors`, `qwen_2.5_vl_7b_fp8_scaled.safetensors`, `umt5_xxl_fp8_e4m3fn_scaled.safetensors`, `qwen3.5_9b_*`, `ministral-3-3b` |
 | `vae/` | `qwen_image_vae.safetensors`, `qwen_image_2.1_vae_bf16.safetensors`, `Wan2_1_VAE_fp32.safetensors`, `wan2.2_vae.safetensors`, `ae.safetensors`, **`seedvr2_ema_vae_fp16.safetensors`** |
-| `loras/` | `grokstyle_krea2_v2.safetensors`, `Krea2NSFWV4.safetensors`, `Krea2-realism-V2.safetensors`, `Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors`, `Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors`, `krea2/krea2_identity_edit_v1_2.safetensors` |
+| `loras/` | `grokstyle_krea2_v2.safetensors`, `Krea2NSFWV4.safetensors`, `Krea2-realism-V2.safetensors`, `Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors`, `Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors`, `krea2_identity_edit_v2.safetensors` |
 
 **Instalados el 2026-10-25** (descargados en la VM con
-`comfyui-workflow-models-downloader`; los 7 flujos HQ corren):
+`comfyui-workflow-models-downloader`; los flujos HQ corren):
 
 - `diffusion_models/krea2SATDirtyRealism_uncut_fp8.safetensors` — checkpoint Dirty
   (Civitai 2796522 / version 3372523; 13.14 GB).
-- `loras/krea2/krea2_identity_edit_v1_2.safetensors` — LoRA que **habilita la edición**
-  sobre Krea 2 (Hugging Face `conradlocke/krea2-identity-edit`; 1.83 GB).
+- `loras/krea2_identity_edit_v2.safetensors` — LoRA que **habilita la edición**
+  sobre Krea 2 (Hugging Face `conradlocke/krea2-identity-edit`; 1.83 GB). Es la que
+  hornea `agil_solo_edit` desde el 2026-11-16 (antes se usaba `v1_2` en `krea2/`).
 
 ## 6. Flujos: bloque HQ (menú activo)
 
-El `COMFYUI_FLOWS` registra **27** ids; el menú de Telegram oculta 10 y muestra **17**
-(9 base + 8 `*_hq`, tras añadir `agil_edit_hq` el 2026-10-30). El tuning **candid** del 2026-10-25 vive en
+El `COMFYUI_FLOWS` registra **15** ids; el menú de Telegram oculta 8 y muestra **7**
+(Ágil solo, Ágil Solo Edit, Ágil Moody, tres `*_hq` y MiniMax H3) en el perfil `a100`
+desde el 2026-11-16. El tuning **candid** del 2026-10-25 vive en
 `src/grokbot/providers/comfyui/workflows/templates/*_hq.json` y, como el bot está en
 `COMFYUI_WORKFLOW_SOURCE=embed`, **aplica sin desplegar nada al box**. El resolver cachea
 los flujos embebidos por proceso (`_flows_cached`): tras editar un template hay que
@@ -145,17 +147,15 @@ los flujos embebidos por proceso (`_flows_cached`): tras editar un template hay 
 
 | Flujo | Modelo / LoRA | Muestreo | Resolución | Corre en Colab |
 |---|---|---|---|---|
-| `grok_style_hq` | Krea2 Turbo bf16 + `grokstyle_krea2_v2` 0.5/0.5 | euler/simple · 10 pasos · cfg 1 + refine 6 pasos denoise 0.25 | 2:3 @ 1.2 MP → refine 1.25× (~1.9 MP) → salida 1.1× | ✅ |
+| `agil_solo_edit` | Krea2 Turbo + `krea2_identity_edit_v2` 1.0 (sin estilo ni NSFW) | er_sde/simple · 10 pasos · cfg 1 | 9:16 @ 1.0 MP (ResolutionSelector) | ✅ |
 | `agil_solo_hq` | Krea2 Turbo bf16, sin LoRA | euler/simple · 8 pasos · cfg 1 | 1024×1792 (1.83 MP) | ✅ |
-| `agil_nsfw_hq` | Krea2 Turbo bf16 + `Krea2NSFWV4` 0.8/0.8 | euler/simple · 8 pasos · cfg 1 | 1024×1792 (1.83 MP) | ✅ |
 | `agil_moody_hq` | Moody v7 fp8 + `Krea2-realism-V2` 1.0/1.0 + `Krea2NSFWV4` 1.0 (model-only) | er_sde/simple · 8 pasos · cfg 1 | 9:16 @ 2.0 MP | ✅ (excepción estilística) |
-| `dirty_realism_hq` | DirtyUncut fp8, sin LoRA | euler/simple · 10 pasos · cfg 1.0 | 9:16 @ 1.5 MP | ✅ |
-| `dirty_edit_hq` | DirtyUncut fp8 + `krea2_identity_edit_v1_2` 1.0 | euler/simple · 12 pasos · cfg 2.0 | 9:16 @ 1.5 MP | ✅ |
-| `grok_edit_hq` | Krea2 Turbo bf16 + identity 1.0 + `grokstyle` 0.5 | euler/simple · 10 pasos · cfg 1 | 9:16 @ 1.5 MP | ✅ |
 | `agil_edit_hq` | Qwen-Image-Edit-2511 fp8mixed, Lightning **apagado** + negativo anti-plástico, y **SeedVR2 7B int8 ×2** al final | euler/simple · 40 pasos · cfg 3.0 → SeedVR2 1 paso (`lab`) | 1 MP (FluxKontextImageScale) → ~4 MP | ✅ (208,7 s en frío, seed 4242) |
 
-`agil_edit_qwen` (Ágil Edit) pasa el 2026-10-30 a **2511 fp8mixed + Lightning 4 pasos** (era
-2509 fp8); el `_meta.timeout` sube a 900 s porque la primera pasada en frío tarda 456–585 s
+`grok_style_hq`, `agil_nsfw_hq`, `grok_edit_hq` y `grok_edit` se retiraron el 2026-11-16
+(templates en `_disabled/`; sus mediciones quedan como histórico). `agil_edit_qwen` (Ágil
+Edit base, 2511 fp8mixed + Lightning 4 pasos) también se retiró; la edición HQ sigue en
+`agil_edit_hq`, con `_meta.timeout` 900 s porque la primera pasada en frío tarda 456–585 s
 (ver §6.2).
 
 Notas de diseño:
@@ -326,9 +326,9 @@ curl -s -X POST http://127.0.0.1:8188/workflow-models/download-url \
 
 curl -s -X POST http://127.0.0.1:8188/workflow-models/download-url \
   -H 'Content-Type: application/json' \
-  -d '{"url":"https://huggingface.co/conradlocke/krea2-identity-edit/resolve/main/krea2_identity_edit_v1_2.safetensors",
-       "filename":"krea2_identity_edit_v1_2.safetensors",
-       "directory":"loras/krea2"}'
+  -d '{"url":"https://huggingface.co/conradlocke/krea2-identity-edit/resolve/main/krea2_identity_edit_v2.safetensors",
+       "filename":"krea2_identity_edit_v2.safetensors",
+       "directory":"loras"}'
 ```
 
 Seguimiento:

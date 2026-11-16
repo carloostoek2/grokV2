@@ -135,3 +135,11 @@ def test_get_settings_cached_and_cache_clear(monkeypatch):
     third = get_settings()
     assert third is not first
     assert third.telegram_bot_token == "tok2"
+
+
+def test_comfyui_menu_flows_env(monkeypatch):
+    _set_required(monkeypatch)
+    monkeypatch.setenv("COMFYUI_MENU_FLOWS", "agil_solo, agil_solo_edit")
+    assert Settings().comfyui_menu_flows == "agil_solo, agil_solo_edit"
+    monkeypatch.delenv("COMFYUI_MENU_FLOWS")
+    assert Settings().comfyui_menu_flows == ""

@@ -41,23 +41,23 @@ async def test_edit_sets_sibling_and_next_text_uses_last_image(tmp_path):
     img = tmp_path / "last.png"
     img.write_bytes(b"png-chain")
     deps.comfy_chain.remember(
-        USER_ID, path=str(img), flow_id="grok_style", prompt="un gato",
+        USER_ID, path=str(img), flow_id="agil_solo", prompt="un gato",
     )
     photo = make_photo_message(message_id=9)
     deps = await _cb(deps, callback_query("pipe:edit", message=photo, message_id=9))
 
     cfg = deps.sessions.get_config(USER_ID)
     assert cfg.model == "comfyui"
-    assert cfg.comfyui.model == "grok_edit"
+    assert cfg.comfyui.model == "agil_solo_edit"
     texts = [c["text"] for c in deps.gateway.calls_by_method("send_message")]
-    assert any("Editar con Grok Style Edit" in t for t in texts)
+    assert any("Editar con Ágil Solo Edit" in t for t in texts)
     assert deps.comfy_chain.is_armed(USER_ID)
 
     deps = await _msg(deps, text_message("night street"))
     calls = registry.provider("comfyui").calls
     assert calls, "expected a Comfy generation"
     request, source = calls[-1]
-    assert request.params["model"] == "grok_edit"
+    assert request.params["model"] == "agil_solo_edit"
     assert source == b"png-chain"
     assert not deps.comfy_chain.is_armed(USER_ID)
 

@@ -176,11 +176,11 @@ def test_set_comfyui_model_valid_persists(sessions):
     sessions.save_config(USER_ID, _cfg())
     uc = _uc(sessions)
 
-    # Único flujo registrado (grok_style, default): seteárselo es no-op válido.
-    res = uc.set_comfyui(USER_ID, model="grok_style")
+    # Único flujo registrado (agil_solo, default): seteárselo es no-op válido.
+    res = uc.set_comfyui(USER_ID, model="agil_solo")
 
     assert res.ok is True and res.changed is False
-    assert sessions.saved[-1][1].comfyui.model == "grok_style"
+    assert sessions.saved[-1][1].comfyui.model == "agil_solo"
 
 
 def test_set_comfyui_invalid_model_and_lora(sessions):
@@ -214,9 +214,9 @@ def test_save_uses_seeded_fake_repo_persistence(sessions):
     uc.set_model(USER_ID, "comfyui")
     cfg = sessions.get_config(USER_ID)
     assert cfg.model == "comfyui"
-    assert cfg.comfyui.model == "grok_style"  # flujo default
+    assert cfg.comfyui.model == "agil_solo"  # flujo default
     # Setear el mismo flujo (único registrado) no añade save.
-    uc.set_comfyui(USER_ID, model="grok_style")
+    uc.set_comfyui(USER_ID, model="agil_solo")
     assert len(sessions.saved) == 2  # baseline + model
 
 
@@ -301,10 +301,10 @@ def test_add_comfyui_lora_appends_with_default_strength(sessions):
     sessions.save_config(USER_ID, _cfg())
     uc = _uc(sessions)
 
-    res = uc.add_comfyui_lora(USER_ID, "grok_style", "krea2/style_a.safetensors")
+    res = uc.add_comfyui_lora(USER_ID, "agil_solo", "krea2/style_a.safetensors")
 
     assert res.ok is True and res.changed is True
-    entries = sessions.get_config(USER_ID).comfyui.loras_for("grok_style")
+    entries = sessions.get_config(USER_ID).comfyui.loras_for("agil_solo")
     assert [entry.name for entry in entries] == ["krea2/style_a.safetensors"]
     assert entries[0].strength == 0.8
     assert "krea2/style_a.safetensors" not in sessions.get_config(USER_ID).comfyui.loras_for("agil_solo")
@@ -313,26 +313,26 @@ def test_add_comfyui_lora_appends_with_default_strength(sessions):
 def test_add_comfyui_lora_is_idempotent_by_name(sessions):
     sessions.save_config(USER_ID, _cfg())
     uc = _uc(sessions)
-    uc.add_comfyui_lora(USER_ID, "grok_style", "a.safetensors")
+    uc.add_comfyui_lora(USER_ID, "agil_solo", "a.safetensors")
     saves = len(sessions.saved)
 
-    res = uc.add_comfyui_lora(USER_ID, "grok_style", "a.safetensors")
+    res = uc.add_comfyui_lora(USER_ID, "agil_solo", "a.safetensors")
 
     assert res.ok is True and res.changed is False
     assert len(sessions.saved) == saves
-    assert len(sessions.get_config(USER_ID).comfyui.loras_for("grok_style")) == 1
+    assert len(sessions.get_config(USER_ID).comfyui.loras_for("agil_solo")) == 1
 
 
 def test_lora_stacks_are_isolated_per_flow(sessions):
     sessions.save_config(USER_ID, _cfg())
     uc = _uc(sessions)
 
-    uc.add_comfyui_lora(USER_ID, "grok_style", "a.safetensors")
-    uc.add_comfyui_lora(USER_ID, "agil_solo", "b.safetensors")
+    uc.add_comfyui_lora(USER_ID, "agil_solo", "a.safetensors")
+    uc.add_comfyui_lora(USER_ID, "agil_moody", "b.safetensors")
 
     cc = sessions.get_config(USER_ID).comfyui
-    assert [e.name for e in cc.loras_for("grok_style")] == ["a.safetensors"]
-    assert [e.name for e in cc.loras_for("agil_solo")] == ["b.safetensors"]
+    assert [e.name for e in cc.loras_for("agil_solo")] == ["a.safetensors"]
+    assert [e.name for e in cc.loras_for("agil_moody")] == ["b.safetensors"]
 
 
 def test_lora_stack_caps_at_max_per_flow(sessions):
@@ -340,41 +340,41 @@ def test_lora_stack_caps_at_max_per_flow(sessions):
     uc = _uc(sessions)
     for index in range(5):
         assert uc.add_comfyui_lora(
-            USER_ID, "grok_style", f"lora_{index}.safetensors"
+            USER_ID, "agil_solo", f"lora_{index}.safetensors"
         ).ok
 
-    res = uc.add_comfyui_lora(USER_ID, "grok_style", "lora_5.safetensors")
+    res = uc.add_comfyui_lora(USER_ID, "agil_solo", "lora_5.safetensors")
 
     assert res.ok is False and res.changed is False
-    assert len(sessions.get_config(USER_ID).comfyui.loras_for("grok_style")) == 5
+    assert len(sessions.get_config(USER_ID).comfyui.loras_for("agil_solo")) == 5
 
 
 def test_shift_lora_strength_clamps_and_is_noop_at_bounds(sessions):
     sessions.save_config(USER_ID, _cfg())
     uc = _uc(sessions)
-    uc.add_comfyui_lora(USER_ID, "grok_style", "a.safetensors")
+    uc.add_comfyui_lora(USER_ID, "agil_solo", "a.safetensors")
 
-    assert uc.shift_comfyui_lora_strength(USER_ID, "grok_style", 0, 0.1).changed
-    assert sessions.get_config(USER_ID).comfyui.loras_for("grok_style")[0].strength == 0.9
+    assert uc.shift_comfyui_lora_strength(USER_ID, "agil_solo", 0, 0.1).changed
+    assert sessions.get_config(USER_ID).comfyui.loras_for("agil_solo")[0].strength == 0.9
 
-    assert uc.shift_comfyui_lora_strength(USER_ID, "grok_style", 0, -5).changed
-    assert sessions.get_config(USER_ID).comfyui.loras_for("grok_style")[0].strength == 0.0
+    assert uc.shift_comfyui_lora_strength(USER_ID, "agil_solo", 0, -5).changed
+    assert sessions.get_config(USER_ID).comfyui.loras_for("agil_solo")[0].strength == 0.0
 
-    res = uc.shift_comfyui_lora_strength(USER_ID, "grok_style", 0, -0.1)
+    res = uc.shift_comfyui_lora_strength(USER_ID, "agil_solo", 0, -0.1)
     assert res.ok is True and res.changed is False
 
 
 def test_remove_and_clear_lora_stack(sessions):
     sessions.save_config(USER_ID, _cfg())
     uc = _uc(sessions)
-    uc.add_comfyui_lora(USER_ID, "grok_style", "a.safetensors")
-    uc.add_comfyui_lora(USER_ID, "grok_style", "b.safetensors")
+    uc.add_comfyui_lora(USER_ID, "agil_solo", "a.safetensors")
+    uc.add_comfyui_lora(USER_ID, "agil_solo", "b.safetensors")
 
-    assert uc.remove_comfyui_lora(USER_ID, "grok_style", 0).changed
-    assert [e.name for e in sessions.get_config(USER_ID).comfyui.loras_for("grok_style")] == ["b.safetensors"]
+    assert uc.remove_comfyui_lora(USER_ID, "agil_solo", 0).changed
+    assert [e.name for e in sessions.get_config(USER_ID).comfyui.loras_for("agil_solo")] == ["b.safetensors"]
 
-    assert uc.clear_comfyui_loras(USER_ID, "grok_style").changed
-    assert sessions.get_config(USER_ID).comfyui.loras_for("grok_style") == ()
+    assert uc.clear_comfyui_loras(USER_ID, "agil_solo").changed
+    assert sessions.get_config(USER_ID).comfyui.loras_for("agil_solo") == ()
 
 
 def test_invalid_flow_index_or_entry_is_rejected(sessions):
@@ -382,8 +382,8 @@ def test_invalid_flow_index_or_entry_is_rejected(sessions):
     uc = _uc(sessions)
 
     assert uc.add_comfyui_lora(USER_ID, "no-such-flow", "a.safetensors").ok is False
-    assert uc.add_comfyui_lora(USER_ID, "grok_style", "").ok is False
-    assert uc.add_comfyui_lora(USER_ID, "grok_style", "a", 9.0).ok is False
-    uc.add_comfyui_lora(USER_ID, "grok_style", "a.safetensors")
-    assert uc.remove_comfyui_lora(USER_ID, "grok_style", 7).ok is False
-    assert uc.shift_comfyui_lora_strength(USER_ID, "grok_style", "0", 0.1).ok is False
+    assert uc.add_comfyui_lora(USER_ID, "agil_solo", "").ok is False
+    assert uc.add_comfyui_lora(USER_ID, "agil_solo", "a", 9.0).ok is False
+    uc.add_comfyui_lora(USER_ID, "agil_solo", "a.safetensors")
+    assert uc.remove_comfyui_lora(USER_ID, "agil_solo", 7).ok is False
+    assert uc.shift_comfyui_lora_strength(USER_ID, "agil_solo", "0", 0.1).ok is False

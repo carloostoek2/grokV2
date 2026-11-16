@@ -46,24 +46,17 @@ VALID_VIDEO_MODES = ("fun", "normal", "spicy")
 # modelo/LoRA por separado. Para añadir un flujo: 1) registrar aquí su (id,
 # nombre) y 2) dejar caer el template ``<id>.json`` (con ``_meta``).
 COMFYUI_FLOWS = (
-    ("grok_style", "Grok Style"),
-    ("donut_face", "Donut Face"),
     ("agil_solo", "Ágil solo"),
-    ("agil_nsfw", "Ágil NSFW"),
+    ("agil_solo_edit", "Ágil Solo Edit"),
     ("agil_moody", "Ágil Moody"),
-    ("agil_edit_qwen", "Ágil Edit"),
-    ("agil_edit_nsfw", "Ágil Edit NSFW"),
-    ("grok_edit", "Grok Style Edit"),
+    ("agil_solo_hq", "Ágil Solo (HQ A100)"),
+    ("agil_moody_hq", "Ágil Moody (HQ A100)"),
+    ("agil_edit_hq", "Ágil Edit (HQ A100)"),
     # Dirty* (dirty_realism/dirty_edit y sus variantes HQ) retirados
     # temporalmente el 2026-11-07: sus templates viven en
     # ``workflows/templates/_disabled/``. Reactivar = devolver las entradas a
     # esta tupla y mover los JSON de vuelta a ``templates/``.
-    ("grok_style_hq", "Grok Style (HQ A100)"),
-    ("agil_solo_hq", "Ágil Solo (HQ A100)"),
-    ("agil_nsfw_hq", "Ágil NSFW (HQ A100)"),
-    ("agil_moody_hq", "Ágil Moody (HQ A100)"),
-    ("grok_edit_hq", "Grok Edit (HQ A100)"),
-    ("agil_edit_hq", "Ágil Edit (HQ A100)"),
+    ("donut_face", "Donut Face"),
     ("wan_i2v", "Wan I2V"),
     ("qwen21_t2i", "Qwen 2.1"),
     ("flux1_dev_t2i", "Flux.1 Dev"),
@@ -99,15 +92,10 @@ PIPE_STAGES = (PIPE_EDIT, PIPE_DETAIL, PIPE_RETAKE)
 FACE_DETAIL_FLOW_ID = "face_detail_impact"
 # T2I id → edit sibling. No entry means the Editar button stays hidden.
 COMFYUI_EDIT_SIBLINGS = {
-    "grok_style": "grok_edit",
-    "grok_style_hq": "grok_edit_hq",
+    "agil_solo": "agil_solo_edit",
+    "agil_moody": "agil_solo_edit",
     "agil_solo_hq": "agil_edit_hq",
     "agil_moody_hq": "agil_edit_hq",
-    "agil_nsfw_hq": "agil_edit_nsfw",
-    "qwen21_t2i": "agil_edit_qwen",
-    "agil_solo": "agil_edit_qwen",
-    "agil_moody": "agil_edit_qwen",
-    "agil_nsfw": "agil_edit_nsfw",
     "ohwx_krea2": "ohwx_edit",
 }
 
@@ -400,7 +388,7 @@ class VideoConfig:
 class ComfyUIConfig:
     """Persisted per-user ComfyUI **flow** selection.
 
-    ``model`` es el id de flujo (p. ej. ``"grok_style"``); el workflow de ese
+    ``model`` es el id de flujo (p. ej. ``"agil_solo"``); el workflow de ese
     flujo trae su modelo/LoRA horneados. ``lora``/``refine`` quedan dormidos
     (persistidos por compat; no participan en la resolución).
 

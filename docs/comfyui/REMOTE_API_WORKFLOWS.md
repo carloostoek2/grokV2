@@ -14,11 +14,14 @@ JSON files **on the Vast box** and fetches them at runtime.
 
 ```
 /workspace/ComfyUI/user/default/api_workflows/
-  agil_edit_nsfw.json   agil_edit_qwen.json   agil_moody.json
-  agil_nsfw.json        agil_solo.json        donut_face.json
-  grok_edit.json        grok_style.json       qwen21_t2i.json
-  wan_i2v.json
+  agil_moody.json       agil_solo.json        agil_solo_edit.json
+  donut_face.json       qwen21_t2i.json       wan_i2v.json
 ```
+
+> **Menú consolidado (2026-11-16):** `grok_style`, `grok_edit`, `agil_nsfw`,
+> `agil_edit_nsfw`, `agil_edit_qwen`, `grok_style_hq`, `agil_nsfw_hq` y
+> `grok_edit_hq` ya no se despliegan; sus templates viven en
+> `workflows/templates/_disabled/`. `agil_solo_edit` sustituye a `grok_edit`.
 
 > **Dirty\* retirados (2026-11-07):** `dirty_edit.json` y `dirty_realism.json`
 > ya no se despliegan; sus templates viven en

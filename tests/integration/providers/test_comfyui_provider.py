@@ -59,10 +59,18 @@ class FakeClient:
         return self.prompt_id
 
     async def history(self, prompt_id: str) -> dict:
+        # Materializa la salida en los nodos Save* del grafo recibido, cualquiera
+        # sea el flujo (antes se fijaba a "19", el save de Grok Style).
+        save_nodes = [
+            nid
+            for nid, node in (self.graph or {}).items()
+            if str(node.get("class_type", "")).startswith("Save")
+        ] or ["19"]
+        outputs = {nid: {"images": self._images} for nid in save_nodes}
         return {
             prompt_id: {
                 "status": {"status_str": "success", "completed": True},
-                "outputs": {"19": {"images": self._images}},
+                "outputs": outputs,
             }
         }
 
@@ -105,7 +113,7 @@ async def test_t2i_generate_patches_graph_and_returns_local_file(tmp_path):
         tmpdir=tmp_path, seed_factory=lambda: 42,
     )
 
-    result = await prov.generate(_req())
+    result = await prov.generate(_req(params={"model": "ohwx_krea2"}))
 
     assert result.provider == "comfyui"
     assert result.media_type is MediaType.IMAGE
@@ -159,7 +167,7 @@ async def test_edit_flow_without_source_photo_raises(tmp_path):
     prov = _provider(FakeTransport("box"), tmp_path)
 
     with pytest.raises(ProviderInputError) as exc:
-        await prov.generate(_req(params={"model": "grok_edit"}))
+        await prov.generate(_req(params={"model": "agil_solo_edit"}))
 
     assert "foto" in exc.value.user_message
 
@@ -169,7 +177,7 @@ async def test_t2i_flow_without_source_photo_is_allowed(tmp_path):
     """The guard only targets photo-requiring flows; plain txt2img stays valid."""
     prov = _provider(FakeTransport("box"), tmp_path)
 
-    result = await prov.generate(_req(params={"model": "grok_style"}))
+    result = await prov.generate(_req(params={"model": "agil_solo"}))
 
     assert result.media_type is MediaType.IMAGE
 
@@ -185,8 +193,8 @@ async def test_missing_template_combo_raises(tmp_path):
 @pytest.mark.asyncio
 async def test_m2_video_request_with_image_flow_raises(tmp_path):
     prov = _provider(FakeTransport("box"), tmp_path)
-    # grok_style es un flujo de imagen: un request VIDEO es un seam del caller.
-    req = _req(media_type=MediaType.VIDEO, params={"model": "grok_style"})
+    # agil_solo es un flujo de imagen: un request VIDEO es un seam del caller.
+    req = _req(media_type=MediaType.VIDEO, params={"model": "agil_solo"})
 
     with pytest.raises(ProviderInputError) as exc:
         await prov.generate(req, source_image=PNG_1x1)
@@ -218,10 +226,10 @@ async def test_supports_routing(tmp_path):
     prov = _provider(FakeTransport("box"), tmp_path)
 
     # Solo los flujos con template son soportados, y el media_type debe coincidir.
-    assert prov.supports(_req(media_type=MediaType.IMAGE))  # default grok_style
-    assert prov.supports(_req(media_type=MediaType.IMAGE, params={"model": "grok_style"}))
+    assert prov.supports(_req(media_type=MediaType.IMAGE))  # default agil_solo
+    assert prov.supports(_req(media_type=MediaType.IMAGE, params={"model": "agil_solo"}))
     assert not prov.supports(_req(media_type=MediaType.IMAGE, params={"model": "qwen"}))
-    assert not prov.supports(_req(media_type=MediaType.VIDEO, params={"model": "grok_style"}))  # flujo de imagen
+    assert not prov.supports(_req(media_type=MediaType.VIDEO, params={"model": "agil_solo"}))  # flujo de imagen
     assert prov.supports(_req(media_type=MediaType.VIDEO, params={"model": "wan_i2v"}))  # flujo de video
     assert not prov.supports(_req(media_type=MediaType.IMAGE, params={"model": "wan_i2v"}))  # video != imagen
     assert not prov.supports(
@@ -233,7 +241,7 @@ async def test_fixed_seed_reaches_all_seed_nodes_and_result(tmp_path, seed):
     calls = []
     prov = ComfyUIProvider("box", transport=FakeTransport(), workflow_source="embed",
         client_factory=lambda url: calls.append(FakeClient(url)) or calls[-1], tmpdir=tmp_path)
-    result = await prov.generate(_req(params={"model": "grok_style", "seed": seed}))
+    result = await prov.generate(_req(params={"model": "ohwx_krea2", "seed": seed}))
     assert calls[0].graph["1"]["inputs"]["seed"] == seed
     assert calls[0].graph["17"]["inputs"]["seed"] == seed
     assert result.meta["seed"] == seed
@@ -250,7 +258,7 @@ async def test_invalid_seed_is_rejected_before_touching_transport(tmp_path, seed
     )
 
     with pytest.raises(ProviderInputError):
-        await prov.generate(_req(params={"model": "grok_style", "seed": seed}))
+        await prov.generate(_req(params={"model": "ohwx_krea2", "seed": seed}))
 
     assert calls == []
     assert transport.ensure_calls == 0
@@ -265,7 +273,7 @@ async def test_fallback_seed_is_drawn_once_and_shared_by_all_seed_nodes(tmp_path
         tmpdir=tmp_path, seed_factory=lambda: next(values),
     )
 
-    result = await prov.generate(_req(params={"model": "grok_style"}))
+    result = await prov.generate(_req(params={"model": "ohwx_krea2"}))
 
     # Un solo sorteo: si render volviera a pedir una semilla por nodo, el
     # segundo nodo recibiría 222 y el meta no coincidiría con el grafo.
@@ -281,7 +289,7 @@ async def test_incomplete_seed_mapping_never_claims_reproducibility(tmp_path):
     prov = ComfyUIProvider("box", transport=FakeTransport(), workflow_source="embed",
         client_factory=lambda url: calls.append(FakeClient(url)) or calls[-1], tmpdir=tmp_path)
     graph = {
-        "_meta": {"id": "grok_style", "media_type": "image", "positive_node": "4", "seed_nodes": ["1", "17"], "save_nodes": ["19"]},
+        "_meta": {"id": "ohwx_krea2", "media_type": "image", "positive_node": "4", "seed_nodes": ["1", "17"], "save_nodes": ["19"]},
         "4": {"class_type": "CLIPTextEncode", "inputs": {"text": ""}},
         "1": {"class_type": "KSampler", "inputs": {"seed": 0}},
         # Semilla enlazada a otro nodo: no es parcheable, así que el meta no
@@ -289,7 +297,7 @@ async def test_incomplete_seed_mapping_never_claims_reproducibility(tmp_path):
         "17": {"class_type": "KSamplerAdvanced", "inputs": {"seed": ["5", 0]}},
     }
     configure_workflow_source(source="remote", fetch=lambda _: json.dumps(graph))
-    result = await prov.generate(_req(params={"model": "grok_style", "seed": 42}))
+    result = await prov.generate(_req(params={"model": "ohwx_krea2", "seed": 42}))
     assert "seed" not in result.meta
     assert calls[0].graph["1"]["inputs"]["seed"] == 42
     assert calls[0].graph["17"]["inputs"]["seed"] == ["5", 0]
@@ -334,9 +342,9 @@ async def test_generate_applies_extra_loras_on_top_of_the_flow(tmp_path):
     await prov.generate(
         _req(
             params={
-                "model": "grok_style",
+                "model": "ohwx_krea2",
                 "lora_stacks": {
-                    "grok_style": [
+                    "ohwx_krea2": [
                         {"name": "style.safetensors", "strength": 0.7}
                     ]
                 },
@@ -351,7 +359,7 @@ async def test_generate_applies_extra_loras_on_top_of_the_flow(tmp_path):
     # Base y refine consumen el stack; la LoRA horneada sigue en el grafo.
     assert graph["1"]["inputs"]["model"] == ["900000", 0]
     assert graph["17"]["inputs"]["model"] == ["900000", 0]
-    assert graph["100"]["inputs"]["lora_name"] == "grokstyle_krea2_v2.safetensors"
+    assert graph["100"]["inputs"]["lora_name"] == "ohwx_krea2.safetensors"
 
 
 @pytest.mark.asyncio
@@ -367,8 +375,8 @@ async def test_generate_ignores_an_invalid_lora_stack(tmp_path):
     await prov.generate(
         _req(
             params={
-                "model": "grok_style",
-                "lora_stacks": {"grok_style": [{"name": "", "strength": 99}]},
+                "model": "ohwx_krea2",
+                "lora_stacks": {"ohwx_krea2": [{"name": "", "strength": 99}]},
             }
         )
     )
@@ -389,7 +397,7 @@ async def test_generate_uses_the_resolved_flow_stack_not_the_requested_one(tmp_p
         client_factory=lambda url: calls.append(FakeClient(url)) or calls[-1],
         tmpdir=tmp_path, seed_factory=lambda: 42,
     )
-    set_active_profile("t4")  # agil_edit_hq (a100) no existe: cae a grok_style
+    set_active_profile("t4")  # agil_edit_hq (a100) no existe: cae a agil_solo
     try:
         await prov.generate(
             _req(
@@ -399,7 +407,7 @@ async def test_generate_uses_the_resolved_flow_stack_not_the_requested_one(tmp_p
                         "agil_edit_hq": [
                             {"name": "hq_only.safetensors", "strength": 1.0}
                         ],
-                        "grok_style": [
+                        "agil_solo": [
                             {"name": "style.safetensors", "strength": 0.7}
                         ],
                     },
@@ -410,7 +418,7 @@ async def test_generate_uses_the_resolved_flow_stack_not_the_requested_one(tmp_p
         set_active_profile(None)
 
     graph = calls[-1].graph
-    # El flujo resuelto es grok_style: se aplica SU stack, nunca el de HQ.
+    # El flujo resuelto es agil_solo: se aplica SU stack, nunca el de HQ.
     assert graph["900000"]["inputs"]["lora_name"] == "style.safetensors"
     assert all(
         "hq_only.safetensors" not in str(node)

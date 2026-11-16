@@ -49,10 +49,10 @@ def test_append_prompt_to_caption_no_prompt_returns_caption():
 
 
 def test_format_model_caption_comfyui():
-    # El caption muestra el FLUJO (Grok Style), sin fila de LoRA (dormido).
-    model = {"comfyui_model": "grok_style"}
+    # El caption muestra el FLUJO (Ágil solo), sin fila de LoRA (dormido).
+    model = {"comfyui_model": "agil_solo"}
     out = f.format_model_caption(model, None, prompt="perro")
-    assert "<b>Modelo:</b> Grok Style" in out
+    assert "<b>Modelo:</b> Ágil solo" in out
     assert "<b>LoRA:</b>" not in out
     assert "<b>Tiempo:</b> …" in out
     assert "<b>Prompt:</b> perro" in out
@@ -66,14 +66,14 @@ def test_format_model_caption_plain_model():
 
 
 def test_format_model_caption_comfyui_with_seed():
-    model = {"comfyui_model": "grok_style", "seed": 4242}
+    model = {"comfyui_model": "agil_solo", "seed": 4242}
     out = f.format_model_caption(model, 10, prompt="perro")
     assert "<b>Semilla:</b> 4242" in out
     assert "<b>Prompt:</b> perro" in out
 
 
 def test_format_model_caption_ignores_non_int_seed():
-    out = f.format_model_caption({"comfyui_model": "grok_style", "seed": True}, 10)
+    out = f.format_model_caption({"comfyui_model": "agil_solo", "seed": True}, 10)
     assert "Semilla" not in out
 
 
@@ -113,12 +113,12 @@ def test_model_display_grok_video_with_replicate():
 def test_model_display_comfyui():
     cfg = UserConfig(
         model="comfyui",
-        comfyui=ComfyUIConfig(model="grok_style"),
+        comfyui=ComfyUIConfig(model="agil_solo"),
     )
     m = f.model_display(cfg)
-    assert m["name"] == "Grok Style"
-    assert m["comfyui_model"] == "grok_style"
-    assert "Grok Style" in m["desc"]
+    assert m["name"] == "Ágil solo"
+    assert m["comfyui_model"] == "agil_solo"
+    assert "Ágil solo" in m["desc"]
 
 
 def test_validate_prompt_rules():
@@ -177,5 +177,5 @@ def test_multipose_summary_numbers_combos():
 def test_labels_constants_transcribed():
     assert f.VIDEO_MODEL_LABELS["grok-imagine-video"] == "Base"
     assert f.VIDEO_MODE_LABELS["spicy"] == "Spicy"
-    assert f.COMFYUI_FLOW_LABELS["grok_style"] == "Grok Style"
+    assert f.COMFYUI_FLOW_LABELS["agil_solo"] == "Ágil solo"
     assert f.LIST_LABELS["poses"] == "Poses"

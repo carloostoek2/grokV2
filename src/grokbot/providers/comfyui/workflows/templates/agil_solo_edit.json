@@ -1,10 +1,11 @@
 {
   "_meta": {
-    "id": "grok_edit",
-    "name": "Grok Style Edit",
+    "id": "agil_solo_edit",
+    "name": "Ágil Solo Edit",
     "media_type": "image",
     "positive_node": "8",
     "positive_input": "prompt",
+    "negative_node": "9",
     "seed_nodes": [
       "13"
     ],
@@ -16,7 +17,7 @@
     "source_node": "1",
     "source_input": "image",
     "timeout": 600,
-    "source": "Krea2 instruction edit: Krea2EditModelPatch + Krea2EditGroundedEncode (comfyui-krea2edit v1.2.5) on krea2_turbo_fp8_scaled + qwen3vl_4b_fp8_scaled (UNET 12.24 GB + TE 4.88 GB + VAE 0.25 GB = 17.4 GB residentes, más ~2.1 GB de LoRAs; cabe en una L4 de 24 GB con normalvram y ComfyUI descarga el text encoder durante el muestreo si falta VRAM). Ajuste 2026-11-07: todo el set Krea comparte los mismos archivos fp8 (krea2_turbo_fp8_scaled + qwen3vl_4b_fp8_scaled) para que ComfyUI cargue un único UNET/TE al cambiar de flujo. Dos LoRAs apiladas: krea2_identity_edit_v1_2 (habilita la edición) + grokstyle_krea2_v2 (look Grok Style). El prompt es una INSTRUCCIÓN de edición (inglés), no una descripción. Turbo: 10 pasos, cfg 1, denoise 1. Objetivo 9:16 @ 1 MP."
+    "source": "Krea2 instruction edit ágil: Krea2EditModelPatch + Krea2EditGroundedEncode (comfyui-krea2edit) sobre el mismo par fp8 que Ágil solo (krea2_turbo_fp8_scaled + qwen3vl_4b_fp8_scaled; el perfil a100 lo sustituye a bf16). Sin LoRA de estilo: solo krea2_identity_edit_v2 (habilita la edición). Reemplaza a grok_edit (2026-11-16): 10 pasos, cfg 1, er_sde/simple, 9:16 @ 1 MP. El prompt es una INSTRUCCIÓN de edición (inglés), no una descripción."
   },
   "1": {
     "inputs": {
@@ -47,30 +48,22 @@
   },
   "5": {
     "inputs": {
+      "lora_name": "krea2_identity_edit_v2.safetensors",
+      "strength_model": 1,
       "model": [
         "2",
         0
-      ],
-      "lora_name": "krea2/krea2_identity_edit_v1_2.safetensors",
-      "strength_model": 1.0
-    },
-    "class_type": "LoraLoaderModelOnly"
-  },
-  "6": {
-    "inputs": {
-      "model": [
-        "5",
-        0
-      ],
-      "lora_name": "grokstyle_krea2_v2.safetensors",
-      "strength_model": 0.6
+      ]
     },
     "class_type": "LoraLoaderModelOnly"
   },
   "7": {
     "inputs": {
+      "ref_boost": 1,
+      "ref_boost_a": 1,
+      "fit_mode": "fit",
       "model": [
-        "6",
+        "5",
         0
       ],
       "source_latent": [
@@ -84,43 +77,39 @@
       "source_image": [
         "1",
         0
-      ],
-      "target_latent": [
-        "11",
-        0
-      ],
-      "ref_boost": 1.0,
-      "fit_mode": "fit"
+      ]
     },
     "class_type": "Krea2EditModelPatch"
   },
   "8": {
     "inputs": {
+      "prompt": "",
+      "grounding_px": 768,
+      "system_prompt": "",
       "clip": [
         "3",
         0
       ],
-      "prompt": "",
       "image": [
         "1",
         0
-      ],
-      "grounding_px": 768
+      ]
     },
     "class_type": "Krea2EditGroundedEncode"
   },
   "9": {
     "inputs": {
+      "prompt": "",
+      "grounding_px": 768,
+      "system_prompt": "",
       "clip": [
         "3",
         0
       ],
-      "prompt": "",
       "image": [
         "1",
         0
-      ],
-      "grounding_px": 768
+      ]
     },
     "class_type": "Krea2EditGroundedEncode"
   },
@@ -154,13 +143,19 @@
   "12": {
     "inputs": {
       "aspect_ratio": "9:16 (Portrait Widescreen)",
-      "megapixels": 1.0,
+      "megapixels": 1,
       "multiple": 8
     },
     "class_type": "ResolutionSelector"
   },
   "13": {
     "inputs": {
+      "seed": 0,
+      "steps": 10,
+      "cfg": 1,
+      "sampler_name": "er_sde",
+      "scheduler": "simple",
+      "denoise": 1,
       "model": [
         "7",
         0
@@ -176,13 +171,7 @@
       "latent_image": [
         "11",
         0
-      ],
-      "seed": 0,
-      "steps": 10,
-      "cfg": 1.0,
-      "sampler_name": "euler",
-      "scheduler": "simple",
-      "denoise": 1.0
+      ]
     },
     "class_type": "KSampler"
   },
@@ -201,11 +190,11 @@
   },
   "15": {
     "inputs": {
+      "filename_prefix": "grokbot/comfyui",
       "images": [
         "14",
         0
-      ],
-      "filename_prefix": "grokbot/comfyui"
+      ]
     },
     "class_type": "SaveImage"
   }

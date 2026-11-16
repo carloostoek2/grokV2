@@ -4,8 +4,8 @@ Cada **flujo** es un archivo JSON API-format de ComfyUI (modelo/LoRA horneados)
 más una clave top-level ``_meta`` que lo describe y declara qué nodos parchear::
 
     "_meta": {
-      "id": "grok_style",
-      "name": "Grok Style",
+      "id": "agil_solo",
+      "name": "Ágil solo",
       "media_type": "image",          # "image" | "video"
       "positive_node": "56",
       "positive_input": "prompt",     # default "text"
@@ -120,6 +120,8 @@ _source_mode: str = "embed"  # "remote" | "embed"
 _remote: _RemoteConfig | None = None
 # Perfil activo (None = sin filtro: todas las plantillas base, modo tests/legacy).
 _active_profile: Profile | None = None
+# Allowlist de menú por box (None = sin filtro). Se intersecta con el perfil.
+_active_menu: frozenset[str] | None = None
 # flow_id -> (monotonic_deadline, Flow)
 _remote_cache: dict[str, tuple[float, Flow]] = {}
 
@@ -129,9 +131,24 @@ def active_profile() -> Profile | None:
     return _active_profile
 
 
+def _parse_menu_flows(raw: str | None) -> frozenset[str] | None:
+    """Parsear ``COMFYUI_MENU_FLOWS`` (CSV) a allowlist; vacío = sin filtro."""
+    if not raw:
+        return None
+    ids = frozenset(part.strip() for part in raw.split(",") if part.strip())
+    return ids or None
+
+
 def active_flow_ids() -> frozenset[str] | None:
-    """Ids visibles con el perfil activo (``None`` = catálogo completo)."""
-    return frozenset(_active_profile.flows) if _active_profile is not None else None
+    """Ids visibles según perfil y allowlist de menú (``None`` = sin filtro)."""
+    profile_ids = (
+        frozenset(_active_profile.flows) if _active_profile is not None else None
+    )
+    if _active_menu is None:
+        return profile_ids
+    if profile_ids is None:
+        return _active_menu
+    return profile_ids & _active_menu
 
 
 def set_active_profile(profile_id: str | None) -> None:
@@ -174,6 +191,7 @@ def configure_workflow_source(
     ssh_bin: str = "ssh",
     fetch: Callable[[str], str | None] | None = None,
     profile: str | None = None,
+    flows: str | None = None,
 ) -> None:
     """Configurar origen de workflows (remoto Vast vía SSH o embed).
 
@@ -186,14 +204,18 @@ def configure_workflow_source(
     ``""`` o ``auto`` dejan el catálogo completo sin filtro hasta que
     :func:`set_active_profile` reciba la GPU detectada.
 
+    ``flows``: allowlist de ids visibles (CSV). Se intersecta con el perfil;
+    vacío/``None`` = sin filtro extra.
+
     Sin ``host`` y ``source=remote`` se degrada a embed con warning.
     ``fetch`` permite mockear la lectura remota en tests unitarios.
     """
-    global _source_mode, _remote
+    global _source_mode, _remote, _active_menu
     mode = (source or "remote").strip().lower()
     if mode not in ("remote", "embed"):
         logger.warning("Unknown COMFYUI_WORKFLOW_SOURCE=%r; using remote", source)
         mode = "remote"
+    _active_menu = _parse_menu_flows(flows)
     profile_id = (profile or "").strip().lower()
     set_active_profile(None if profile_id in ("", "auto") else profile_id)
     _remote_cache.clear()

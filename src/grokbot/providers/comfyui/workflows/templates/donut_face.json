@@ -237,7 +237,7 @@
   },
   "883": {
     "inputs": {
-      "lora_name": "krea2/krea2_identity_edit_v1_2.safetensors",
+      "lora_name": "krea2_identity_edit_v2.safetensors",
       "strength_model": 1,
       "model": [
         "1055",

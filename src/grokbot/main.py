@@ -98,6 +98,7 @@ def _build_providers(
             workflows_dir=settings.comfyui_workflows_dir,
             workflow_cache_ttl=settings.comfyui_workflow_cache_ttl,
             weight_profile=settings.comfyui_perfil,
+            menu_flows=settings.comfyui_menu_flows,
         ),
     )
 

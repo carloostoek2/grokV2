@@ -116,7 +116,7 @@ async def test_comfyui_batch_item_result_request_has_params(sessions, variables_
     cfg = replace(
         UserConfig.defaults(),
         model="comfyui",
-        comfyui=ComfyUIConfig(model="grok_style"),
+        comfyui=ComfyUIConfig(model="agil_solo"),
     )
     sessions.save_config(USER_ID, cfg)
     prov = FakeComfyuiProvider(outcomes=[make_result(provider="comfyui", file_path="/tmp/mp.jpg")])
@@ -141,7 +141,7 @@ async def test_comfyui_batch_item_result_request_has_params(sessions, variables_
     req = results[0].request
     assert req is not None
     assert req.provider == "comfyui"
-    assert req.params.get("model") == "grok_style"
+    assert req.params.get("model") == "agil_solo"
     assert "lora" not in req.params
     assert "refine" not in req.params
 

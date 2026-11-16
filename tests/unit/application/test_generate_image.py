@@ -187,7 +187,7 @@ async def test_comfyui_params_flow_id_in_request(sessions):
     cfg = replace(
         UserConfig.defaults(),
         model="comfyui",
-        comfyui=ComfyUIConfig(model="grok_style"),
+        comfyui=ComfyUIConfig(model="agil_solo"),
     )
     sessions.save_config(USER_ID, cfg)
     prov = FakeComfyuiProvider(
@@ -201,7 +201,7 @@ async def test_comfyui_params_flow_id_in_request(sessions):
     assert request.provider == "comfyui"
     assert request.media_type is MediaType.IMAGE
     # El request lleva el id de flujo; lora/refine quedaron dormidos (no viajan).
-    assert request.params["model"] == "grok_style"
+    assert request.params["model"] == "agil_solo"
     assert "lora" not in request.params
     assert "refine" not in request.params
 
@@ -264,9 +264,9 @@ async def test_comfyui_sends_per_flow_lora_stacks(sessions):
         UserConfig.defaults(),
         model="comfyui",
         comfyui=ComfyUIConfig(
-            model="grok_style",
+            model="agil_solo",
             lora_stacks=(
-                ("grok_style", (LoraStackEntry("style.safetensors", 0.7),)),
+                ("agil_solo", (LoraStackEntry("style.safetensors", 0.7),)),
                 ("agil_solo", (LoraStackEntry("solo.safetensors", 1.0),)),
             ),
         ),
@@ -282,7 +282,7 @@ async def test_comfyui_sends_per_flow_lora_stacks(sessions):
     request, _ = prov.calls[0]
     # El provider elige por id de flujo resuelto: viaja el mapa completo.
     assert request.params["lora_stacks"] == {
-        "grok_style": [{"name": "style.safetensors", "strength": 0.7}],
+        "agil_solo": [{"name": "style.safetensors", "strength": 0.7}],
         "agil_solo": [{"name": "solo.safetensors", "strength": 1.0}],
     }
     assert "loras" not in request.params

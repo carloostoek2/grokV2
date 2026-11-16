@@ -181,10 +181,10 @@ async def test_comfyui_known_flow_adds_chain_buttons_and_remembers_path(tmp_path
     )
     request = GenerationRequest(
         provider="comfyui",
-        model_id="grok_style",
+        model_id="agil_solo",
         media_type=MediaType.IMAGE,
         prompt="un gato",
-        params={"model": "grok_style"},
+        params={"model": "agil_solo"},
     )
     item = ItemResult(
         result=make_result(
@@ -205,7 +205,7 @@ async def test_comfyui_known_flow_adds_chain_buttons_and_remembers_path(tmp_path
     remembered = memory.last(7)
     assert remembered is not None
     assert remembered["path"] == str(img)
-    assert remembered["flow_id"] == "grok_style"
+    assert remembered["flow_id"] == "agil_solo"
 
 
 @pytest.mark.asyncio
@@ -359,10 +359,10 @@ async def test_comfyui_over_photo_limit_is_not_tied_to_one_flow(
     )
     request = GenerationRequest(
         provider="comfyui",
-        model_id="grok_style",
+        model_id="agil_solo",
         media_type=MediaType.IMAGE,
         prompt="un gato",
-        params={"model": "grok_style"},
+        params={"model": "agil_solo"},
     )
     item = ItemResult(
         result=make_result(
@@ -384,7 +384,7 @@ async def test_comfyui_over_photo_limit_is_not_tied_to_one_flow(
         "regen", "pipe:edit", "pipe:detail", "pipe:retake",
     ]
     remembered = memory.last(7)
-    assert remembered is not None and remembered["flow_id"] == "grok_style"
+    assert remembered is not None and remembered["flow_id"] == "agil_solo"
 
 
 @pytest.mark.asyncio
@@ -866,10 +866,10 @@ async def test_caption_shows_real_elapsed_when_present(gateway, downloader, refs
 def _comfy_item(*, file_path, seed: int) -> ItemResult:
     request = GenerationRequest(
         provider="comfyui",
-        model_id="grok_style",
+        model_id="agil_solo",
         media_type=MediaType.IMAGE,
         prompt="un gato",
-        params={"model": "grok_style", "seed": seed},
+        params={"model": "agil_solo", "seed": seed},
     )
     return ItemResult(
         result=make_result(
@@ -893,7 +893,7 @@ async def test_comfyui_caption_shows_effective_seed(tmp_path, gateway, downloade
     await sender.send_image(ui, _comfy_item(file_path=img, seed=4242), "Prompt")
 
     caption = gateway.calls_by_method("send_photo")[0]["caption"]
-    assert "<b>Modelo:</b> Grok Style" in caption
+    assert "<b>Modelo:</b> Ágil solo" in caption
     assert "<b>Semilla:</b> 4242" in caption
 
 
@@ -909,10 +909,10 @@ async def test_comfyui_album_caption_shows_effective_seed(
     sender = _make_sender(gateway, downloader, refs_repo)
     request = GenerationRequest(
         provider="comfyui",
-        model_id="grok_style",
+        model_id="agil_solo",
         media_type=MediaType.IMAGE,
         prompt="un gato",
-        params={"model": "grok_style", "seed": 7},
+        params={"model": "agil_solo", "seed": 7},
     )
     item = ItemResult(
         result=make_result(

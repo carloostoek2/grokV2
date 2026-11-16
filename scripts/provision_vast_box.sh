@@ -52,7 +52,7 @@ MODELS=(
   "text_encoders/qwen3vl_4b_fp8_scaled.safetensors|https://huggingface.co/Comfy-Org/Krea-2/resolve/main/text_encoders/qwen3vl_4b_fp8_scaled.safetensors|none"
   "vae/qwen_image_vae.safetensors|https://huggingface.co/Comfy-Org/Krea-2/resolve/main/vae/qwen_image_vae.safetensors|none"
   "diffusion_models/Moody-Krea-Mix-v4.1G_00001__clean_nvfp4.safetensors|https://huggingface.co/catlover1937/moody-krea-mix/resolve/main/Moody-Krea-Mix-v4.1G_00001__clean_nvfp4.safetensors|none"
-  "loras/krea2/krea2_identity_edit_v1_2.safetensors|https://huggingface.co/conradlocke/krea2-identity-edit/resolve/main/krea2_identity_edit_v1_2.safetensors|hf"
+  "loras/krea2_identity_edit_v2.safetensors|https://huggingface.co/conradlocke/krea2-identity-edit/resolve/main/krea2_identity_edit_v2.safetensors|hf"
   "vae/wan_2.1_vae.safetensors|https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors|none"
   "loras/grokstyle_krea2_v2.safetensors|https://civitai.com/api/download/models/3278913|civitai"
   "diffusion_models/krea2SATDirtyRealism_uncut_fp8.safetensors|https://civitai.com/api/download/models/3372523?fileId=3260775|civitai"
@@ -65,7 +65,6 @@ MANUAL_WEIGHTS=(
   "text_encoders/qwen3vl_8b_int8_convrot.safetensors"
   "text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors"
   "vae/qwen_image_2.1_vae_bf16.safetensors"
-  "checkpoints/Qwen-Rapid-AIO-NSFW-v23.safetensors"
   "loras/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors"
   "loras/Krea2NSFWV4.safetensors"
 )

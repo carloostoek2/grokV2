@@ -60,12 +60,12 @@ def test_injects_after_the_unet_when_the_flow_has_no_lora():
 
 
 def test_keeps_baked_loras_and_appends_after_the_last_model_node():
-    graph, meta = _graph("grok_edit.json")
-    baked = {nid: copy.deepcopy(graph[nid]) for nid in ("5", "6", "7")}
+    graph, meta = _graph("agil_solo_edit.json")
+    baked = {nid: copy.deepcopy(graph[nid]) for nid in ("5", "7")}
 
     apply_lora_stack(graph, (_entry(),), positive_node=meta["positive_node"])
 
-    # Las LoRAs del flujo (identidad + estilo + patch de edición) no cambian.
+    # La LoRA de identidad y el patch de edición del flujo no cambian.
     assert {nid: graph[nid] for nid in baked} == baked
     # El nodo nuevo cuelga del último productor de MODEL y el sampler lo lee.
     assert graph["900000"]["inputs"]["model"] == ["7", 0]
@@ -87,15 +87,15 @@ def test_multiple_entries_chain_in_order():
 
 
 def test_rewires_all_samplers_that_share_the_anchor():
-    graph, meta = _graph("krea2_t2i.json")
+    graph, meta = _graph("ohwx_krea2.json")
 
     apply_lora_stack(graph, (_entry(),), positive_node=meta["positive_node"])
 
-    # Grok Style tiene sampler base (1) y refine (17); ambos consumían la LoRA
+    # Ohwx tiene sampler base (1) y refine (17); ambos consumían la LoRA
     # horneada (100) y ahora consumen el stack del usuario.
     assert graph["1"]["inputs"]["model"] == ["900000", 0]
     assert graph["17"]["inputs"]["model"] == ["900000", 0]
-    assert graph["100"]["inputs"]["lora_name"] == "grokstyle_krea2_v2.safetensors"
+    assert graph["100"]["inputs"]["lora_name"] == "ohwx_krea2.safetensors"
 
 
 def test_does_not_touch_the_seedvr_branch_of_hq_flows():

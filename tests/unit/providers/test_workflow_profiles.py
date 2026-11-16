@@ -41,7 +41,7 @@ def test_los_tres_perfiles_existen_y_su_default_es_valido():
 
 
 def test_a100_usa_bf16_para_krea():
-    graph = flow_graphs(PROFILES["a100"])["grok_edit"]
+    graph = flow_graphs(PROFILES["a100"])["agil_solo_edit"]
     unet = _unet_nodes(graph)[0]
     assert unet["class_type"] == "UNETLoader"
     assert unet["inputs"]["unet_name"] == "krea2_turbo_bf16.safetensors"
@@ -54,7 +54,7 @@ def test_a100_usa_bf16_para_krea():
 
 
 def test_t4_cambia_el_unet_a_gguf_y_quita_weight_dtype():
-    graph = flow_graphs(PROFILES["t4"])["grok_edit"]
+    graph = flow_graphs(PROFILES["t4"])["agil_solo_edit"]
     unet = _unet_nodes(graph)[0]
     assert unet["class_type"] == "UnetLoaderGGUF"
     assert unet["inputs"] == {"unet_name": "Krea-2-Turbo-Q4_K_M.gguf"}
@@ -62,10 +62,10 @@ def test_t4_cambia_el_unet_a_gguf_y_quita_weight_dtype():
 
 def test_l4_usa_qwen_edit_gguf_pero_krea_sigue_en_fp8():
     graphs = flow_graphs(PROFILES["l4"])
-    qwen = _unet_nodes(graphs["agil_edit_qwen"])[0]
+    qwen = _unet_nodes(graphs["agil_edit_hq"])[0]
     assert qwen["class_type"] == "UnetLoaderGGUF"
     assert qwen["inputs"]["unet_name"] == "qwen-image-edit-2511-Q4_K_M.gguf"
-    krea = _unet_nodes(graphs["grok_edit"])[0]
+    krea = _unet_nodes(graphs["agil_solo_edit"])[0]
     assert krea["class_type"] == "UNETLoader"
     assert krea["inputs"]["unet_name"] == "krea2_turbo_fp8_scaled.safetensors"
 
@@ -129,11 +129,11 @@ def test_resolver_filtra_y_adapta_por_perfil():
         assert active_profile() is not None
         assert active_profile().id == "t4"
         assert [f.id for f in flows()] == list(PROFILES["t4"].flows)
-        flow = get_flow("grok_edit")
+        flow = get_flow("agil_solo_edit")
         assert flow is not None
         assert flow.graph["2"]["class_type"] == "UnetLoaderGGUF"
         # Flujo de A100 que no cabe en la T4: no existe para el bot.
-        assert get_flow("grok_style_hq") is None
+        assert get_flow("agil_edit_hq") is None
     finally:
         reset_workflow_source()
 
@@ -142,9 +142,9 @@ def test_resolver_sin_perfil_devuelve_todas_las_plantillas():
     reset_workflow_source()
     try:
         ids = {flow.id for flow in flows()}
-        assert "grok_style_hq" in ids
-        assert "grok_edit" in ids
-        assert get_flow("grok_style_hq") is not None
+        assert "agil_solo_edit" in ids
+        assert "agil_edit_hq" in ids
+        assert get_flow("agil_solo_edit") is not None
     finally:
         reset_workflow_source()
 
@@ -192,6 +192,6 @@ async def test_refresh_profile_detecta_t4_y_no_abre_tunel():
         assert active_profile().id == "t4"
         # La detección consume el túnel ya activo, no lo abre.
         assert _FakeTransport.ensure_calls == 0
-        assert get_flow("agil_edit_qwen") is None
+        assert get_flow("agil_edit_hq") is None
     finally:
         reset_workflow_source()

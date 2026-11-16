@@ -27,11 +27,18 @@
 >
 > **Update 2026-11-07 — set Krea en fp8 y Dirty\* retirados:** todos los flujos Krea
 > comparten `krea2_turbo_fp8_scaled` + `qwen3vl_4b_fp8_scaled` + `qwen_image_vae`
-> (incluidos los `*_hq` y `grok_edit`) para no cargar dos copias del mismo peso al
+> (incluidos los `*_hq` y `agil_solo_edit`) para no cargar dos copias del mismo peso al
 > cambiar de flujo. `agil_moody` / `agil_moody_hq` conservan su UNET Moody y comparten
 > el TE. Los flujos Dirty\* y `ohwx_dirty_edit` se retiran temporalmente: ids fuera de
 > `COMFYUI_FLOWS` y templates en `workflows/templates/_disabled/`. Detalle de producto:
 > `docs/PRODUCT_STATUS.md` §2.
+>
+> **Update 2026-11-16 — menú ágil consolidado:** `grok_edit` se sustituye por
+> `agil_solo_edit` («Ágil Solo Edit»), el mismo grafo krea2edit **sin** las LoRAs
+> `grokstyle`/NSFW y con `krea2_identity_edit_v2` + `er_sde/simple`. `grok_style`,
+> `agil_nsfw`, `agil_edit_nsfw`, `agil_edit_qwen`, `grok_style_hq`, `agil_nsfw_hq` y
+> `grok_edit_hq` salen del catálogo (templates a `_disabled/`); `agil_edit_hq` se conserva.
+> Nuevo `COMFYUI_MENU_FLOWS` (CSV) para acotar el menú por box sin tocar el perfil.
 
 # ComfyUI en grokV2 — integración por API HTTP/WS (avance y estado)
 
@@ -94,7 +101,7 @@ Componentes (bajo `src/grokbot/providers/comfyui/`):
 | `transport.py` | `SshLocalForward`: abre/mantiene `ssh -N -L 127.0.0.1:<local>:127.0.0.1:<remote>` al box. `ensure()/restart()/close()`; spawner inyectable (tests). No ejecuta comandos remotos. |
 | `client.py` | `ComfyApiClient` (aiohttp): `enqueue`, `run_workflow` (fin por WS con match de `prompt_id` y fallback a `/history`; deadline único), `history`, `view` (acepta MP4), `upload_image`, `health`, `object_info`. Errores tipados de `providers/base.py`. Sesión y fuente WS inyectables. |
 | `workflows/resolver.py` | Registro de **flujos** por id: `flows()`/`get_flow(id)` → `Flow` (grafo limpio + nodos prompt/seed/save + `supports_source`), descubriendo los `templates/*.json`. `render()` copia el grafo (sin `_meta`) y parchea prompt + seeds. |
-| `workflows/templates/*.json` | Workflows API-format versionados, **self-describables** (`_meta`: id, name, media_type, nodos a parchear). Hoy `krea2_t2i.json` = flujo `grok_style`. |
+| `workflows/templates/*.json` | Workflows API-format versionados, **self-describables** (`_meta`: id, name, media_type, nodos a parchear). Hoy `agil_solo.json` = flujo `agil_solo` y `agil_solo_edit.json` = `agil_solo_edit`. |
 | `provider.py` | `ComfyUIProvider` (implements `ImageProvider`/`VideoProvider`): valida el **id de flujo** (M1), resuelve el flujo, corre y descarga a `tmp/comfyui`, normaliza a `GenerationResult`. |
 
 Detalles del flujo por generación:
@@ -152,8 +159,9 @@ Con el flujo **Grok Style** (`krea2_t2i.json`, txt2img, 2 pasadas + upscale + `S
 
 - El camino SSH (`ssh_client.py`, `gen_comfy.py`) se eliminó del árbol; exports y
   `main.py` apuntan al provider HTTP.
-- **ComfyUI se configura por flujos** (hoy `grok_style`/Grok Style, `donut_face`/Donut
-  Face, `agil_solo`/Ágil solo y `agil_nsfw`/Ágil NSFW): el `/config` lista los flujos por
+- **ComfyUI se configura por flujos** (hoy `agil_solo`/Ágil solo, `agil_solo_edit`/Ágil
+  Solo Edit, `agil_moody`/Ágil Moody y sus `*_hq`, más los legacy/ocultos): el `/config`
+  lista los flujos por
   nombre; el catálogo legacy de modelo/LoRA (qwen,
   krea2_raw/moody, wan_i2v, LoRAs, refine) salió de la UI y de la validación — las sesiones
   viejas se auto-normalizan al flujo default al cargar.
@@ -184,7 +192,7 @@ directa no se toca). Contrato:
      [REMOTE_API_WORKFLOWS.md](./REMOTE_API_WORKFLOWS.md)): tras tocar cualquier flag hay que
      **desplegarlo**, no basta con el template del repo.
 2. Registrar el flujo en `domain/user_config.COMFYUI_FLOWS`:
-   `(("grok_style", "Grok Style"), ("<id>", "<Nombre>"))`. El id entra a
+   `(("agil_solo", "Ágil solo"), ("<id>", "<Nombre>"))`. El id entra a
    `VALID_COMFYUI_MODELS` (validación/normalización) y la UI lo lista por `name`.
 3. Los **LoRAs extra del usuario** no se declaran en el `_meta`. El provider
    descubre el ancla —el MODEL que consume el sampler principal— y apila

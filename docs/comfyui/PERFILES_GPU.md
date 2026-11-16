@@ -35,9 +35,9 @@ Consumidores del mismo JSON: el resolver del bot, `actualizar_cuaderno.py`
 
 | Perfil | Tarjeta | Krea | Qwen Edit | Flujos |
 |---|---|---|---|---|
-| `a100` | A100 / H100 | bf16 24,48 + 8,27 GB | fp8mixed 19,12 GB | 13 |
-| `l4` | L4 24 GB | fp8 12,24 + 4,88 GB | GGUF Q4_K_M 11,96 GB | 12 (sin Rapid AIO) |
-| `t4` | T4 16 GB | GGUF Q4_K_M 6,97 GB | no | 4: `grok_style`, `agil_solo`, `agil_nsfw`, `grok_edit` |
+| `a100` | A100 / H100 | bf16 24,48 + 8,27 GB | fp8mixed 19,12 GB | 7 |
+| `l4` | L4 24 GB | fp8 12,24 + 4,88 GB | GGUF Q4_K_M 11,96 GB | 6 (sin Rapid AIO) |
+| `t4` | T4 16 GB | GGUF Q4_K_M 6,97 GB | no | 2: `agil_solo`, `agil_solo_edit` |
 
 `face_detail_impact` («Detalle cara») queda **fuera de todos los perfiles**: la función
 está retirada (arquitectura SDXL/Impact antigua) y no se descargan sus pesos. Por eso el
@@ -88,8 +88,11 @@ nodo. Sin ese parche el loader responde
 
 | Flujo | Pesos | Resultado | Tiempo |
 |---|---|---|---|
-| `grok_edit` | Krea GGUF Q4 + TE fp8 | edición correcta, identidad conservada | 257 s en frío / 179 s en caliente |
-| `agil_edit_qwen` | Qwen Edit GGUF Q4 + TE fp8 | edición correcta | 775 s (4,6 GB de UNET descargados a RAM) |
+| `grok_edit` (retirado 2026-11-16) | Krea GGUF Q4 + TE fp8 | edición correcta, identidad conservada | 257 s en frío / 179 s en caliente |
+| `agil_edit_qwen` (retirado) | Qwen Edit GGUF Q4 + TE fp8 | edición correcta | 775 s (4,6 GB de UNET descargados a RAM) |
+
+Desde el 2026-11-16 `t4` ofrece `agil_solo` y `agil_solo_edit`, ambos sobre la misma
+base Krea GGUF Q4; la medición de `agil_solo_edit` en T4 queda pendiente.
 
 Qwen Edit en T4 funciona pero no es práctico; por eso `t4` no lo incluye. En L4
 el mismo GGUF no necesita descargar a RAM y debería bajar a ~2–4 min.

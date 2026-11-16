@@ -26,7 +26,7 @@ REAL_GROK_SESSION_REC = {
     "video_model": "grok-imagine-video",
     "video_mode": "normal",
     "video_hourly_timestamps": [],
-    "comfyui_model": "grok_style",
+    "comfyui_model": "agil_solo",
     "comfyui_lora": "none",
     "comfyui_refine": "0",
 }
@@ -44,7 +44,7 @@ def test_defaults_mirror_default_session_record():
     assert uc.video.resolution == "720p"
     assert uc.video.model == "grok-imagine-video"
     assert uc.video.mode == "normal"
-    assert uc.comfyui.model == "grok_style"
+    assert uc.comfyui.model == "agil_solo"
     assert uc.comfyui.lora == "none"
     assert uc.comfyui.refine == "1"
     assert uc.source_path is None
@@ -109,10 +109,11 @@ def test_comfyui_refine_preserved_as_str():
 
 
 def test_obsolete_comfyui_model_falls_back():
-    # realvisxl y los ids del catálogo anterior (krea2/qwen/...) caen al flujo default.
-    for legacy in ("realvisxl", "krea2", "krea2_moody", "qwen", "minimax_i2v"):
+    # realvisxl, ids del catálogo anterior (krea2/qwen/...) y los flujos
+    # Grok retirados caen al flujo default.
+    for legacy in ("realvisxl", "krea2", "krea2_moody", "qwen", "minimax_i2v", "grok_style", "grok_edit"):
         uc = UserConfig.from_record({"comfyui_model": legacy})
-        assert uc.comfyui.model == "grok_style"
+        assert uc.comfyui.model == "agil_solo"
 
 
 def test_wan_i2v_comfyui_model_is_accepted():
@@ -186,7 +187,7 @@ def test_real_grok_session_record_loads_without_loss():
     assert uc.video.resolution == "480p"
     assert uc.video.model == "grok-imagine-video"
     assert uc.video.mode == "normal"
-    assert uc.comfyui.model == "grok_style"
+    assert uc.comfyui.model == "agil_solo"
     assert uc.comfyui.refine == "0"
     assert uc.comfyui.refine_enabled is False
     assert uc.grok_imagine_provider == "kie"
@@ -200,9 +201,9 @@ def test_video_config_and_comfyui_config_standalone():
                                   "model": "grok-imagine-video-1.5", "mode": "fun"})
     assert vc.to_record() == {"duration": 15, "aspect_ratio": "3:2", "resolution": "480p",
                               "model": "grok-imagine-video-1.5", "mode": "fun"}
-    cc = ComfyUIConfig.from_record({"model": "grok_style", "lora": "none", "refine": "1"})
+    cc = ComfyUIConfig.from_record({"model": "agil_solo", "lora": "none", "refine": "1"})
     assert cc.to_record() == {
-        "model": "grok_style",
+        "model": "agil_solo",
         "lora": "none",
         "refine": "1",
         "seed_mode": "random",
@@ -238,11 +239,11 @@ def test_new_comfy_flows_are_accepted():
 def test_comfy_chain_stages():
     from grokbot.domain.user_config import comfy_chain_destination, comfy_chain_stages
 
-    grok = comfy_chain_stages("grok_style", supports_source=False, requires_source=False)
+    grok = comfy_chain_stages("agil_solo", supports_source=False, requires_source=False)
     assert grok == (
-        ("edit", "grok_edit"),
+        ("edit", "agil_solo_edit"),
         ("detail", "face_detail_impact"),
-        ("retake", "grok_style"),
+        ("retake", "agil_solo"),
     )
     # Dirty* retirados: no son ids válidos ni generan cadena.
     from grokbot.domain.user_config import VALID_COMFYUI_MODELS
@@ -330,15 +331,15 @@ def test_parse_lora_stack_caps_the_stack():
 def test_comfyui_config_round_trips_lora_stacks():
     cc = ComfyUIConfig(
         lora_stacks=(
-            ("grok_style", (LoraStackEntry("a.safetensors", 0.6),)),
-            ("agil_solo", (LoraStackEntry("b.safetensors", 1.2),)),
+            ("agil_solo", (LoraStackEntry("a.safetensors", 0.6),)),
+            ("agil_moody", (LoraStackEntry("b.safetensors", 1.2),)),
         )
     )
 
     restored = ComfyUIConfig.from_record(cc.to_record())
 
     assert restored.lora_stacks == cc.lora_stacks
-    assert restored.loras_for("grok_style") == (LoraStackEntry("a.safetensors", 0.6),)
+    assert restored.loras_for("agil_solo") == (LoraStackEntry("a.safetensors", 0.6),)
     assert restored.loras_for("unknown") == ()
 
 
@@ -346,7 +347,7 @@ def test_comfyui_config_drops_corrupt_stacks_but_keeps_other_flows():
     cc = ComfyUIConfig.from_record(
         {
             "lora_stacks": {
-                "grok_style": [
+                "agil_solo": [
                     {"name": "ok.safetensors", "strength": 0.9},
                     {"name": "bad.safetensors", "strength": "high"},
                 ],
@@ -356,7 +357,7 @@ def test_comfyui_config_drops_corrupt_stacks_but_keeps_other_flows():
         }
     )
 
-    assert cc.loras_for("grok_style") == (LoraStackEntry("ok.safetensors", 0.9),)
+    assert cc.loras_for("agil_solo") == (LoraStackEntry("ok.safetensors", 0.9),)
     # Un flujo retirado conserva su stack para cuando vuelva.
     assert cc.loras_for("retired_flow") == (
         LoraStackEntry("keep.safetensors", 0.5),
@@ -366,10 +367,10 @@ def test_comfyui_config_drops_corrupt_stacks_but_keeps_other_flows():
 
 def test_with_lora_stack_removes_the_key_when_emptied():
     cc = ComfyUIConfig(
-        lora_stacks=(("grok_style", (LoraStackEntry("a.safetensors"),)),)
+        lora_stacks=(("agil_solo", (LoraStackEntry("a.safetensors"),)),)
     )
 
-    emptied = cc.with_lora_stack("grok_style", ())
+    emptied = cc.with_lora_stack("agil_solo", ())
 
     assert emptied.lora_stacks == ()
-    assert cc.loras_for("grok_style") == (LoraStackEntry("a.safetensors"),)
+    assert cc.loras_for("agil_solo") == (LoraStackEntry("a.safetensors"),)

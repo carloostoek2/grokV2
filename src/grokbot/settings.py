@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     # Perfil de pesos: "auto" detecta la GPU por /system_stats; o forzar
     # "a100" | "l4" | "t4" (útil en tests/offline).
     comfyui_perfil: str = "auto"
+    # Allowlist del menú ComfyUI (CSV de flow ids) para boxes que no tienen
+    # todos los pesos; vacío = sin filtro extra (manda el perfil).
+    comfyui_menu_flows: str = ""
 
     # Telegram user ID allowlists. blank/whitespace -> None (open bot); None too.
     allowed_telegram_ids: Annotated[set[int] | None, NoDecode] = None

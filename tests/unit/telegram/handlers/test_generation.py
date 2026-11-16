@@ -420,7 +420,7 @@ async def test_photo_no_caption_while_awaiting_reminds():
 # --------------------------------------------------------------------------- #
 _ALBUM_LABEL = "Grok Imagine (Kie.ai • Alta calidad)"
 _NANO_ALBUM_LABEL = "Nano Banana (Kie.ai • Nano Banana 2)"
-_COMFY_ALBUM_LABEL = "Ágil Edit"  # COMFYUI_FLOW_LABELS["agil_edit_qwen"]
+_COMFY_ALBUM_LABEL = "Ágil Solo Edit"  # COMFYUI_FLOW_LABELS["agil_solo_edit"]
 
 
 async def _feed_album(deps, n: int, *, group: str = "album-1", caption_on: int | None = 1,
@@ -495,7 +495,7 @@ async def test_album_comfyui_edits_sequentially():
     comfy = registry.provider("comfyui")
     deps = make_deps(registry=registry)
     deps.update_config.set_model(_UID, "comfyui")
-    deps.update_config.set_comfyui(_UID, model="agil_edit_qwen")
+    deps.update_config.set_comfyui(_UID, model="agil_solo_edit")
     deps.album.delay = 0.05
     deps = await _feed_album(
         deps, 3, group="album-comfy", file_prefix="FAKE:alb_comfy"
@@ -525,7 +525,7 @@ async def test_album_comfyui_edits_sequentially():
     assert all(source is not None for _request, source in comfy.calls)
     assert [request.prompt for request, _source in comfy.calls] == ["un cambio"] * 3
     assert all(
-        request.params.get("model") == "agil_edit_qwen"
+        request.params.get("model") == "agil_solo_edit"
         for request, _source in comfy.calls
     )
     assert deps.job_manager.active_jobs(_UID) == ()
