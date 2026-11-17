@@ -180,7 +180,7 @@ colab-comfy T4
 colab-comfy L4
 colab-comfy --sin-preparar      # omite la fase CPU (ComfyUI verifica/descarga en GPU)
 colab-comfy --preparar          # fuerza re-verificar aunque la sesión esté activa
-colab-comfy --no-drive          # sin Drive (efímero; no recomendado)
+colab-comfy --no-drive          # sin Drive: pesos efímeros en /content, verificados/descargados en la GPU
 colab-comfy --extras            # instala requirements de nodos viejos (lento)
 COMFY_REF=v0.43.2 colab-comfy   # fija versión de ComfyUI
 

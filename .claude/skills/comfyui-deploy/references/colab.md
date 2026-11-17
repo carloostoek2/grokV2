@@ -101,7 +101,8 @@ Reglas de la fase:
   para no gastar unidades sin poder correr.
 - Log: `/home/ubuntu/comfy-colab/preparacion.log`.
 - `--sin-preparar` omite la fase y deja que el cuaderno verifique/descargue dentro de la GPU.
-- `--no-drive` también la omite (no habría dónde persistir los pesos).
+- `--no-drive` omite **solo** la fase CPU (no podría persistir los pesos), pero el cuaderno
+  **sí verifica y descarga** los que falten en la GPU, a `/content` (efímero).
 - Con una sesión GPU ya activa no se repite; `--preparar` la reinicia para re-verificar.
 
 ### 2.3 Fase 2 — sesión GPU y cuaderno
