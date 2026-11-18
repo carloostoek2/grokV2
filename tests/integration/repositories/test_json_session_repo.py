@@ -134,17 +134,17 @@ def test_legacy_grok_provider_migrates_and_is_dropped_on_save(tmp_path):
 
 
 def test_legacy_comfyui_flow_model_migrates_to_default(tmp_path):
-    """Un comfyui_model del catálogo anterior normaliza al flujo default (agil_solo)."""
+    """Un comfyui_model del catálogo anterior normaliza al flujo default (agil_solo_edit)."""
     path = tmp_path / "sessions.json"
     rec = canonical_record()
     rec["comfyui_model"] = "krea2_moody"
     write(path, {str(UID): rec})
     repo = JsonSessionRepository(path)
     config = repo.get_config(UID)
-    assert config.comfyui.model == "agil_solo"
+    assert config.comfyui.model == "agil_solo_edit"
     repo.save_config(UID, config)
     raw = json.loads(path.read_text(encoding="utf-8"))[str(UID)]
-    assert raw["comfyui_model"] == "agil_solo"
+    assert raw["comfyui_model"] == "agil_solo_edit"
 
 
 def test_canonical_wins_over_legacy_when_both_present(tmp_path):

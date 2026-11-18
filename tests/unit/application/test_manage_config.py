@@ -176,11 +176,11 @@ def test_set_comfyui_model_valid_persists(sessions):
     sessions.save_config(USER_ID, _cfg())
     uc = _uc(sessions)
 
-    # Único flujo registrado (agil_solo, default): seteárselo es no-op válido.
-    res = uc.set_comfyui(USER_ID, model="agil_solo")
+    # Flujo por defecto (agil_solo_edit): seteárselo es no-op válido.
+    res = uc.set_comfyui(USER_ID, model="agil_solo_edit")
 
     assert res.ok is True and res.changed is False
-    assert sessions.saved[-1][1].comfyui.model == "agil_solo"
+    assert sessions.saved[-1][1].comfyui.model == "agil_solo_edit"
 
 
 def test_set_comfyui_invalid_model_and_lora(sessions):
@@ -214,9 +214,9 @@ def test_save_uses_seeded_fake_repo_persistence(sessions):
     uc.set_model(USER_ID, "comfyui")
     cfg = sessions.get_config(USER_ID)
     assert cfg.model == "comfyui"
-    assert cfg.comfyui.model == "agil_solo"  # flujo default
+    assert cfg.comfyui.model == "agil_solo_edit"  # flujo default
     # Setear el mismo flujo (único registrado) no añade save.
-    uc.set_comfyui(USER_ID, model="agil_solo")
+    uc.set_comfyui(USER_ID, model="agil_solo_edit")
     assert len(sessions.saved) == 2  # baseline + model
 
 

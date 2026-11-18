@@ -87,8 +87,8 @@ def test_config_comfyui_keyboard_lists_seeds_and_flows():
         "cfg:comfyui:seed:random",
         "cfg:comfyui:seed:batch",
         "cfg:comfyui:seed:fixed",
-        "cfg:comfyui:flow:agil_solo",
         "cfg:comfyui:flow:agil_solo_edit",
+        "cfg:comfyui:flow:agil_solo",
         "cfg:comfyui:flow:agil_moody",
         "cfg:comfyui:flow:agil_solo_hq",
         "cfg:comfyui:flow:agil_moody_hq",
@@ -109,7 +109,9 @@ def test_config_comfyui_has_no_legacy_model_lora_refine_rows():
     rows = kb.config_comfyui_keyboard(cfg).inline_keyboard
     labels = [b.text for row in rows for b in row]
     assert labels[0] == "✅ Semilla aleatoria por imagen"
-    assert labels[3] == "✅ Ágil solo"
+    # El flujo por defecto (edit) va primero; el seleccionado lleva ✅.
+    assert labels[3] == "• Ágil Solo Edit"
+    assert labels[4] == "✅ Ágil solo"
     for row in rows:
         for b in row:
             if b.callback_data is None:

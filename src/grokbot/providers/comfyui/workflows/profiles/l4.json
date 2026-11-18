@@ -1,7 +1,7 @@
 {
   "id": "l4",
   "label": "L4 24 GB (fp8 + Qwen GGUF)",
-  "default_flow": "agil_solo",
+  "default_flow": "agil_solo_edit",
   "flows": [
     "agil_solo",
     "agil_solo_edit",

@@ -1,7 +1,7 @@
 {
   "id": "t4",
   "label": "T4 16 GB (GGUF Q4)",
-  "default_flow": "agil_solo",
+  "default_flow": "agil_solo_edit",
   "flows": [
     "agil_solo",
     "agil_solo_edit"

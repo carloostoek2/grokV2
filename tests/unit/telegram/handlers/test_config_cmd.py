@@ -428,7 +428,7 @@ async def test_comfyui_lora_open_shows_stack_and_catalog():
         _BOT, callback_update(_bot_panel_callback("cfg:lora:open", mid))
     )
     edit = _last_edit_text(deps)
-    assert "LoRAs extra de <b>Ágil solo</b>" in edit["text"]
+    assert "LoRAs extra de <b>Ágil Solo Edit</b>" in edit["text"]
     assert "Sin LoRAs extra" in edit["text"]
     assert deps.lora_catalog.names == (
         "krea2/style_a.safetensors",
@@ -439,7 +439,7 @@ async def test_comfyui_lora_open_shows_stack_and_catalog():
         _BOT, callback_update(_bot_panel_callback("cfg:lora:add", mid))
     )
     edit = _last_edit_text(deps)
-    assert "LoRAs disponibles para <b>Ágil solo</b>" in edit["text"]
+    assert "LoRAs disponibles para <b>Ágil Solo Edit</b>" in edit["text"]
     labels = _labels(edit)
     assert any("style_a" in label for label in labels)
     assert any("style_b" in label for label in labels)
@@ -458,7 +458,7 @@ async def test_comfyui_lora_add_adjust_and_remove():
     await dp.feed_update(
         _BOT, callback_update(_bot_panel_callback(f"cfg:lora:a:{short}", mid))
     )
-    entries = deps.sessions.get_config(_UID).comfyui.loras_for("agil_solo")
+    entries = deps.sessions.get_config(_UID).comfyui.loras_for("agil_solo_edit")
     assert [entry.name for entry in entries] == ["style_b.safetensors"]
     assert entries[0].strength == 0.8
     assert _last_answer(deps)["text"] == (
@@ -469,14 +469,14 @@ async def test_comfyui_lora_add_adjust_and_remove():
     await dp.feed_update(
         _BOT, callback_update(_bot_panel_callback("cfg:lora:u:0", mid))
     )
-    entries = deps.sessions.get_config(_UID).comfyui.loras_for("agil_solo")
+    entries = deps.sessions.get_config(_UID).comfyui.loras_for("agil_solo_edit")
     assert entries[0].strength == 0.9
     assert _last_answer(deps)["text"] == "Intensidad: 0.9"
 
     await dp.feed_update(
         _BOT, callback_update(_bot_panel_callback("cfg:lora:x:0", mid))
     )
-    assert deps.sessions.get_config(_UID).comfyui.loras_for("agil_solo") == ()
+    assert deps.sessions.get_config(_UID).comfyui.loras_for("agil_solo_edit") == ()
     assert _last_answer(deps)["text"] == "LoRA extra quitado."
 
 
@@ -504,7 +504,7 @@ async def test_comfyui_lora_search_filters_and_adds():
     )
     assert [
         entry.name
-        for entry in deps.sessions.get_config(_UID).comfyui.loras_for("agil_solo")
+        for entry in deps.sessions.get_config(_UID).comfyui.loras_for("agil_solo_edit")
     ] == ["style_b.safetensors"]
 
 
@@ -525,7 +525,7 @@ async def test_comfyui_lora_box_down_degrades_to_user_safe_copy():
     answer = _last_answer(deps)
     assert "No se pudo leer el catálogo de LoRAs" in answer["text"]
     assert answer["show_alert"] is True
-    assert deps.sessions.get_config(_UID).comfyui.loras_for("agil_solo") == ()
+    assert deps.sessions.get_config(_UID).comfyui.loras_for("agil_solo_edit") == ()
 
 
 async def test_comfyui_lora_stack_is_isolated_per_flow():
@@ -542,7 +542,7 @@ async def test_comfyui_lora_stack_is_isolated_per_flow():
             _bot_panel_callback(f"cfg:lora:a:{lora_short_id('style_b.safetensors')}", mid)
         ),
     )
-    assert deps.sessions.get_config(_UID).comfyui.loras_for("agil_solo")
+    assert deps.sessions.get_config(_UID).comfyui.loras_for("agil_solo_edit")
 
     await dp.feed_update(
         _BOT, callback_update(_bot_panel_callback("cfg:lora:back", mid))
@@ -554,4 +554,4 @@ async def test_comfyui_lora_stack_is_isolated_per_flow():
         _BOT, callback_update(_bot_panel_callback("cfg:lora:open", mid))
     )
     assert "Sin LoRAs extra" in _last_edit_text(deps)["text"]
-    assert deps.sessions.get_config(_UID).comfyui.loras_for("agil_solo")
+    assert deps.sessions.get_config(_UID).comfyui.loras_for("agil_solo_edit")

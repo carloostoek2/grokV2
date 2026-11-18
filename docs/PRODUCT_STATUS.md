@@ -333,7 +333,7 @@ local-forward** (`transport.py` → `client.py` → plantillas API-format en
   `dirty_realism_hq`, `dirty_edit_hq`) y `ohwx_dirty_edit` quedan **retirados temporalmente**:
   ids fuera de `COMFYUI_FLOWS`, templates en `workflows/templates/_disabled/` y checkpoint
   Dirty fuera de `descargar_local.py`. Una config guardada con un id retirado cae al flujo
-  default (`agil_solo`). Reactivar = devolver las entradas a la tupla y mover los JSON de
+  default (`agil_solo_edit` desde 2026-11-18). Reactivar = devolver las entradas a la tupla y mover los JSON de
   vuelta a `templates/`.
 - **Preparación del box Vast RTX 5000 Ada (2026-11-08)**: instancia de 32 GB VRAM, 125 GB
   de RAM y 212 GB de disco; el set Krea canónico es **fp8** (`krea2_turbo_fp8_scaled` +
@@ -443,6 +443,14 @@ lo codificaba como `application/octet-stream` (`.bin`) y el modelo respondía
 disparaba predicciones extra + HTTP 429. Fix: buffer con extensión según magic bytes
 (paridad grok `image_data.name`) y `ModelError` de predicción mapeado a
 `ProviderGenerationError` (terminal, sin retry). Aplica al reiniciar `grok-bot.service`.
+
+- **Flujo por defecto = `agil_solo_edit` (2026-11-18)**: `COMFYUI_FLOWS` lo pone primero
+  (de ahí sale `DEFAULT_COMFYUI_MODEL`, el botón ✅ del menú y el fallback de una config
+  guardada con un id retirado) y los tres perfiles de pesos (`t4/l4/a100`) lo declaran como
+  `default_flow`. Motivo: edit acepta prompt **y** foto, y comparte modelo con `agil_solo`;
+  el cuaderno sin Drive lo descarga primero (VAE, LoRA de identidad, TE, UNET). Consecuencia:
+  un prompt de texto sin flujo elegido ahora pide la foto («Este flujo edita una foto…»);
+  para texto puro hay que elegir `agil_solo` en `/config`. Suite **931 passed**.
 
 ---
 

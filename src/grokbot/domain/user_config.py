@@ -46,8 +46,10 @@ VALID_VIDEO_MODES = ("fun", "normal", "spicy")
 # modelo/LoRA por separado. Para añadir un flujo: 1) registrar aquí su (id,
 # nombre) y 2) dejar caer el template ``<id>.json`` (con ``_meta``).
 COMFYUI_FLOWS = (
-    ("agil_solo", "Ágil solo"),
+    # El primero es el flujo por defecto (DEFAULT_COMFYUI_MODEL): edit acepta
+    # una imagen además del prompt y comparte modelo con agil_solo.
     ("agil_solo_edit", "Ágil Solo Edit"),
+    ("agil_solo", "Ágil solo"),
     ("agil_moody", "Ágil Moody"),
     ("agil_solo_hq", "Ágil Solo (HQ A100)"),
     ("agil_moody_hq", "Ágil Moody (HQ A100)"),

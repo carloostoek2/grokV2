@@ -53,6 +53,10 @@ class FakeClient:
         self.model_files_calls.append(folder)
         return ("a.safetensors", "b.safetensors")
 
+    async def upload_image(self, filename: str, data: bytes) -> str:
+        """El provider escribe el nombre devuelto en el LoadImage del flujo."""
+        return filename
+
     async def run_workflow(self, workflow: dict, *, timeout: float) -> str:
         self.graph = workflow
         self.timeout = timeout
@@ -136,8 +140,9 @@ async def test_t2i_generate_patches_graph_and_returns_local_file(tmp_path):
 async def test_generate_no_outputs_raises_unavailable(tmp_path):
     prov = _provider(FakeTransport("box"), tmp_path, images=())
 
+    # Flujo t2i explícito: el default (edit) exige foto y fallaría antes.
     with pytest.raises(ProviderUnavailableError):
-        await prov.generate(_req())
+        await prov.generate(_req(params={"model": "agil_solo"}))
 
 
 @pytest.mark.asyncio
@@ -154,8 +159,11 @@ async def test_empty_host_raises_not_configured(tmp_path):
 async def test_source_photo_without_template_variant_raises(tmp_path):
     prov = _provider(FakeTransport("box"), tmp_path)
 
+    # agil_solo es t2i: no admite foto de entrada.
     with pytest.raises(ProviderInputError) as exc:
-        await prov.generate(_req(), source_image=PNG_1x1)
+        await prov.generate(
+            _req(params={"model": "agil_solo"}), source_image=PNG_1x1
+        )
 
     assert "foto" in exc.value.user_message
 
@@ -226,7 +234,7 @@ async def test_supports_routing(tmp_path):
     prov = _provider(FakeTransport("box"), tmp_path)
 
     # Solo los flujos con template son soportados, y el media_type debe coincidir.
-    assert prov.supports(_req(media_type=MediaType.IMAGE))  # default agil_solo
+    assert prov.supports(_req(media_type=MediaType.IMAGE))  # default agil_solo_edit
     assert prov.supports(_req(media_type=MediaType.IMAGE, params={"model": "agil_solo"}))
     assert not prov.supports(_req(media_type=MediaType.IMAGE, params={"model": "qwen"}))
     assert not prov.supports(_req(media_type=MediaType.VIDEO, params={"model": "agil_solo"}))  # flujo de imagen
@@ -397,7 +405,7 @@ async def test_generate_uses_the_resolved_flow_stack_not_the_requested_one(tmp_p
         client_factory=lambda url: calls.append(FakeClient(url)) or calls[-1],
         tmpdir=tmp_path, seed_factory=lambda: 42,
     )
-    set_active_profile("t4")  # agil_edit_hq (a100) no existe: cae a agil_solo
+    set_active_profile("t4")  # agil_edit_hq (a100) no existe: cae al default
     try:
         await prov.generate(
             _req(
@@ -407,18 +415,19 @@ async def test_generate_uses_the_resolved_flow_stack_not_the_requested_one(tmp_p
                         "agil_edit_hq": [
                             {"name": "hq_only.safetensors", "strength": 1.0}
                         ],
-                        "agil_solo": [
+                        "agil_solo_edit": [
                             {"name": "style.safetensors", "strength": 0.7}
                         ],
                     },
                 }
-            )
+            ),
+            source_image=PNG_1x1,  # el default del t4 (edit) exige foto
         )
     finally:
         set_active_profile(None)
 
     graph = calls[-1].graph
-    # El flujo resuelto es agil_solo: se aplica SU stack, nunca el de HQ.
+    # El flujo resuelto es agil_solo_edit: se aplica SU stack, nunca el de HQ.
     assert graph["900000"]["inputs"]["lora_name"] == "style.safetensors"
     assert all(
         "hq_only.safetensors" not in str(node)
