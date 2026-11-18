@@ -102,7 +102,10 @@ Reglas de la fase:
 - Log: `/home/ubuntu/comfy-colab/preparacion.log`.
 - `--sin-preparar` omite la fase y deja que el cuaderno verifique/descargue dentro de la GPU.
 - `--no-drive` omite **solo** la fase CPU (no podría persistir los pesos), pero el cuaderno
-  **sí verifica y descarga** los que falten en la GPU, a `/content` (efímero).
+  **verifica y descarga en segundo plano** los que falten, a `/content` (efímero): lanza el
+  descargador desacoplado (log `/content/descargas.log`) y sigue con nodos y arranque. Primero
+  baja los pesos de `agil_solo_edit`, de menor a mayor; cada peso aparece al completarse sin
+  reiniciar ComfyUI. Un `flock` evita dos descargadores si el cuaderno se re-ejecuta.
 - Con una sesión GPU ya activa no se repite; `--preparar` la reinicia para re-verificar.
 
 ### 2.3 Fase 2 — sesión GPU y cuaderno
