@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 from grokbot.domain.generation import GenerationRequest, GenerationResult, MediaType
 from grokbot.domain.user_config import (
     COMFYUI_SEED_LIMIT,
+    COMFYUI_TEXT_FALLBACKS,
     DEFAULT_COMFYUI_MODEL,
     is_valid_comfyui_seed,
     parse_lora_stack,
@@ -279,6 +280,35 @@ class ComfyUIProvider:
         return flow
 
     @staticmethod
+    def _fallback_without_source(flow: Flow) -> Flow:
+        """Un flujo de edición sin foto cae a su hermano de texto.
+
+        Con ``agil_solo_edit`` como flujo por defecto, cualquier prompt de texto
+        sin foto se rechazaría. El hermano comparte modelo y pesos, así que se
+        genera la imagen desde el prompt en vez de devolver un aviso. Si el
+        hermano no está instalado, se conserva el original y ``_validate_flow``
+        deja el mensaje de «envía la foto».
+        """
+        if not flow.requires_source:
+            return flow
+        candidato = COMFYUI_TEXT_FALLBACKS.get(flow.id)
+        alterno = get_flow(candidato) if candidato else None
+        if alterno is None or alterno.requires_source:
+            if candidato:
+                logger.warning(
+                    "ComfyUI flow %s sin foto: el hermano %s no está disponible",
+                    flow.id,
+                    candidato,
+                )
+            return flow
+        logger.info(
+            "ComfyUI flow %s sin foto: se usa el hermano de texto %s",
+            flow.id,
+            alterno.id,
+        )
+        return alterno
+
+    @staticmethod
     def _validate_flow(
         flow: Flow,
         request: GenerationRequest,
@@ -372,6 +402,8 @@ class ComfyUIProvider:
         # transporte. La detección de GPU se hace después y, si cambia el
         # perfil, se vuelve a resolver el flujo para usar sus pesos.
         flow = self._resolve_flow(request)  # M1: id validado antes de tocar transporte.
+        if source_image is None:
+            flow = self._fallback_without_source(flow)
         self._validate_flow(flow, request, source_image)
 
         seed = request.params.get("seed")
@@ -389,6 +421,8 @@ class ComfyUIProvider:
         base_url = await self._transport.ensure()
         if self._weight_profile == "auto" and await self.refresh_profile():
             flow = self._resolve_flow(request)
+            if source_image is None:
+                flow = self._fallback_without_source(flow)
             # El fallback del perfil puede cambiar el tipo de flujo (p. ej. un
             # Ágil Edit guardado en una T4 cae a Grok Style T2I): revalidar
             # evita ignorar la foto o exigirla de más.

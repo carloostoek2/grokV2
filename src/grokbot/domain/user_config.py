@@ -101,6 +101,17 @@ COMFYUI_EDIT_SIBLINGS = {
     "ohwx_krea2": "ohwx_edit",
 }
 
+# Hermano de texto de un flujo de edición. Si el flujo resuelto exige foto y el
+# pedido no la trae (p. ej. el default agil_solo_edit con un prompt de texto),
+# el provider usa este flujo en lugar de rechazar la generación. La elección es
+# canónica: la relación COMFYUI_EDIT_SIBLINGS es varios-a-uno y aquí se fija el
+# hermano base (agil_solo_edit -> agil_solo, no agil_moody).
+COMFYUI_TEXT_FALLBACKS = {
+    "agil_solo_edit": "agil_solo",
+    "agil_edit_hq": "agil_solo_hq",
+    "ohwx_edit": "ohwx_krea2",
+}
+
 
 def comfy_chain_stages(
     flow_id: str,

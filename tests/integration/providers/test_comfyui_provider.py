@@ -169,15 +169,39 @@ async def test_source_photo_without_template_variant_raises(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_edit_flow_without_source_photo_raises(tmp_path):
-    """Reverse guard: without a photo an edit flow would run with its baked
-    placeholder (example.png) and return a silently wrong result."""
+async def test_edit_flow_without_photo_falls_back_to_t2i(tmp_path):
+    """Sin foto, un flujo de edición usa su hermano de texto.
+
+    Si corriera el flujo de edición, usaría su placeholder horneado
+    (example.png) y devolvería un resultado silenciosamente incorrecto; el
+    fallback a agil_solo genera desde el prompt con el mismo modelo.
+    """
+    transport = FakeTransport("box")
+    calls: list[FakeClient] = []
+    prov = ComfyUIProvider(
+        "box", 22, transport=transport,
+        client_factory=lambda url: calls.append(FakeClient(url)) or calls[-1],
+        tmpdir=tmp_path, seed_factory=lambda: 42,
+    )
+
+    result = await prov.generate(_req(params={"model": "agil_solo_edit"}))
+
+    assert result.media_type is MediaType.IMAGE
+    graph = calls[-1].graph
+    assert not any(
+        isinstance(node, dict) and node.get("class_type") == "LoadImage"
+        for node in graph.values()
+    )
+
+
+@pytest.mark.asyncio
+async def test_default_flow_without_photo_uses_t2i(tmp_path):
+    """El flujo por defecto (edit) no rompe un prompt de texto: cae a agil_solo."""
     prov = _provider(FakeTransport("box"), tmp_path)
 
-    with pytest.raises(ProviderInputError) as exc:
-        await prov.generate(_req(params={"model": "agil_solo_edit"}))
+    result = await prov.generate(_req())
 
-    assert "foto" in exc.value.user_message
+    assert result.media_type is MediaType.IMAGE
 
 
 @pytest.mark.asyncio

@@ -448,9 +448,10 @@ disparaba predicciones extra + HTTP 429. Fix: buffer con extensión según magic
   (de ahí sale `DEFAULT_COMFYUI_MODEL`, el botón ✅ del menú y el fallback de una config
   guardada con un id retirado) y los tres perfiles de pesos (`t4/l4/a100`) lo declaran como
   `default_flow`. Motivo: edit acepta prompt **y** foto, y comparte modelo con `agil_solo`;
-  el cuaderno sin Drive lo descarga primero (VAE, LoRA de identidad, TE, UNET). Consecuencia:
-  un prompt de texto sin flujo elegido ahora pide la foto («Este flujo edita una foto…»);
-  para texto puro hay que elegir `agil_solo` en `/config`. Suite **931 passed**.
+  el cuaderno sin Drive lo descarga primero (VAE, LoRA de identidad, TE, UNET). Un prompt de
+  texto sin foto no falla: el provider cae a su hermano de texto (`COMFYUI_TEXT_FALLBACKS`:
+  `agil_solo_edit` → `agil_solo`, `agil_edit_hq` → `agil_solo_hq`, `ohwx_edit` → `ohwx_krea2`)
+  y genera desde el prompt. Con foto se queda en el flujo de edición. Suite **932 passed**.
 
 ---
 
