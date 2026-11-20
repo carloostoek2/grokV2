@@ -97,6 +97,7 @@ def test_flows_returns_registered_flows():
     assert ids == {
         "agil_solo",
         "agil_solo_edit",
+        "agil_edit_nsfw",
         "agil_solo_hq",
         "agil_moody",
         "agil_moody_hq",

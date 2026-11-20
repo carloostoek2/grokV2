@@ -49,6 +49,9 @@ COMFYUI_FLOWS = (
     # El primero es el flujo por defecto (DEFAULT_COMFYUI_MODEL): edit acepta
     # una imagen además del prompt y comparte modelo con agil_solo.
     ("agil_solo_edit", "Ágil Solo Edit"),
+    # Edición Qwen (Rapid-AIO NSFW v23) restituida el 2026-11-20: convive con
+    # la edición Krea (agil_solo_edit); ninguna sustituye a la otra.
+    ("agil_edit_nsfw", "Ágil Edit NSFW (Qwen)"),
     ("agil_solo", "Ágil solo"),
     ("agil_moody", "Ágil Moody"),
     ("agil_solo_hq", "Ágil Solo (HQ A100)"),

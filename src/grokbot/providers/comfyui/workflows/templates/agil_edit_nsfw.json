@@ -1,7 +1,7 @@
 {
   "_meta": {
     "id": "agil_edit_nsfw",
-    "name": "Ágil Edit NSFW",
+    "name": "Ágil Edit NSFW (Qwen)",
     "media_type": "image",
     "positive_node": "4",
     "positive_input": "prompt",
@@ -16,7 +16,7 @@
     "source_node": "2",
     "source_input": "image",
     "timeout": 900,
-    "source": "Phr00t Qwen-Image-Edit-Rapid-AIO NSFW v23 all-in-one checkpoint. TextEncodeQwenImageEditPlus. 4 steps CFG 1."
+    "source": "Phr00t Qwen-Image-Edit-Rapid-AIO NSFW v23 all-in-one checkpoint. TextEncodeQwenImageEditPlus. 4 steps CFG 1. Reinstated 2026-11-20 next to agil_solo_edit (Krea): both edit flows stay in the menu."
   },
   "1": {
     "class_type": "CheckpointLoaderSimple",

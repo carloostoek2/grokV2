@@ -39,6 +39,11 @@
 > `agil_nsfw`, `agil_edit_nsfw`, `agil_edit_qwen`, `grok_style_hq`, `agil_nsfw_hq` y
 > `grok_edit_hq` salen del catálogo (templates a `_disabled/`); `agil_edit_hq` se conserva.
 > Nuevo `COMFYUI_MENU_FLOWS` (CSV) para acotar el menú por box sin tocar el perfil.
+>
+> **Update 2026-11-20 — vuelve Ágil Edit NSFW (Qwen):** `agil_edit_nsfw` regresa al
+> catálogo como «Ágil Edit NSFW (Qwen)» junto a `agil_solo_edit` (Krea), con su checkpoint
+> `Qwen-Rapid-AIO-NSFW-v23` de nuevo en los perfiles `a100`/`l4` y en
+> `provision_vast_box.sh`; `t4` no lo ofrece (25 GB no caben en 16 GB).
 
 # ComfyUI en grokV2 — integración por API HTTP/WS (avance y estado)
 

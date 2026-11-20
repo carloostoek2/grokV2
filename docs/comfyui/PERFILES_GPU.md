@@ -35,8 +35,8 @@ Consumidores del mismo JSON: el resolver del bot, `actualizar_cuaderno.py`
 
 | Perfil | Tarjeta | Krea | Qwen Edit | Flujos |
 |---|---|---|---|---|
-| `a100` | A100 / H100 | bf16 24,48 + 8,27 GB | fp8mixed 19,12 GB | 7 |
-| `l4` | L4 24 GB | fp8 12,24 + 4,88 GB | GGUF Q4_K_M 11,96 GB | 6 (sin Rapid AIO) |
+| `a100` | A100 / H100 | bf16 24,48 + 8,27 GB | fp8mixed 19,12 GB | 8 |
+| `l4` | L4 24 GB | fp8 12,24 + 4,88 GB | GGUF Q4_K_M 11,96 GB | 7 (con Rapid AIO) |
 | `t4` | T4 16 GB | GGUF Q4_K_M 6,97 GB | no | 2: `agil_solo`, `agil_solo_edit` |
 
 `face_detail_impact` («Detalle cara») queda **fuera de todos los perfiles**: la función

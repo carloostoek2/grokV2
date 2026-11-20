@@ -137,9 +137,9 @@ bf16 volvieron a descargarse ese día; ver §6.2):
 
 ## 6. Flujos: bloque HQ (menú activo)
 
-El `COMFYUI_FLOWS` registra **15** ids; el menú de Telegram oculta 8 y muestra **7**
-(Ágil solo, Ágil Solo Edit, Ágil Moody, tres `*_hq` y MiniMax H3) en el perfil `a100`
-desde el 2026-11-16. El tuning **candid** del 2026-10-25 vive en
+El `COMFYUI_FLOWS` registra **16** ids; el menú de Telegram oculta 8 y muestra **8**
+(Ágil solo, Ágil Solo Edit, Ágil Edit NSFW (Qwen), Ágil Moody, tres `*_hq` y MiniMax H3)
+en el perfil `a100` desde el 2026-11-20. El tuning **candid** del 2026-10-25 vive en
 `src/grokbot/providers/comfyui/workflows/templates/*_hq.json` y, como el bot está en
 `COMFYUI_WORKFLOW_SOURCE=embed`, **aplica sin desplegar nada al box**. El resolver cachea
 los flujos embebidos por proceso (`_flows_cached`): tras editar un template hay que
@@ -148,6 +148,7 @@ los flujos embebidos por proceso (`_flows_cached`): tras editar un template hay 
 | Flujo | Modelo / LoRA | Muestreo | Resolución | Corre en Colab |
 |---|---|---|---|---|
 | `agil_solo_edit` | Krea2 Turbo + `krea2_identity_edit_v2` 1.0 (sin estilo ni NSFW) | er_sde/simple · 10 pasos · cfg 1 | 9:16 @ 1.0 MP (ResolutionSelector) | ✅ |
+| `agil_edit_nsfw` | Qwen-Rapid-AIO-NSFW v23 (checkpoint all-in-one) | euler/simple · 4 pasos · cfg 1 | según foto (FluxKontextImageScale) | ✅ si el checkpoint está en Drive |
 | `agil_solo_hq` | Krea2 Turbo bf16, sin LoRA | euler/simple · 8 pasos · cfg 1 | 1024×1792 (1.83 MP) | ✅ |
 | `agil_moody_hq` | Moody v7 fp8 + `Krea2-realism-V2` 1.0/1.0 + `Krea2NSFWV4` 1.0 (model-only) | er_sde/simple · 8 pasos · cfg 1 | 9:16 @ 2.0 MP | ✅ (excepción estilística) |
 | `agil_edit_hq` | Qwen-Image-Edit-2511 fp8mixed, Lightning **apagado** + negativo anti-plástico, y **SeedVR2 7B int8 ×2** al final | euler/simple · 40 pasos · cfg 3.0 → SeedVR2 1 paso (`lab`) | 1 MP (FluxKontextImageScale) → ~4 MP | ✅ (208,7 s en frío, seed 4242) |
@@ -156,7 +157,10 @@ los flujos embebidos por proceso (`_flows_cached`): tras editar un template hay 
 (templates en `_disabled/`; sus mediciones quedan como histórico). `agil_edit_qwen` (Ágil
 Edit base, 2511 fp8mixed + Lightning 4 pasos) también se retiró; la edición HQ sigue en
 `agil_edit_hq`, con `_meta.timeout` 900 s porque la primera pasada en frío tarda 456–585 s
-(ver §6.2).
+(ver §6.2). `agil_edit_nsfw` volvió el 2026-11-20 como «Ágil Edit NSFW (Qwen)» junto a
+`agil_solo_edit`; necesita `checkpoints/Qwen-Rapid-AIO-NSFW-v23.safetensors` (26,48 GB),
+que los perfiles `a100`/`l4` vuelven a declarar en `weights` y `provision_vast_box.sh`
+lista en `MANUAL_WEIGHTS`.
 
 Notas de diseño:
 

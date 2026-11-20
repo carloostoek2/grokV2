@@ -5,6 +5,7 @@
   "flows": [
     "agil_solo",
     "agil_solo_edit",
+    "agil_edit_nsfw",
     "agil_moody",
     "agil_solo_hq",
     "agil_moody_hq",
@@ -62,6 +63,12 @@
       "url": "https://huggingface.co/lightx2v/Qwen-Image-Edit-2511-Lightning/resolve/main/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
       "auth": "none",
       "min_size": 700000000
+    },
+    {
+      "path": "checkpoints/Qwen-Rapid-AIO-NSFW-v23.safetensors",
+      "url": "https://huggingface.co/Phr00t/Qwen-Image-Edit-Rapid-AIO/resolve/main/v23/Qwen-Rapid-AIO-NSFW-v23.safetensors",
+      "auth": "none",
+      "min_size": 25000000000
     },
     {
       "path": "diffusion_models/seedvr2_7b_int8_convrot.safetensors",

@@ -65,6 +65,7 @@ MANUAL_WEIGHTS=(
   "text_encoders/qwen3vl_8b_int8_convrot.safetensors"
   "text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors"
   "vae/qwen_image_2.1_vae_bf16.safetensors"
+  "checkpoints/Qwen-Rapid-AIO-NSFW-v23.safetensors"
   "loras/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors"
   "loras/Krea2NSFWV4.safetensors"
 )

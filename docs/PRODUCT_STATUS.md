@@ -365,10 +365,16 @@ local-forward** (`transport.py` → `client.py` → plantillas API-format en
   Los perfiles y `provision_vast_box.sh` descargan `krea2_identity_edit_v2.safetensors` (HF);
   `grokstyle_krea2_v2` sigue disponible para los flujos ocultos/legacy que aún la usan.
   Nuevo `COMFYUI_MENU_FLOWS` (CSV) para acotar el menú por box sin tocar el perfil.
-- **Alcance actual**: **15 flujos registrados** en `COMFYUI_FLOWS`; el menú depende del
-  perfil de GPU: **7 visibles en `a100`** (Ágil solo, Ágil Solo Edit, Ágil Moody, 3 `*_hq`
-  y MiniMax H3), **6 en `l4`** y **2 en `t4`**; el resto son legacy/ocultos
-  (`COMFYUI_MENU_HIDDEN_FLOWS`). Salud real de cada
+- **Reintegro de Ágil Edit NSFW (Qwen) (2026-11-20)**: `agil_edit_nsfw` vuelve al
+  catálogo como **«Ágil Edit NSFW (Qwen)»** y **convive** con `agil_solo_edit` (Krea):
+  no sustituye a nadie. Regresa su `templates/agil_edit_nsfw.json` (checkpoint
+  all-in-one `Qwen-Rapid-AIO-NSFW-v23`, foto obligatoria, 4 pasos, cfg 1) y su descarga
+  en los perfiles `a100`/`l4` y en `provision_vast_box.sh`; `t4` sigue sin él (el
+  checkpoint de ~25 GB no cabe en 16 GB).
+- **Alcance actual**: **16 flujos registrados** en `COMFYUI_FLOWS`; el menú depende del
+  perfil de GPU: **8 visibles en `a100`** (Ágil solo, Ágil Solo Edit, Ágil Edit NSFW
+  (Qwen), Ágil Moody, 3 `*_hq` y MiniMax H3), **7 en `l4`** y **2 en `t4`**; el resto son
+  legacy/ocultos (`COMFYUI_MENU_HIDDEN_FLOWS`). Salud real de cada
   flujo y pesos instalados:
   `docs/comfyui/INVENTARIO_BOX_COLAB.md`; el inventario Vast queda como histórico.
 
