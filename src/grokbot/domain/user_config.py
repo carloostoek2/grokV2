@@ -65,7 +65,10 @@ COMFYUI_FLOWS = (
     ("wan_i2v", "Wan I2V"),
     ("qwen21_t2i", "Qwen 2.1"),
     ("flux1_dev_t2i", "Flux.1 Dev"),
-    ("minimax_h3_i2v", "MiniMax H3"),
+    # MiniMax H3 por modalidad: el grafo de video (i2v) y el de imagen
+    # (edición/referencia). Ambos ids comparten el TE Qwen3VL-32B.
+    ("minimax_h3_i2v", "MiniMax H3 Video"),
+    ("minimax_h3_image", "MiniMax H3 Imagen"),
     ("face_detail_impact", "Face Detail"),
     ("instantid_sdxl", "InstantID SDXL"),
     ("ohwx_krea2", "Ohwx"),

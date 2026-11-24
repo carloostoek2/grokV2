@@ -10,7 +10,8 @@
     "agil_solo_hq",
     "agil_moody_hq",
     "agil_edit_hq",
-    "minimax_h3_i2v"
+    "minimax_h3_i2v",
+    "minimax_h3_image"
   ],
   "substitutions": {
     "krea2_turbo_fp8_scaled.safetensors": "krea2_turbo_bf16.safetensors",
@@ -130,6 +131,24 @@
       "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_audio_vae_fp32.safetensors",
       "auth": "none",
       "min_size": 605254808
+    },
+    {
+      "path": "diffusion_models/minimax_h3_image_pruned_int8_convrot.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/MiniMax-H3-Image/resolve/main/diffusion_models/minimax_h3_image_pruned_int8_convrot.safetensors",
+      "auth": "none",
+      "min_size": 20979314802
+    },
+    {
+      "path": "text_encoders/qwen3.5_9b_w4a8_gptq.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/MiniMax-H3-Image/resolve/main/text_encoders/qwen3.5_9b_w4a8_gptq.safetensors",
+      "auth": "none",
+      "min_size": 7343591088
+    },
+    {
+      "path": "vae/minimax_h3_image_vae_fp16.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/MiniMax-H3-Image/resolve/main/vae/minimax_h3_image_vae_fp16.safetensors",
+      "auth": "none",
+      "min_size": 1168505312
     },
     {
       "path": "loras/RealisticSnapshotKrea2.safetensors",

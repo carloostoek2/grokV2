@@ -111,6 +111,7 @@ def test_flows_returns_registered_flows():
         "ohwx_krea2",
         "ohwx_edit",
         "minimax_h3_i2v",
+        "minimax_h3_image",
     }
 
 

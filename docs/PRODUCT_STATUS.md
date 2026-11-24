@@ -352,7 +352,7 @@ local-forward** (`transport.py` → `client.py` → plantillas API-format en
   `agil_solo_edit`. Detalle en `docs/comfyui/PERFILES_GPU.md`.
 - **MiniMax H3 (`minimax_h3_i2v`, 2026-10-04, commit directo `f6bbae3`)**: se registra en
   `COMFYUI_FLOWS` como flujo de video (también en `COMFY_VIDEO_MODELS`). Desde `737944c`
-  está en `COMFYUI_MENU_HIDDEN_FLOWS`, así que no aparece en el teclado de `/config`.
+  quedó en `COMFYUI_MENU_HIDDEN_FLOWS`; hoy vuelve a estar visible en `/config`.
 - **Menú ágil consolidado + Ágil Solo Edit (2026-11-16)**: `grok_edit` se reemplaza por
   **`agil_solo_edit`** («Ágil Solo Edit»): mismo grafo krea2edit que corría Grok Style Edit,
   pero **sin la LoRA `grokstyle` ni la NSFW**, solo `krea2_identity_edit_v2`; sampler
@@ -371,9 +371,20 @@ local-forward** (`transport.py` → `client.py` → plantillas API-format en
   all-in-one `Qwen-Rapid-AIO-NSFW-v23`, foto obligatoria, 4 pasos, cfg 1) y su descarga
   en los perfiles `a100`/`l4` y en `provision_vast_box.sh`; `t4` sigue sin él (el
   checkpoint de ~25 GB no cabe en 16 GB).
-- **Alcance actual**: **16 flujos registrados** en `COMFYUI_FLOWS`; el menú depende del
-  perfil de GPU: **8 visibles en `a100`** (Ágil solo, Ágil Solo Edit, Ágil Edit NSFW
-  (Qwen), Ágil Moody, 3 `*_hq` y MiniMax H3), **7 en `l4`** y **2 en `t4`**; el resto son
+- **MiniMax H3 por modalidad (2026-11-24)**: `minimax_h3_i2v` se muestra como
+  **«MiniMax H3 Video»** y se registra **`minimax_h3_image`** («MiniMax H3 Imagen»),
+  el flujo de imagen con foto de referencia obligatoria: UNET
+  `minimax_h3_image_pruned_int8_convrot` + TE `qwen3vl_32b_minimax_h3_nvfp4_awq` +
+  `minimax_h3_image_vae_fp16`, KSampler euler/simple 6 pasos cfg 1 y resolución
+  derivada de la foto (8 MP, múltiplo de 32). Incluye el PE opcional del export
+  (`TextGenerateV2` con `qwen3.5_9b_w4a8_gptq`, encendido por defecto) que expande
+  la instrucción a JSON y extrae `expanded_caption`. Los tres pesos nuevos están en
+  el perfil `a100` (`weights`, HF `Comfy-Org/MiniMax-H3-Image`), que es el único
+  perfil que expone el flujo.
+- **Alcance actual**: **17 flujos registrados** en `COMFYUI_FLOWS`; el menú depende del
+  perfil de GPU: **9 visibles en `a100`** (Ágil solo, Ágil Solo Edit, Ágil Edit NSFW
+  (Qwen), Ágil Moody, 3 `*_hq`, MiniMax H3 Video y MiniMax H3 Imagen), **7 en `l4`** y
+  **2 en `t4`**; el resto son
   legacy/ocultos (`COMFYUI_MENU_HIDDEN_FLOWS`). Salud real de cada
   flujo y pesos instalados:
   `docs/comfyui/INVENTARIO_BOX_COLAB.md`; el inventario Vast queda como histórico.
