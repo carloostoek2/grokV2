@@ -195,6 +195,54 @@ async def test_edit_flow_without_photo_falls_back_to_t2i(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_minimax_image_without_photo_falls_back_to_its_t2i_sibling(tmp_path):
+    """MiniMax H3 Image genera y edita: sin foto usa el hermano T2I."""
+    calls: list[FakeClient] = []
+    prov = ComfyUIProvider(
+        "box", 22, transport=FakeTransport("box"),
+        client_factory=lambda url: calls.append(FakeClient(url)) or calls[-1],
+        tmpdir=tmp_path, seed_factory=lambda: 42,
+    )
+
+    result = await prov.generate(
+        _req(params={"model": "minimax_h3_image"}, prompt="un zorro de peluche")
+    )
+
+    assert result.media_type is MediaType.IMAGE
+    graph = calls[-1].graph
+    assert not any(
+        isinstance(node, dict) and node.get("class_type") == "LoadImage"
+        for node in graph.values()
+    )
+    assert graph["43"]["inputs"]["value"] == "un zorro de peluche"
+    assert graph["40"]["inputs"]["find"] == "input_text: {}"
+    assert graph["32"]["inputs"]["width"] == ["14", 0]
+
+
+@pytest.mark.asyncio
+async def test_minimax_image_with_photo_uploads_it_to_the_edit_graph(tmp_path):
+    """Con foto, el mismo flujo visible corre el grafo de edición."""
+    calls: list[FakeClient] = []
+    prov = ComfyUIProvider(
+        "box", 22, transport=FakeTransport("box"),
+        client_factory=lambda url: calls.append(FakeClient(url)) or calls[-1],
+        tmpdir=tmp_path, seed_factory=lambda: 42,
+    )
+
+    await prov.generate(
+        _req(params={"model": "minimax_h3_image"}), source_image=PNG_1x1
+    )
+
+    graph = calls[-1].graph
+    load_images = [
+        node for node in graph.values()
+        if isinstance(node, dict) and node.get("class_type") == "LoadImage"
+    ]
+    assert len(load_images) == 1
+    assert load_images[0]["inputs"]["image"].startswith("grokbot_src_")
+
+
+@pytest.mark.asyncio
 async def test_default_flow_without_photo_uses_t2i(tmp_path):
     """El flujo por defecto (edit) no rompe un prompt de texto: cae a agil_solo."""
     prov = _provider(FakeTransport("box"), tmp_path)

@@ -11,7 +11,8 @@
     "agil_moody_hq",
     "agil_edit_hq",
     "minimax_h3_i2v",
-    "minimax_h3_image"
+    "minimax_h3_image",
+    "minimax_h3_t2i"
   ],
   "substitutions": {
     "krea2_turbo_fp8_scaled.safetensors": "krea2_turbo_bf16.safetensors",

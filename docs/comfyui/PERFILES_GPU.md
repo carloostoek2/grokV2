@@ -35,8 +35,8 @@ Consumidores del mismo JSON: el resolver del bot, `actualizar_cuaderno.py`
 
 | Perfil | Tarjeta | Krea | Qwen Edit | Flujos |
 |---|---|---|---|---|
-| `a100` | A100 / H100 | bf16 24,48 + 8,27 GB | fp8mixed 19,12 GB | 8 |
-| `l4` | L4 24 GB | fp8 12,24 + 4,88 GB | GGUF Q4_K_M 11,96 GB | 7 (con Rapid AIO) |
+| `a100` | A100 / H100 | bf16 24,48 + 8,27 GB | fp8mixed 19,12 GB | 10 |
+| `l4` | L4 24 GB | fp8 12,24 + 4,88 GB | GGUF Q4_K_M 11,96 GB | 9 (con Rapid AIO y MiniMax H3 imagen) |
 | `t4` | T4 16 GB | GGUF Q4_K_M 6,97 GB | no | 2: `agil_solo`, `agil_solo_edit` |
 
 `face_detail_impact` («Detalle cara») queda **fuera de todos los perfiles**: la función
@@ -96,6 +96,12 @@ base Krea GGUF Q4; la medición de `agil_solo_edit` en T4 queda pendiente.
 
 Qwen Edit en T4 funciona pero no es práctico; por eso `t4` no lo incluye. En L4
 el mismo GGUF no necesita descargar a RAM y debería bajar a ~2–4 min.
+
+Desde el 2026-11-24 `l4` también expone `minimax_h3_image` y su hermano T2I
+(`minimax_h3_t2i`): cargan ~45 GB de pesos (UNET 21 GB + TE Qwen3VL-32B 15,7 GB +
+PE Qwen3.5 9B 7,3 GB + VAE) en 24 GB de VRAM, así que ComfyUI offloadea y el
+flujo va lento; se acepta ese coste. Cualquier flujo de perfiles: `a100` 10,
+`l4` 9, `t4` 2.
 
 ## Cómo añadir o cambiar un peso
 

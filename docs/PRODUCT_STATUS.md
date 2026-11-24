@@ -372,20 +372,25 @@ local-forward** (`transport.py` → `client.py` → plantillas API-format en
   en los perfiles `a100`/`l4` y en `provision_vast_box.sh`; `t4` sigue sin él (el
   checkpoint de ~25 GB no cabe en 16 GB).
 - **MiniMax H3 por modalidad (2026-11-24)**: `minimax_h3_i2v` se muestra como
-  **«MiniMax H3 Video»** y se registra **`minimax_h3_image`** («MiniMax H3 Imagen»),
-  el flujo de imagen con foto de referencia obligatoria: UNET
-  `minimax_h3_image_pruned_int8_convrot` + TE `qwen3vl_32b_minimax_h3_nvfp4_awq` +
-  `minimax_h3_image_vae_fp16`, KSampler euler/simple 6 pasos cfg 1 y resolución
-  derivada de la foto (8 MP, múltiplo de 32). Incluye el PE opcional del export
-  (`TextGenerateV2` con `qwen3.5_9b_w4a8_gptq`, encendido por defecto) que expande
-  la instrucción a JSON y extrae `expanded_caption`. Los tres pesos nuevos están en
-  el perfil `a100` (`weights`, HF `Comfy-Org/MiniMax-H3-Image`), que es el único
-  perfil que expone el flujo.
-- **Alcance actual**: **17 flujos registrados** en `COMFYUI_FLOWS`; el menú depende del
+  **«MiniMax H3 Video»** y se registran dos flujos de imagen que comparten modelo:
+  **`minimax_h3_image`** («MiniMax H3 Imagen», el visible) y **`minimax_h3_t2i`**
+  (hermano solo-texto, oculto en el menú). El modelo genera y edita, así que el flujo
+  visible **acepta texto o una foto de referencia**: con foto corre el grafo de edición
+  (resolución derivada de la foto, 8 MP múltiplo de 32); sin foto, el provider cae al
+  hermano T2I por `COMFYUI_TEXT_FALLBACKS` (`ResolutionSelector` 9:16 @ 4 MP múltiplo
+  de 32). Ambos usan UNET `minimax_h3_image_pruned_int8_convrot` + TE
+  `qwen3vl_32b_minimax_h3_nvfp4_awq` + `minimax_h3_image_vae_fp16`, euler/simple 6
+  pasos cfg 1 y el PE por defecto (`TextGenerateV2` con `qwen3.5_9b_w4a8_gptq`); el
+  T2I usa el `task_prompt` oficial de `MiniMaxAI/MiniMax-H3-Image-PE/prompt/t2i`.
+  Los tres pesos nuevos están en `weights` de los perfiles **`a100` y `l4`** (HF
+  `Comfy-Org/MiniMax-H3-Image`); en L4 el grafo descarga/offloadea pesos y va lento,
+  lo cual se acepta.
+- **Alcance actual**: **18 flujos registrados** en `COMFYUI_FLOWS`; el menú depende del
   perfil de GPU: **9 visibles en `a100`** (Ágil solo, Ágil Solo Edit, Ágil Edit NSFW
-  (Qwen), Ágil Moody, 3 `*_hq`, MiniMax H3 Video y MiniMax H3 Imagen), **7 en `l4`** y
-  **2 en `t4`**; el resto son
-  legacy/ocultos (`COMFYUI_MENU_HIDDEN_FLOWS`). Salud real de cada
+  (Qwen), Ágil Moody, 3 `*_hq`, MiniMax H3 Video y MiniMax H3 Imagen) y **8 visibles
+  en `l4`** (los mismos ágiles + MiniMax H3 Imagen), con los perfiles declarando 10
+  y 9 flujos respectivamente; **2 en `t4`**. El resto son legacy/ocultos
+  (`COMFYUI_MENU_HIDDEN_FLOWS`, incluido el hermano T2I de MiniMax). Salud real de cada
   flujo y pesos instalados:
   `docs/comfyui/INVENTARIO_BOX_COLAB.md`; el inventario Vast queda como histórico.
 

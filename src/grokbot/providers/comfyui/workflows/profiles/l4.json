@@ -9,7 +9,9 @@
     "agil_moody",
     "agil_solo_hq",
     "agil_moody_hq",
-    "agil_edit_hq"
+    "agil_edit_hq",
+    "minimax_h3_image",
+    "minimax_h3_t2i"
   ],
   "substitutions": {
     "qwen_image_edit_2511_fp8mixed.safetensors": "qwen-image-edit-2511-Q4_K_M.gguf",
@@ -105,6 +107,30 @@
       "url": "https://civitai.com/api/download/models/3084537",
       "auth": "civitai",
       "min_size": 228587720
+    },
+    {
+      "path": "diffusion_models/minimax_h3_image_pruned_int8_convrot.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/MiniMax-H3-Image/resolve/main/diffusion_models/minimax_h3_image_pruned_int8_convrot.safetensors",
+      "auth": "none",
+      "min_size": 20979314802
+    },
+    {
+      "path": "text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      "auth": "none",
+      "min_size": 15687142551
+    },
+    {
+      "path": "text_encoders/qwen3.5_9b_w4a8_gptq.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/MiniMax-H3-Image/resolve/main/text_encoders/qwen3.5_9b_w4a8_gptq.safetensors",
+      "auth": "none",
+      "min_size": 7343591088
+    },
+    {
+      "path": "vae/minimax_h3_image_vae_fp16.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/MiniMax-H3-Image/resolve/main/vae/minimax_h3_image_vae_fp16.safetensors",
+      "auth": "none",
+      "min_size": 1168505312
     }
   ],
   "symlinks": [

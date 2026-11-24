@@ -137,10 +137,10 @@ bf16 volvieron a descargarse ese día; ver §6.2):
 
 ## 6. Flujos: bloque HQ (menú activo)
 
-El `COMFYUI_FLOWS` registra **17** ids; el menú de Telegram oculta 8 y muestra **9**
+El `COMFYUI_FLOWS` registra **18** ids; el menú de Telegram oculta 9 y muestra **9**
 (Ágil solo, Ágil Solo Edit, Ágil Edit NSFW (Qwen), Ágil Moody, tres `*_hq`, MiniMax H3
-Video y MiniMax H3 Imagen) en el perfil `a100` desde el 2026-11-24. El tuning
-**candid** del 2026-10-25 vive en
+Video y MiniMax H3 Imagen; el hermano T2I de imagen queda oculto y se usa en automático)
+en el perfil `a100` desde el 2026-11-24. El tuning **candid** del 2026-10-25 vive en
 `src/grokbot/providers/comfyui/workflows/templates/*_hq.json` y, como el bot está en
 `COMFYUI_WORKFLOW_SOURCE=embed`, **aplica sin desplegar nada al box**. El resolver cachea
 los flujos embebidos por proceso (`_flows_cached`): tras editar un template hay que

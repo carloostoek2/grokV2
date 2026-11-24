@@ -65,10 +65,12 @@ COMFYUI_FLOWS = (
     ("wan_i2v", "Wan I2V"),
     ("qwen21_t2i", "Qwen 2.1"),
     ("flux1_dev_t2i", "Flux.1 Dev"),
-    # MiniMax H3 por modalidad: el grafo de video (i2v) y el de imagen
-    # (edición/referencia). Ambos ids comparten el TE Qwen3VL-32B.
+    # MiniMax H3 por modalidad: el grafo de video (i2v) y los de imagen
+    # (edición con foto y su hermano solo-texto, que no se muestra en el menú).
+    # Los tres comparten el TE Qwen3VL-32B.
     ("minimax_h3_i2v", "MiniMax H3 Video"),
     ("minimax_h3_image", "MiniMax H3 Imagen"),
+    ("minimax_h3_t2i", "MiniMax H3 Imagen (texto)"),
     ("face_detail_impact", "Face Detail"),
     ("instantid_sdxl", "InstantID SDXL"),
     ("ohwx_krea2", "Ohwx"),
@@ -89,6 +91,9 @@ COMFYUI_MENU_HIDDEN_FLOWS = frozenset({
     "instantid_sdxl",
     "ohwx_krea2",
     "ohwx_edit",
+    # Hermano solo-texto de MiniMax H3 Imagen: se usa en automático cuando no
+    # hay foto, así que no ocupa un botón propio en el menú.
+    "minimax_h3_t2i",
 })
 
 # Result-chain stages (Telegram buttons under a ComfyUI image). The callback
@@ -116,6 +121,9 @@ COMFYUI_TEXT_FALLBACKS = {
     "agil_solo_edit": "agil_solo",
     "agil_edit_hq": "agil_solo_hq",
     "ohwx_edit": "ohwx_krea2",
+    # MiniMax H3 Image genera y edita: sin foto se usa el hermano T2I, así que
+    # el flujo visible acepta texto o una imagen de referencia indistintamente.
+    "minimax_h3_image": "minimax_h3_t2i",
 }
 
 
