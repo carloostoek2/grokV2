@@ -379,9 +379,12 @@ local-forward** (`transport.py` → `client.py` → plantillas API-format en
   (resolución derivada de la foto, 4 MP múltiplo de 32); sin foto, el provider cae al
   hermano T2I por `COMFYUI_TEXT_FALLBACKS` (`ResolutionSelector` 9:16 @ 4 MP múltiplo
   de 32). Ambos usan UNET `minimax_h3_image_pruned_int8_convrot` + TE
-  `qwen3vl_32b_minimax_h3_nvfp4_awq` + `minimax_h3_image_vae_fp16`, euler/simple 6
-  pasos cfg 1 y el PE por defecto (`TextGenerateV2` con `qwen3.5_9b_w4a8_gptq`); el
-  T2I usa el `task_prompt` oficial de `MiniMaxAI/MiniMax-H3-Image-PE/prompt/t2i`.
+  `qwen3vl_32b_heretic_minimax_h3_nvfp4` (heretic/uncensored, 2026-11-27; el video
+  sigue con el `qwen3vl_32b_minimax_h3_nvfp4_awq` original) + `minimax_h3_image_vae_fp16`,
+  euler/simple 6 pasos cfg 1, **LoRA CROWN Douyin Influencer** (r16 slim, strength 0.85,
+  trigger `dy_chunyu_yujie`) sobre el UNET y el PE por defecto (`TextGenerateV2` con
+  `qwen3.5_9b_w4a8_gptq`); el T2I usa el `task_prompt` oficial de
+  `MiniMaxAI/MiniMax-H3-Image-PE/prompt/t2i`.
   Los tres pesos nuevos están en `weights` de los perfiles **`a100` y `l4`** (HF
   `Comfy-Org/MiniMax-H3-Image`); en L4 el grafo descarga/offloadea pesos y va lento,
   lo cual se acepta.

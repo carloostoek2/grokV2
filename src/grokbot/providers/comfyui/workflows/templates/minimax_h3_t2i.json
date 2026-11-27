@@ -15,7 +15,7 @@
     "supports_source": false,
     "requires_source": false,
     "timeout": 1200,
-    "source": "MiniMax H3 imagen solo texto (hermano sin foto de minimax_h3_image): UNET minimax_h3_image_pruned_int8_convrot + TE Qwen3VL-32B nvfp4 + VAE imagen fp16, euler/simple 6 pasos cfg 1. ResolutionSelector 9:16 @ 4 MP múltiplo de 32. PE por defecto (TextGenerateV2 con qwen3.5_9b_w4a8_gptq) con el task_prompt oficial de T2I de MiniMax-H3-Image-PE."
+    "source": "MiniMax H3 imagen solo texto (hermano sin foto de minimax_h3_image): UNET minimax_h3_image_pruned_int8_convrot + TE Qwen3VL-32B heretic nvfp4 (uncensored) + VAE imagen fp16, euler/simple 6 pasos cfg 1. LoRA CROWN (retrato Douyin, strength 0.85, trigger dy_chunyu_yujie) sobre el UNET. ResolutionSelector 9:16 @ 4 MP múltiplo de 32. PE por defecto (TextGenerateV2 con qwen3.5_9b_w4a8_gptq) con el task_prompt oficial de T2I de MiniMax-H3-Image-PE."
   },
   "9": {
     "inputs": {
@@ -36,7 +36,7 @@
   },
   "30": {
     "inputs": {
-      "clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      "clip_name": "qwen3vl_32b_heretic_minimax_h3_nvfp4.safetensors",
       "type": "minimax",
       "device": "default"
     },
@@ -143,7 +143,7 @@
       "scheduler": "simple",
       "denoise": 1,
       "model": [
-        "29",
+        "62",
         0
       ],
       "positive": [
@@ -240,5 +240,16 @@
       "megapixels": 4.0,
       "multiple": 32
     }
+  },
+  "62": {
+    "inputs": {
+      "lora_name": "CROWN_MiniMax_H3_Image_Douyin_Chunyu_Yujie_V1_r16_slim.safetensors",
+      "strength_model": 0.85,
+      "model": [
+        "29",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly"
   }
 }

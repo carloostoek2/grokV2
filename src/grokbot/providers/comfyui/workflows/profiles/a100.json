@@ -122,6 +122,18 @@
       "min_size": 15687142551
     },
     {
+      "path": "text_encoders/qwen3vl_32b_heretic_minimax_h3_nvfp4.safetensors",
+      "url": "https://huggingface.co/Momoking/Qwen3-VL-32B-Heretic-MiniMax-H3-NVFP4/resolve/main/qwen3vl_32b_heretic_minimax_h3_nvfp4.safetensors",
+      "auth": "none",
+      "min_size": 15000000000
+    },
+    {
+      "path": "loras/CROWN_MiniMax_H3_Image_Douyin_Chunyu_Yujie_V1_r16_slim.safetensors",
+      "url": "https://civitai.com/api/download/models/3465545",
+      "auth": "civitai",
+      "min_size": 140000000
+    },
+    {
       "path": "vae/minimax_h3_video_vae_fp16.safetensors",
       "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_video_vae_fp16.safetensors",
       "auth": "none",
