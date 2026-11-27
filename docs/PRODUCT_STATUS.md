@@ -376,8 +376,8 @@ local-forward** (`transport.py` → `client.py` → plantillas API-format en
   **`minimax_h3_image`** («MiniMax H3 Imagen», el visible) y **`minimax_h3_t2i`**
   (hermano solo-texto, oculto en el menú). El modelo genera y edita, así que el flujo
   visible **acepta texto o una foto de referencia**: con foto corre el grafo de edición
-  (resolución derivada de la foto, 4 MP múltiplo de 32); sin foto, el provider cae al
-  hermano T2I por `COMFYUI_TEXT_FALLBACKS` (`ResolutionSelector` 9:16 @ 4 MP múltiplo
+  (resolución derivada de la foto, 8 MP múltiplo de 32); sin foto, el provider cae al
+  hermano T2I por `COMFYUI_TEXT_FALLBACKS` (`ResolutionSelector` 9:16 @ 8 MP múltiplo
   de 32). Ambos usan UNET `minimax_h3_image_pruned_int8_convrot` + TE
   `qwen3vl_32b_heretic_minimax_h3_nvfp4` (heretic/uncensored, 2026-11-27; el video
   sigue con el `qwen3vl_32b_minimax_h3_nvfp4_awq` original) + `minimax_h3_image_vae_fp16`,
