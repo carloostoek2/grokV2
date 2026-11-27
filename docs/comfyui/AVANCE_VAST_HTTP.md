@@ -184,10 +184,14 @@ directa no se toca). Contrato:
    `workflows/templates/<id>.json` con su modelo/LoRA **horneados** en los nodos y una
    clave `_meta`: id, name, media_type, positive_node, **positive_input** (default
    `"text"`; p. ej. `"prompt"` si el nodo es un Wildcard Processor), negative_node,
-   seed_nodes, save_nodes, supports_source, **requires_source** y **timeout** (override del
-   default por media).
+   seed_nodes, save_nodes, supports_source, **requires_source**, **prompt_expander_node**
+   y **timeout** (override del default por media).
    - `supports_source: true` + `source_node`/`source_input` = el flujo **admite** foto (el
      provider la sube y parchea ese nodo).
+   - `prompt_expander_node` = id del nodo booleano que enciende/apaga el expansor de prompt
+     (PE). El usuario puede apagarlo por flujo desde `/config` (🧠 Expansor de prompt):
+     `render(prompt_expander=False)` escribe `false` en ese nodo y el grafo usa el prompt
+     crudo. Un flujo sin la clave no muestra el toggle y no ejecuta ningún PE.
    - `requires_source: true` = el flujo **exige** foto. Sin foto el grafo correría con el
      placeholder horneado (`example.png`, que existe en el `input/` del box) y devolvería un
      resultado incorrecto **en silencio**; el provider lo rechaza con mensaje user-safe. Van

@@ -16,6 +16,7 @@
     "requires_source": true,
     "source_node": "45",
     "source_input": "image",
+    "prompt_expander_node": "61",
     "timeout": 1200,
     "source": "MiniMax H3 imagen (edición/referencia): UNET minimax_h3_image_pruned_int8_convrot + TE Qwen3VL-32B heretic nvfp4 (uncensored) + VAE imagen fp16; KSampler euler/simple 6 pasos cfg 1. Resolución derivada de la foto (4 MP, múltiplo de 32). Sin LoRA horneado: el stack extra por flujo se inyecta por request (p. ej. CROWN, trigger dy_chunyu_yujie). PE opcional por defecto encendido (TextGenerateV2 con qwen3.5_9b_w4a8_gptq) que expande el prompt a JSON y extrae expanded_caption."
   },

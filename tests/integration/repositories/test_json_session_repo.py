@@ -118,7 +118,7 @@ def test_legacy_video_hourly_timestamps_purged_on_first_load(tmp_path):
     # Los timestamps no tocan la config: el record queda limpio y estable.
     repo = JsonSessionRepository(path)
     repo.save_config(UID, config)
-    assert json.loads(path.read_text(encoding="utf-8"))[str(UID)] == {**canonical_record(), "comfyui_seed_mode": "random", "comfyui_seed": 0}
+    assert json.loads(path.read_text(encoding="utf-8"))[str(UID)] == {**canonical_record(), "comfyui_seed_mode": "random", "comfyui_seed": 0, "comfyui_prompt_expander": True}
 
 
 def test_legacy_grok_provider_migrates_and_is_dropped_on_save(tmp_path):
@@ -186,7 +186,7 @@ def test_round_trip_parity(tmp_path):
     repo = JsonSessionRepository(path)
     config = repo.get_config(UID)
     repo.save_config(UID, config)
-    assert json.loads(path.read_text(encoding="utf-8"))[str(UID)] == {**canonical_record(), "comfyui_seed_mode": "random", "comfyui_seed": 0}
+    assert json.loads(path.read_text(encoding="utf-8"))[str(UID)] == {**canonical_record(), "comfyui_seed_mode": "random", "comfyui_seed": 0, "comfyui_prompt_expander": True}
 
 
 def test_write_json_atomic_ensure_ascii_default_true(tmp_path):

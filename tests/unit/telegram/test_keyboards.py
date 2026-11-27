@@ -79,6 +79,42 @@ def test_config_variant_keyboard():
     assert rows[1][0].text == "✅ Alta calidad"
 
 
+def test_config_comfyui_keyboard_shows_prompt_expander_only_for_pe_flows():
+    from grokbot.providers.comfyui.workflows.resolver import (
+        configure_workflow_source,
+        reset_workflow_source,
+    )
+
+    configure_workflow_source(source="embed", host="", profile="a100")
+
+    cfg = ComfyUIConfig(model="minimax_h3_image", prompt_expander=False)
+    rows = kb.config_comfyui_keyboard(cfg).inline_keyboard
+    data = flat_callback_data(kb.config_comfyui_keyboard(cfg))
+    labels = [b.text for row in rows for b in row]
+    assert "cfg:comfyui:expander" in data
+    assert "🧠 Expansor de prompt: desactivado" in labels
+
+    on = flat_callback_data(
+        kb.config_comfyui_keyboard(
+            ComfyUIConfig(model="minimax_h3_image", prompt_expander=True)
+        )
+    )
+    assert "cfg:comfyui:expander" in on
+    labels_on = [
+        b.text
+        for row in kb.config_comfyui_keyboard(
+            ComfyUIConfig(model="minimax_h3_image", prompt_expander=True)
+        ).inline_keyboard
+        for b in row
+    ]
+    assert "🧠 Expansor de prompt: activado" in labels_on
+
+    # Un flujo sin PE no muestra el toggle.
+    other = flat_callback_data(kb.config_comfyui_keyboard(ComfyUIConfig(model="agil_solo")))
+    assert "cfg:comfyui:expander" not in other
+    reset_workflow_source()
+
+
 def test_config_comfyui_keyboard_lists_seeds_and_flows():
     cfg = ComfyUIConfig(model="agil_solo")
     data = flat_callback_data(kb.config_comfyui_keyboard(cfg))

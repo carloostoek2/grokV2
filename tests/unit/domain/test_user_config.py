@@ -159,6 +159,7 @@ def test_round_trip_canonical_record():
     expected["nano_banana_variant"] = "banana2"
     expected["comfyui_seed_mode"] = "random"
     expected["comfyui_seed"] = 0
+    expected["comfyui_prompt_expander"] = True
     expected["comfyui_lora_stacks"] = {}
     assert out == expected
 
@@ -208,6 +209,7 @@ def test_video_config_and_comfyui_config_standalone():
         "refine": "1",
         "seed_mode": "random",
         "seed": 0,
+        "prompt_expander": True,
         "lora_stacks": {},
     }
     assert cc.refine_enabled is True
@@ -293,6 +295,22 @@ def test_comfy_seed_roundtrip_and_legacy():
     assert ComfyUIConfig.from_record({}).seed_mode == "random"
     for value in (-1, 1 << 63, True, "123"):
         assert ComfyUIConfig.from_record({"seed": value}).seed == 0
+
+
+def test_comfy_prompt_expander_default_roundtrip_and_legacy():
+    # Sesiones viejas sin la clave: PE encendido por default.
+    assert ComfyUIConfig.from_record({}).prompt_expander is True
+    cc = ComfyUIConfig.from_record({"prompt_expander": False})
+    assert cc.prompt_expander is False
+    assert cc.to_record()["prompt_expander"] is False
+    assert UserConfig.from_record(
+        UserConfig.defaults().to_record()
+    ).comfyui.prompt_expander is True
+    # Valores no booleanos caen al default (no se reinterpretan).
+    for value in ("no", 0, 1, None):
+        assert ComfyUIConfig.from_record(
+            {"prompt_expander": value}
+        ).prompt_expander is True
 
 
 # --- ComfyUI LoRA stack --------------------------------------------------------

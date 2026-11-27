@@ -266,7 +266,10 @@ def config_comfyui_keyboard(cfg: ComfyUIConfig) -> InlineKeyboardMarkup:
         ]
         for mode in VALID_COMFYUI_SEED_MODES
     ]
-    from grokbot.providers.comfyui.workflows.resolver import active_flow_ids
+    from grokbot.providers.comfyui.workflows.resolver import (
+        active_flow_ids,
+        supports_prompt_expander,
+    )
 
     allowed = active_flow_ids()
     for flow_id, flow_name in COMFYUI_FLOW_LABELS.items():
@@ -279,6 +282,14 @@ def config_comfyui_keyboard(cfg: ComfyUIConfig) -> InlineKeyboardMarkup:
             InlineKeyboardButton(
                 text=f"{mark}{flow_name}",
                 callback_data=f"cfg:comfyui:flow:{flow_id}",
+            )
+        ])
+    if supports_prompt_expander(cfg.model):
+        estado = "activado" if cfg.prompt_expander else "desactivado"
+        rows.append([
+            InlineKeyboardButton(
+                text=f"🧠 Expansor de prompt: {estado}",
+                callback_data="cfg:comfyui:expander",
             )
         ])
     extra_loras = len(cfg.loras_for(cfg.model))

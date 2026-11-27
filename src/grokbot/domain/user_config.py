@@ -422,6 +422,11 @@ class ComfyUIConfig:
     ``lora_stacks`` es el stack **adicional** por flujo que el usuario arma
     desde Telegram: se inyecta al final de la cadena de modelo y nunca sustituye
     lo horneado. Un flujo sin entrada no lleva LoRAs extra.
+
+    ``prompt_expander`` controla el expansor de prompt (PE) de los flujos que lo
+    declaran en ``_meta.prompt_expander_node`` (MiniMax H3 Imagen): ``True`` usa
+    el caption expandido por el modelo 9B; ``False`` usa el prompt tal cual lo
+    escribió el usuario. En flujos sin PE no tiene efecto.
     """
 
     model: str = DEFAULT_COMFYUI_MODEL
@@ -429,6 +434,8 @@ class ComfyUIConfig:
     refine: str = DEFAULT_COMFYUI_REFINE  # "0"/"1" as str (JSON parity)
     seed_mode: str = VALID_COMFYUI_SEED_MODES[0]
     seed: int = 0
+    # Expansor de prompt (solo flujos que lo declaran). True = caption 9B.
+    prompt_expander: bool = True
     # Tuple of (flow_id, entries): frozen + ordered, same semantics as a dict.
     lora_stacks: tuple[tuple[str, tuple[LoraStackEntry, ...]], ...] = ()
 
@@ -456,6 +463,10 @@ class ComfyUIConfig:
         seed = rec.get("seed", 0)
         if not is_valid_comfyui_seed(seed):
             seed = 0
+        # Sesiones viejas no traen la clave: el PE queda encendido (default).
+        prompt_expander = rec.get("prompt_expander", True)
+        if not isinstance(prompt_expander, bool):
+            prompt_expander = True
         lora_stacks = _normalize_lora_stacks(rec.get("lora_stacks"))
         return cls(
             model=model,
@@ -463,6 +474,7 @@ class ComfyUIConfig:
             refine=refine,
             seed_mode=seed_mode,
             seed=seed,
+            prompt_expander=prompt_expander,
             lora_stacks=lora_stacks,
         )
 
@@ -473,6 +485,7 @@ class ComfyUIConfig:
             "refine": self.refine,
             "seed_mode": self.seed_mode,
             "seed": self.seed,
+            "prompt_expander": self.prompt_expander,
             "lora_stacks": {
                 flow_id: [entry.to_record() for entry in entries]
                 for flow_id, entries in self.lora_stacks
@@ -604,6 +617,7 @@ class UserConfig:
             "comfyui_model": self.comfyui.model,
             "comfyui_lora": self.comfyui.lora,
             "comfyui_refine": self.comfyui.refine,
+            "comfyui_prompt_expander": self.comfyui.prompt_expander,
             "comfyui_lora_stacks": {
                 flow_id: [entry.to_record() for entry in entries]
                 for flow_id, entries in self.comfyui.lora_stacks

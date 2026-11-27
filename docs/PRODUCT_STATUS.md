@@ -386,7 +386,10 @@ local-forward** (`transport.py` → `client.py` → plantillas API-format en
   `MiniMaxAI/MiniMax-H3-Image-PE/prompt/t2i`. El LoRA **CROWN Douyin Influencer**
   (r16 slim, trigger `dy_chunyu_yujie`) queda **instalado en el box pero fuera del
   template**: se agrega por flujo desde `/config` → 🎨 LoRAs (stack extra con strength
-  ajustable), así el flujo base corre solo con el modelo.
+  ajustable), así el flujo base corre solo con el modelo. El **expansor de prompt**
+  (PE, modelo Qwen 9B) se puede apagar por usuario desde `/config` (botón
+  🧠 Expansor de prompt, solo visible en flujos que lo declaran): apagado, el grafo
+  usa el prompt crudo y no ejecuta el 9B; el default sigue encendido.
   Los tres pesos nuevos están en `weights` de los perfiles **`a100` y `l4`** (HF
   `Comfy-Org/MiniMax-H3-Image`); en L4 el grafo descarga/offloadea pesos y va lento,
   lo cual se acepta.

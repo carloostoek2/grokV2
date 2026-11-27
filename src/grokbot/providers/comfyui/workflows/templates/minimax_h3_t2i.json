@@ -14,6 +14,7 @@
     ],
     "supports_source": false,
     "requires_source": false,
+    "prompt_expander_node": "61",
     "timeout": 1200,
     "source": "MiniMax H3 imagen solo texto (hermano sin foto de minimax_h3_image): UNET minimax_h3_image_pruned_int8_convrot + TE Qwen3VL-32B heretic nvfp4 (uncensored) + VAE imagen fp16, euler/simple 6 pasos cfg 1. Sin LoRA horneado: el stack extra por flujo se inyecta por request (p. ej. CROWN, trigger dy_chunyu_yujie). ResolutionSelector 9:16 @ 4 MP múltiplo de 32. PE por defecto (TextGenerateV2 con qwen3.5_9b_w4a8_gptq) con el task_prompt oficial de T2I de MiniMax-H3-Image-PE."
   },

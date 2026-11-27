@@ -435,7 +435,19 @@ class ComfyUIProvider:
                 flow.id,
                 flow.seed_nodes,
             )
-        graph = render(flow, request.prompt, lambda: seed)
+        # PE: solo se apaga si el usuario lo desactivó Y el flujo lo declara.
+        # Un params sin la clave (bots/tests viejos) mantiene el default ON.
+        prompt_expander = request.params.get("prompt_expander", True) is not False
+        graph = render(
+            flow,
+            request.prompt,
+            lambda: seed,
+            prompt_expander=prompt_expander,
+        )
+        if not prompt_expander and flow.prompt_expander_node:
+            logger.info(
+                "ComfyUI flow %s: prompt expander disabled by user", flow.id
+            )
         # LoRAs extra del usuario: se apilan sobre la copia del request (la
         # plantilla no se modifica). Un grafo sin cadena de modelo se rechaza
         # antes de encolar en vez de correr sin el LoRA en silencio.

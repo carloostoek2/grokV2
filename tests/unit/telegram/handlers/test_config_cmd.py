@@ -405,6 +405,48 @@ async def test_comfyui_seed_button_rejects_unknown_mode():
     assert deps.sessions.get_config(_UID) == before
 
 
+async def test_comfyui_prompt_expander_toggle_persists():
+    from dataclasses import replace
+
+    from grokbot.providers.comfyui.workflows.resolver import (
+        configure_workflow_source,
+        reset_workflow_source,
+    )
+
+    configure_workflow_source(source="embed", host="", profile="a100")
+    dp, deps = await _open_config()
+    mid = _panel_id(deps)
+    cfg = deps.sessions.get_config(_UID)
+    deps.sessions.save_config(
+        _UID,
+        replace(cfg, comfyui=replace(cfg.comfyui, model="minimax_h3_image")),
+    )
+    await dp.feed_update(
+        _BOT, callback_update(callback_query("cfg:model:comfyui", message_id=mid))
+    )
+
+    await dp.feed_update(
+        _BOT, callback_update(_bot_panel_callback("cfg:comfyui:expander", mid))
+    )
+    assert deps.sessions.get_config(_UID).comfyui.prompt_expander is False
+    edit = _last_edit_text(deps)
+    assert edit["text"].startswith("Configuración actualizada ✅")
+    assert "<b>Expansor de prompt:</b> desactivado" in edit["text"]
+    assert _last_answer(deps)["text"] == (
+        "Expansor desactivado: se usará tu prompt tal cual."
+    )
+
+    # Segundo tap: vuelve a encenderse y deja de anunciar "actualizada".
+    await dp.feed_update(
+        _BOT, callback_update(_bot_panel_callback("cfg:comfyui:expander", mid))
+    )
+    assert deps.sessions.get_config(_UID).comfyui.prompt_expander is True
+    assert _last_edit_text(deps)["text"].startswith("Configuración actualizada ✅")
+    assert _last_answer(deps)["text"] == "Expansor de prompt activado."
+
+    reset_workflow_source()
+
+
 # --- ComfyUI: LoRAs extra ------------------------------------------------------
 
 async def _open_comfyui(deps=None):

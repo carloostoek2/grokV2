@@ -591,3 +591,40 @@ def test_active_flow_ids_reconfigure_sin_menu_limpia_allowlist():
     assert resolver_mod.active_flow_ids() == frozenset(
         resolver_mod.load_profiles()["a100"].flows
     )
+
+
+# --- Expansor de prompt (PE) ---------------------------------------------------
+
+def test_render_prompt_expander_switch_minimax():
+    """``prompt_expander=False`` apaga el booleano del PE sin tocar el prompt."""
+    configure_workflow_source(source="embed", host="", profile="a100")
+    flow = get_flow("minimax_h3_image")
+    assert flow is not None and flow.prompt_expander_node == "61"
+
+    on = render(flow, "hola", lambda: 7)
+    off = render(flow, "hola", lambda: 7, prompt_expander=False)
+
+    assert on["61"]["inputs"]["value"] is True
+    assert off["61"]["inputs"]["value"] is False
+    assert off["43"]["inputs"]["value"] == "hola"
+    # La plantilla cacheada no se muta.
+    assert flow.graph["61"]["inputs"]["value"] is True
+
+
+def test_render_prompt_expander_flag_ignored_without_pe():
+    configure_workflow_source(source="embed", host="", profile="a100")
+    flow = get_flow("agil_solo")
+    assert flow is not None and flow.prompt_expander_node is None
+
+    graph = render(flow, "hola", lambda: 7, prompt_expander=False)
+
+    assert graph["5"]["inputs"]["text"] == "hola"
+
+
+def test_supports_prompt_expander_only_for_declared_flows():
+    configure_workflow_source(source="embed", host="", profile="a100")
+
+    assert resolver_mod.supports_prompt_expander("minimax_h3_image") is True
+    assert resolver_mod.supports_prompt_expander("minimax_h3_t2i") is True
+    assert resolver_mod.supports_prompt_expander("agil_solo") is False
+    assert resolver_mod.supports_prompt_expander("no_existe") is False

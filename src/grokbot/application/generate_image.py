@@ -49,6 +49,9 @@ def _comfy_params(cfg: UserConfig, prompts: list[str] | None) -> dict:
         if cfg.comfyui.seed_mode == "fixed"
         else random.randrange(COMFYUI_SEED_LIMIT)
     )
+    # El PE solo existe en flujos que lo declaran; el provider ignora la clave
+    # en los demás. Se envía siempre para que el usuario pueda apagarlo.
+    params["prompt_expander"] = cfg.comfyui.prompt_expander
     # Stacks extra POR FLUJO: el provider elige el del flujo que realmente corre
     # (puede caer al default del perfil si el pedido no existe en esta GPU), así
     # que un stack configurado para otro flujo nunca se inyecta por error.

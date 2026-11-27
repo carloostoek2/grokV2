@@ -203,6 +203,8 @@ async def cmd_seed(message: types.Message, state: FSMContext, deps: BotDeps) -> 
 def _comfyui_screen_text(cfg, *, updated: bool = False) -> str:
     from grokbot.providers.comfyui.workflows.resolver import active_profile
 
+    from grokbot.providers.comfyui.workflows.resolver import supports_prompt_expander
+
     cc = cfg.comfyui
     header = "Configuración actualizada ✅\n" if updated else "Configuración de ComfyUI (GPU propia):\n"
     flow_name = COMFYUI_FLOW_LABELS.get(cc.model, cc.model)
@@ -210,15 +212,26 @@ def _comfyui_screen_text(cfg, *, updated: bool = False) -> str:
     linea_perfil = f"<b>Tarjeta:</b> {perfil.label}\n" if perfil is not None else ""
     extra_loras = len(cc.loras_for(cc.model))
     linea_loras = f"<b>LoRAs extra:</b> {extra_loras}\n" if extra_loras else ""
+    linea_expansor = ""
+    nota_expansor = ""
+    if supports_prompt_expander(cc.model):
+        estado = "activado" if cc.prompt_expander else "desactivado"
+        linea_expansor = f"<b>Expansor de prompt:</b> {estado}\n"
+        nota_expansor = (
+            "\nEl expansor reescribe tu prompt con un modelo 9B (más lento y más "
+            "fiel); desactívalo para enviar tu texto tal cual."
+        )
     return (
         f"{header}"
         f"{linea_perfil}"
         f"<b>Flujo:</b> {flow_name}\n"
         f"<b>Semilla (imágenes):</b> {_seed_label(cc)}\n"
         f"{linea_loras}"
+        f"{linea_expansor}"
         "Para fijar un número: /semilla 123456\n\n"
         "Elige el flujo: cada uno trae su modelo y LoRA configurados en la GPU.\n"
         "Con 🎨 LoRAs puedes apilar LoRAs extra sin modificar el flujo."
+        f"{nota_expansor}"
     )
 
 
@@ -726,6 +739,28 @@ async def handle_cfg_comfyui(callback: types.CallbackQuery, state: FSMContext, d
     ):
         return
     parts = callback.data.split(":")
+    if len(parts) == 3 and parts[2] == "expander":
+        uid = callback.from_user.id
+        cfg = deps.sessions.get_config(uid)
+        new_value = not cfg.comfyui.prompt_expander
+        result = deps.update_config.set_comfyui_prompt_expander(uid, new_value)
+        if not result.ok:
+            await answer_callback(
+                deps.gateway, callback, "No se pudo cambiar el expansor.", show_alert=True
+            )
+            return
+        await _show_configure_screen(
+            callback.message, state, deps, "comfyui",
+            uid=uid, updated=result.changed,
+        )
+        await answer_callback(
+            deps.gateway,
+            callback,
+            "Expansor de prompt activado."
+            if new_value
+            else "Expansor desactivado: se usará tu prompt tal cual.",
+        )
+        return
     if len(parts) == 4 and parts[2] == "seed":
         result = deps.update_config.set_comfyui_seed(callback.from_user.id, parts[3])
         if not result.ok:

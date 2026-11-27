@@ -35,6 +35,7 @@ def build_video_request(
     """
     params = {"model": cfg.comfyui.model} if res.name == "comfyui" else {}
     if res.name == "comfyui":
+        params["prompt_expander"] = cfg.comfyui.prompt_expander
         stacks = {
             flow_id: [entry.to_record() for entry in entries]
             for flow_id, entries in cfg.comfyui.lora_stacks

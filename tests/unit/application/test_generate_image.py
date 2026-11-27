@@ -286,3 +286,21 @@ async def test_comfyui_sends_per_flow_lora_stacks(sessions):
         "agil_solo": [{"name": "solo.safetensors", "strength": 1.0}],
     }
     assert "loras" not in request.params
+
+
+async def test_comfyui_sends_prompt_expander_flag(sessions):
+    cfg = replace(
+        UserConfig.defaults(),
+        model="comfyui",
+        comfyui=ComfyUIConfig(model="minimax_h3_image", prompt_expander=False),
+    )
+    sessions.save_config(USER_ID, cfg)
+    prov = FakeComfyuiProvider(
+        outcomes=[make_result(provider="comfyui", model_id="comfyui", file_path="/tmp/a.jpg")]
+    )
+    reg = make_registry(comfyui=prov)
+
+    await _run(_uc(reg, sessions), user_id=USER_ID, prompt="un retrato")
+
+    request, _ = prov.calls[0]
+    assert request.params["prompt_expander"] is False

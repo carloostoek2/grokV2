@@ -243,6 +243,41 @@ async def test_minimax_image_with_photo_uploads_it_to_the_edit_graph(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_minimax_image_disables_prompt_expander_when_user_asks(tmp_path):
+    """``prompt_expander=False`` apaga el switch del PE en el grafo encolado."""
+    calls: list[FakeClient] = []
+    prov = ComfyUIProvider(
+        "box", 22, transport=FakeTransport("box"),
+        client_factory=lambda url: calls.append(FakeClient(url)) or calls[-1],
+        tmpdir=tmp_path, seed_factory=lambda: 42,
+    )
+
+    await prov.generate(
+        _req(params={"model": "minimax_h3_image", "prompt_expander": False}),
+        source_image=PNG_1x1,
+    )
+
+    assert calls[-1].graph["61"]["inputs"]["value"] is False
+
+
+@pytest.mark.asyncio
+async def test_minimax_image_keeps_prompt_expander_by_default(tmp_path):
+    """Sin la clave en params (o True) el PE queda encendido."""
+    calls: list[FakeClient] = []
+    prov = ComfyUIProvider(
+        "box", 22, transport=FakeTransport("box"),
+        client_factory=lambda url: calls.append(FakeClient(url)) or calls[-1],
+        tmpdir=tmp_path, seed_factory=lambda: 42,
+    )
+
+    await prov.generate(
+        _req(params={"model": "minimax_h3_image"}), source_image=PNG_1x1
+    )
+
+    assert calls[-1].graph["61"]["inputs"]["value"] is True
+
+
+@pytest.mark.asyncio
 async def test_default_flow_without_photo_uses_t2i(tmp_path):
     """El flujo por defecto (edit) no rompe un prompt de texto: cae a agil_solo."""
     prov = _provider(FakeTransport("box"), tmp_path)

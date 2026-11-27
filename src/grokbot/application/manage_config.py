@@ -212,6 +212,24 @@ class UpdateUserConfigUseCase:
         self._sessions.save_config(user_id, new_cfg)
         return ConfigResult(ok=True, changed=True, field=f"comfyui.{name}", value=value)
 
+    def set_comfyui_prompt_expander(self, user_id: int, enabled: bool) -> ConfigResult:
+        """Encender/apagar el expansor de prompt (PE) de los flujos que lo usan."""
+        if not isinstance(enabled, bool):
+            return ConfigResult(
+                ok=False, changed=False, field="comfyui.prompt_expander", value=enabled
+            )
+        cfg = self._sessions.get_config(user_id)
+        comfyui = cfg.comfyui
+        if comfyui.prompt_expander == enabled:
+            return ConfigResult(
+                ok=True, changed=False, field="comfyui.prompt_expander", value=enabled
+            )
+        new_cfg = replace(cfg, comfyui=replace(comfyui, prompt_expander=enabled))
+        self._sessions.save_config(user_id, new_cfg)
+        return ConfigResult(
+            ok=True, changed=True, field="comfyui.prompt_expander", value=enabled
+        )
+
     # -- comfyui LoRA stack -------------------------------------------------
 
     def set_comfyui_loras(

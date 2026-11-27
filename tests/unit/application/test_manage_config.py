@@ -387,3 +387,34 @@ def test_invalid_flow_index_or_entry_is_rejected(sessions):
     uc.add_comfyui_lora(USER_ID, "agil_solo", "a.safetensors")
     assert uc.remove_comfyui_lora(USER_ID, "agil_solo", 7).ok is False
     assert uc.shift_comfyui_lora_strength(USER_ID, "agil_solo", "0", 0.1).ok is False
+
+
+# --- comfyui prompt expander ---------------------------------------------------
+
+def test_set_comfyui_prompt_expander_toggles_and_is_idempotent(sessions):
+    sessions.save_config(USER_ID, _cfg())
+    uc = _uc(sessions)
+
+    res = uc.set_comfyui_prompt_expander(USER_ID, False)
+    assert res.ok is True and res.changed is True
+    assert res.field == "comfyui.prompt_expander"
+    assert sessions.get_config(USER_ID).comfyui.prompt_expander is False
+
+    again = uc.set_comfyui_prompt_expander(USER_ID, False)
+    assert again.ok is True and again.changed is False
+    assert len(sessions.saved) == 2  # baseline + 1 save real
+
+    on = uc.set_comfyui_prompt_expander(USER_ID, True)
+    assert on.ok is True and on.changed is True
+    assert sessions.get_config(USER_ID).comfyui.prompt_expander is True
+
+
+def test_set_comfyui_prompt_expander_rejects_non_bool(sessions):
+    sessions.save_config(USER_ID, _cfg())
+    uc = _uc(sessions)
+
+    for value in ("no", 0, 1, None):
+        res = uc.set_comfyui_prompt_expander(USER_ID, value)
+        assert res.ok is False and res.changed is False
+
+    assert sessions.get_config(USER_ID).comfyui.prompt_expander is True

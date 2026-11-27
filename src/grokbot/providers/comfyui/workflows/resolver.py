@@ -99,6 +99,9 @@ class Flow:
     source_input: str = "image"
     # Timeout de generación en segundos (override del default por media_type).
     timeout: int | None = None
+    # Nodo con un booleano que enciende/apaga el expansor de prompt (PE).
+    # ``None`` = el flujo no tiene PE. Ver ``render(prompt_expander=...)``.
+    prompt_expander_node: str | None = None
     # Origen del grafo: "remote" (Vast) o "embed" (templates/ del repo).
     origin: str = "embed"
 
@@ -279,6 +282,11 @@ def _flow_from_raw(raw: dict, file_name: str, *, origin: str) -> Flow:
         ),
         source_input=str(meta.get("source_input", "image")),
         timeout=int(meta["timeout"]) if meta.get("timeout") else None,
+        prompt_expander_node=(
+            str(meta["prompt_expander_node"])
+            if meta.get("prompt_expander_node")
+            else None
+        ),
         origin=origin,
     )
 
@@ -332,6 +340,14 @@ def flows() -> tuple[Flow, ...]:
     """Flujos disponibles con el perfil activo (orden del perfil)."""
     activo = _active_profile.id if _active_profile is not None else None
     return _flows_cached(activo)
+
+
+def supports_prompt_expander(flow_id: str) -> bool:
+    """True si el flujo activo declara un nodo de expansor de prompt (PE)."""
+    return any(
+        flow.id == flow_id and flow.prompt_expander_node is not None
+        for flow in flows()
+    )
 
 
 def _get_embed_flow(flow_id: str) -> Flow | None:
@@ -493,13 +509,24 @@ def patchable_seed_nodes(flow: Flow) -> tuple[str, ...]:
     )
 
 
-def render(flow: Flow, prompt: str, seed_factory) -> dict:
+def render(
+    flow: Flow,
+    prompt: str,
+    seed_factory,
+    *,
+    prompt_expander: bool = True,
+) -> dict:
     """Copia el grafo y parchea prompt + seeds para un request (sin ``_meta``).
 
     El prompt se escribe en ``flow.positive_node`` / ``flow.positive_input``
     (default ``"text"`` para CLIPTextEncode; p. ej. ``"prompt"`` en un
     Wildcard Processor). Solo se parchean los nodos de
     ``patchable_seed_nodes(flow)``, en su input real (``seed`` o ``noise_seed``).
+
+    ``prompt_expander=False`` apaga el PE de los flujos que lo declaran: el
+    booleano de ``flow.prompt_expander_node`` pasa a ``False`` y el switch del
+    grafo usa el prompt crudo en vez del caption expandido. En flujos sin PE
+    este argumento no tiene efecto.
     """
     graph = copy.deepcopy(flow.graph)
     pos = graph.get(flow.positive_node)
@@ -513,4 +540,14 @@ def render(flow: Flow, prompt: str, seed_factory) -> dict:
         name = _seed_input_name(graph[node_id])
         if name is not None:
             graph[node_id]["inputs"][name] = seed_factory()
+    if not prompt_expander and flow.prompt_expander_node:
+        switch = graph.get(flow.prompt_expander_node)
+        if isinstance(switch, dict) and isinstance(switch.get("inputs"), dict):
+            switch["inputs"]["value"] = False
+        else:
+            logger.warning(
+                "template %s: falta el nodo PE %s; se deja como está",
+                flow.file,
+                flow.prompt_expander_node,
+            )
     return graph
