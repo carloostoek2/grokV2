@@ -17,7 +17,7 @@
     "source_node": "45",
     "source_input": "image",
     "timeout": 1200,
-    "source": "MiniMax H3 imagen (edición/referencia): UNET minimax_h3_image_pruned_int8_convrot + TE Qwen3VL-32B heretic nvfp4 (uncensored) + VAE imagen fp16; KSampler euler/simple 6 pasos cfg 1. Resolución derivada de la foto (4 MP, múltiplo de 32). LoRA CROWN (retrato Douyin, strength 0.85, trigger dy_chunyu_yujie) sobre el UNET. PE opcional por defecto encendido (TextGenerateV2 con qwen3.5_9b_w4a8_gptq) que expande el prompt a JSON y extrae expanded_caption."
+    "source": "MiniMax H3 imagen (edición/referencia): UNET minimax_h3_image_pruned_int8_convrot + TE Qwen3VL-32B heretic nvfp4 (uncensored) + VAE imagen fp16; KSampler euler/simple 6 pasos cfg 1. Resolución derivada de la foto (4 MP, múltiplo de 32). Sin LoRA horneado: el stack extra por flujo se inyecta por request (p. ej. CROWN, trigger dy_chunyu_yujie). PE opcional por defecto encendido (TextGenerateV2 con qwen3.5_9b_w4a8_gptq) que expande el prompt a JSON y extrae expanded_caption."
   },
   "9": {
     "inputs": {
@@ -153,7 +153,7 @@
       "scheduler": "simple",
       "denoise": 1,
       "model": [
-        "62",
+        "29",
         0
       ],
       "positive": [
@@ -281,16 +281,5 @@
       "value": true
     },
     "class_type": "PrimitiveBoolean"
-  },
-  "62": {
-    "inputs": {
-      "lora_name": "CROWN_MiniMax_H3_Image_Douyin_Chunyu_Yujie_V1_r16_slim.safetensors",
-      "strength_model": 0.85,
-      "model": [
-        "29",
-        0
-      ]
-    },
-    "class_type": "LoraLoaderModelOnly"
   }
 }

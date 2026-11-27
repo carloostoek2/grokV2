@@ -166,10 +166,13 @@ lista en `MANUAL_WEIGHTS`.
 **MiniMax H3 Imagen NSFW (2026-11-27):** los dos flujos de imagen
 (`minimax_h3_image`/`minimax_h3_t2i`) usan el text encoder **heretic/uncensored**
 `text_encoders/qwen3vl_32b_heretic_minimax_h3_nvfp4.safetensors` (HF
-`Momoking/Qwen3-VL-32B-Heretic-MiniMax-H3-NVFP4`, 15,68 GB) y el nodo
-`LoraLoaderModelOnly` con `loras/CROWN_MiniMax_H3_Image_Douyin_Chunyu_Yujie_V1_r16_slim.safetensors`
-(Civitai model 3047887 / version 3465545, 155,1 MB, strength 0.85, trigger
-`dy_chunyu_yujie`). El video (`minimax_h3_i2v`) conserva el encoder alineado original.
+`Momoking/Qwen3-VL-32B-Heretic-MiniMax-H3-NVFP4`, 15,68 GB). El LoRA
+`loras/CROWN_MiniMax_H3_Image_Douyin_Chunyu_Yujie_V1_r16_slim.safetensors` (Civitai
+model 3047887 / version 3465545, 155,1 MB, trigger `dy_chunyu_yujie`) queda
+**instalado en el box pero no horneado**: aparece en el catálogo de `/config` → 🎨
+LoRAs y se apila por flujo (strength ajustable; 0.85 recomendado), así el template
+base queda solo con el modelo. El video (`minimax_h3_i2v`) conserva el encoder
+alineado original.
 Los pesos van al `models/` **activo** del runtime (`/content/ComfyUI_data/models/`, no
 `/content/ComfyUI/models/`): ese runtime arranca con `--base-directory`. En el box
 actual no está instalado el nodo downloader; se descargaron con `aria2c`/`curl` por SSH
