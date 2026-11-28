@@ -173,6 +173,18 @@ model 3047887 / version 3465545, 155,1 MB, trigger `dy_chunyu_yujie`) queda
 LoRAs y se apila por flujo (strength ajustable; 0.85 recomendado), así el template
 base queda solo con el modelo. El video (`minimax_h3_i2v`) conserva el encoder
 alineado original.
+
+El PE de los dos flujos es
+`text_encoders/p-h3-image_prompt_upsampler_heretic_w4a8.safetensors` (HF
+`DeepNeuralNerd/Minimax_H3_Image_Prompt_Upsampler_Uncensored_Heretic`, 7,46 GB,
+Apache-2.0; upsampler Qwen3.5-9B heretic, refusals 95/100 → 6/100, KL 0,0069).
+Sustituye al `qwen3.5_9b_w4a8_gptq` oficial. Los prompts del PE (nodos 36 y 39)
+llevan una **dirección erótica permanente** (adultos 25+, sin menores, personas
+reales ni no consentimiento) y el toggle 🧠 Expansor de prompt sigue disponible.
+Los perfiles `a100`/`l4`, `preparar_modelos.py` y `scripts/provision_vast_box.sh`
+declaran y descargan el PE heretic, el TE heretic y CROWN. El descargador de
+arranque usa una sola conexión para Civitai (`-x1 -s1`): el CDN rechaza las
+descargas multi-conexión y antes dejaba CROWN fuera de la sesión.
 Los pesos van al `models/` **activo** del runtime (`/content/ComfyUI_data/models/`, no
 `/content/ComfyUI/models/`): ese runtime arranca con `--base-directory`. En el box
 actual no está instalado el nodo downloader; se descargaron con `aria2c`/`curl` por SSH

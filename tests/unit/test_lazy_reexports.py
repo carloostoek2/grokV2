@@ -67,7 +67,9 @@ def _run_clean_probe(script_body: str) -> subprocess.CompletedProcess:
         capture_output=True,
         text=True,
         env=env,
-        timeout=60,
+        # Importación en frío: al correr la suite completa el hijo compite por
+        # CPU con hilos residuales de otros tests y 60 s puede no alcanzar.
+        timeout=180,
     )
 
 

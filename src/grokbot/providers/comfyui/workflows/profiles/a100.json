@@ -152,10 +152,10 @@
       "min_size": 20979314802
     },
     {
-      "path": "text_encoders/qwen3.5_9b_w4a8_gptq.safetensors",
-      "url": "https://huggingface.co/Comfy-Org/MiniMax-H3-Image/resolve/main/text_encoders/qwen3.5_9b_w4a8_gptq.safetensors",
+      "path": "text_encoders/p-h3-image_prompt_upsampler_heretic_w4a8.safetensors",
+      "url": "https://huggingface.co/DeepNeuralNerd/Minimax_H3_Image_Prompt_Upsampler_Uncensored_Heretic/resolve/main/p-h3-image_prompt_upsampler_heretic_w4a8.safetensors",
       "auth": "none",
-      "min_size": 7343591088
+      "min_size": 7400000000
     },
     {
       "path": "vae/minimax_h3_image_vae_fp16.safetensors",

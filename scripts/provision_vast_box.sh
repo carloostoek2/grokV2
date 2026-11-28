@@ -56,6 +56,18 @@ MODELS=(
   "vae/wan_2.1_vae.safetensors|https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors|none"
   "loras/grokstyle_krea2_v2.safetensors|https://civitai.com/api/download/models/3278913|civitai"
   "diffusion_models/krea2SATDirtyRealism_uncut_fp8.safetensors|https://civitai.com/api/download/models/3372523?fileId=3260775|civitai"
+  # MiniMax H3 video (minimax_h3_i2v): UNET fl2va + TE original + VAE de video/audio.
+  "diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors|https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors|none"
+  "text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors|https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors|none"
+  "vae/minimax_h3_video_vae_fp16.safetensors|https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_video_vae_fp16.safetensors|none"
+  "vae/minimax_h3_audio_vae_fp32.safetensors|https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_audio_vae_fp32.safetensors|none"
+  # MiniMax H3 Imagen (minimax_h3_image / _t2i): UNET + TE heretic + PE heretic + VAE.
+  "diffusion_models/minimax_h3_image_pruned_int8_convrot.safetensors|https://huggingface.co/Comfy-Org/MiniMax-H3-Image/resolve/main/diffusion_models/minimax_h3_image_pruned_int8_convrot.safetensors|none"
+  "text_encoders/qwen3vl_32b_heretic_minimax_h3_nvfp4.safetensors|https://huggingface.co/Momoking/Qwen3-VL-32B-Heretic-MiniMax-H3-NVFP4/resolve/main/qwen3vl_32b_heretic_minimax_h3_nvfp4.safetensors|none"
+  "text_encoders/p-h3-image_prompt_upsampler_heretic_w4a8.safetensors|https://huggingface.co/DeepNeuralNerd/Minimax_H3_Image_Prompt_Upsampler_Uncensored_Heretic/resolve/main/p-h3-image_prompt_upsampler_heretic_w4a8.safetensors|none"
+  "vae/minimax_h3_image_vae_fp16.safetensors|https://huggingface.co/Comfy-Org/MiniMax-H3-Image/resolve/main/vae/minimax_h3_image_vae_fp16.safetensors|none"
+  # LoRA CROWN (retrato Douyin) que el bot inyecta por flujo desde /config.
+  "loras/CROWN_MiniMax_H3_Image_Douyin_Chunyu_Yujie_V1_r16_slim.safetensors|https://civitai.com/api/download/models/3465545|civitai"
 )
 
 # Referenced by flows, but with NO verified origin — only reported, never downloaded.
@@ -241,7 +253,7 @@ else
 fi
 EOF
   done
-  [ "$missing" -eq 0 ] && c_ok "  los 8 pesos del manifiesto ya estaban"
+  [ "$missing" -eq 0 ] && c_ok "  los ${#MODELS[@]} pesos del manifiesto ya estaban"
 fi
 
 # ------------------------------------------------------------------------- links

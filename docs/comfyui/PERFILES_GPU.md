@@ -99,7 +99,7 @@ el mismo GGUF no necesita descargar a RAM y debería bajar a ~2–4 min.
 
 Desde el 2026-11-24 `l4` también expone `minimax_h3_image` y su hermano T2I
 (`minimax_h3_t2i`): cargan ~45 GB de pesos (UNET 21 GB + TE Qwen3VL-32B 15,7 GB +
-PE Qwen3.5 9B 7,3 GB + VAE) en 24 GB de VRAM, así que ComfyUI offloadea y el
+PE Qwen3.5 9B heretic 7,46 GB + VAE) en 24 GB de VRAM, así que ComfyUI offloadea y el
 flujo va lento; se acepta ese coste. Cualquier flujo de perfiles: `a100` 10,
 `l4` 9, `t4` 2.
 

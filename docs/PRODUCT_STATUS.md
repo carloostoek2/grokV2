@@ -381,9 +381,13 @@ local-forward** (`transport.py` → `client.py` → plantillas API-format en
   de 32). Ambos usan UNET `minimax_h3_image_pruned_int8_convrot` + TE
   `qwen3vl_32b_heretic_minimax_h3_nvfp4` (heretic/uncensored, 2026-11-27; el video
   sigue con el `qwen3vl_32b_minimax_h3_nvfp4_awq` original) + `minimax_h3_image_vae_fp16`,
-  euler/simple 6 pasos cfg 1 y el PE por defecto (`TextGenerateV2` con
-  `qwen3.5_9b_w4a8_gptq`); el T2I usa el `task_prompt` oficial de
-  `MiniMaxAI/MiniMax-H3-Image-PE/prompt/t2i`. El LoRA **CROWN Douyin Influencer**
+  euler/simple 6 pasos cfg 1 y el PE heretic por defecto (`TextGenerateV2` con
+  `p-h3-image_prompt_upsampler_heretic_w4a8`, upsampler Qwen3.5-9B sin censura);
+  el T2I usa el `task_prompt` oficial de
+  `MiniMaxAI/MiniMax-H3-Image-PE/prompt/t2i`. Los prompts del PE (sistema y tarea,
+  nodos 36 y 39) llevan una **dirección erótica permanente** —adultos 25+, sin
+  menores, personas reales ni no consentimiento— que empuja cada expansión hacia
+  sensualismo y erotismo, incluso con prompts neutros. El LoRA **CROWN Douyin Influencer**
   (r16 slim, trigger `dy_chunyu_yujie`) queda **instalado en el box pero fuera del
   template**: se agrega por flujo desde `/config` → 🎨 LoRAs (stack extra con strength
   ajustable), así el flujo base corre solo con el modelo. El **expansor de prompt**

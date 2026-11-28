@@ -192,6 +192,11 @@ directa no se toca). Contrato:
      (PE). El usuario puede apagarlo por flujo desde `/config` (🧠 Expansor de prompt):
      `render(prompt_expander=False)` escribe `false` en ese nodo y el grafo usa el prompt
      crudo. Un flujo sin la clave no muestra el toggle y no ejecuta ningún PE.
+   - El PE de referencia de MiniMax H3 Imagen es
+     `p-h3-image_prompt_upsampler_heretic_w4a8.safetensors` (Qwen3.5-9B heretic en
+     `text_encoders/`); sus prompts (sistema y tarea) llevan la dirección erótica del
+     bot (adultos 25+, sin menores ni personas reales). Cambiar de PE = ajustar el
+     `clip_name` del `CLIPLoader` y declarar el peso en los perfiles.
    - `requires_source: true` = el flujo **exige** foto. Sin foto el grafo correría con el
      placeholder horneado (`example.png`, que existe en el `input/` del box) y devolvería un
      resultado incorrecto **en silencio**; el provider lo rechaza con mensaje user-safe. Van
